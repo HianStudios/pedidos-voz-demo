@@ -3,164 +3,192 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Sabor Casero — Pedidos</title>
+<title>Sabor Casero</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 *{box-sizing:border-box;margin:0;padding:0;}
 :root{
-  --bg:#0D0D0D;--surface:rgba(255,255,255,0.04);--surface2:rgba(255,255,255,0.07);
-  --glass:rgba(255,255,255,0.06);--glass-border:rgba(255,255,255,0.09);
-  --text:#F0EDE8;--text-dim:rgba(240,237,232,0.5);--text-mid:rgba(240,237,232,0.72);
-  --gold:#D4A853;--gold-dim:rgba(212,168,83,0.15);--gold-glow:rgba(212,168,83,0.3);
-  --green:#4A7C59;--green-dim:rgba(74,124,89,0.15);--red:#C14040;
-  --font:'DM Sans',sans-serif;
+  --bg:#050505;--text:#F0EDE8;--text-dim:rgba(240,237,232,0.45);
+  --gold:#D4A853;--gold-dim:rgba(212,168,83,0.15);--gold-glow:rgba(212,168,83,0.25);
+  --green:#4A7C59;--green-glow:rgba(74,124,89,0.3);
+  --glass:rgba(255,255,255,0.06);--glass-border:rgba(255,255,255,0.1);
+  --red:#E05555;--font:'DM Sans',sans-serif;
   padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
 }
-html{scroll-padding-top:env(safe-area-inset-top,0px);height:100%;}
-body{font-family:var(--font);background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased;min-height:100%;}
-.app{max-width:480px;margin:0 auto;min-height:100vh;min-height:100dvh;display:flex;flex-direction:column;}
+html,body{height:100%;overflow:hidden;}
+body{font-family:var(--font);background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased;}
+.app{max-width:480px;margin:0 auto;height:100%;height:100dvh;display:flex;flex-direction:column;position:relative;overflow:hidden;}
 
+/* Minimal header */
 header{
   display:flex;align-items:center;justify-content:space-between;
-  padding:12px 16px;padding-top:calc(12px + env(safe-area-inset-top,0px));
-  position:sticky;top:0;z-index:10;
-  background:rgba(13,13,13,0.92);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
-  border-bottom:1px solid var(--glass-border);
+  padding:10px 16px;padding-top:calc(10px + env(safe-area-inset-top,0px));
+  position:relative;z-index:10;
 }
-.logo{font-weight:700;font-size:1.1rem;letter-spacing:-0.02em;}
-.logo span{color:var(--gold);}
-.tabs{display:flex;gap:2px;background:var(--surface2);border-radius:8px;padding:3px;}
-.tabs button{
-  border:none;background:transparent;font-family:var(--font);font-weight:500;font-size:0.75rem;
-  padding:6px 12px;border-radius:6px;color:var(--text-dim);cursor:pointer;transition:all .2s;
+.logo{font-weight:700;font-size:1rem;letter-spacing:-0.02em;opacity:0.6;}
+.logo span{color:var(--gold);opacity:1;}
+.tab-cajero{
+  border:none;background:var(--glass);font-family:var(--font);font-weight:600;font-size:0.72rem;
+  padding:6px 12px;border-radius:20px;color:var(--text-dim);cursor:pointer;
+  border:1px solid var(--glass-border);
 }
-.tabs button.active{background:var(--gold);color:#0D0D0D;font-weight:700;}
+.tab-cajero.active{background:var(--gold-dim);color:var(--gold);border-color:var(--gold-glow);}
 
-main{flex:1;display:flex;flex-direction:column;}
-.view{display:none;flex:1;flex-direction:column;}
-.view.active{display:flex;}
+main{flex:1;position:relative;}
+.view{display:none;position:absolute;inset:0;}
+.view.active{display:flex;flex-direction:column;}
 
-/* ---- Conversación ---- */
-.conversation{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:12px;padding-bottom:90px;}
+/* ========== MASCOTA ========== */
+.mascot-view{align-items:center;justify-content:center;}
 
-.msg{display:flex;gap:10px;max-width:90%;animation:msgIn .3s ease-out;}
-.msg.user{align-self:flex-end;flex-direction:row-reverse;}
-@keyframes msgIn{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:translateY(0);}}
+.mascot-wrap{position:relative;display:flex;flex-direction:column;align-items:center;gap:20px;}
 
-.ai-ava{
-  width:34px;height:34px;border-radius:10px;flex-shrink:0;
-  background:linear-gradient(135deg,var(--gold-dim),var(--surface2));
-  display:flex;align-items:center;justify-content:center;font-size:0.95rem;
+/* Ondas detrás de la bolita */
+.waves{position:absolute;width:220px;height:220px;top:50%;left:50%;transform:translate(-50%,-50%);}
+.wave-ring{
+  position:absolute;inset:0;border-radius:50%;
+  border:1.5px solid var(--gold-glow);opacity:0;
 }
-.bubble{
-  padding:10px 14px;font-size:0.9rem;line-height:1.45;
-  border-radius:4px 14px 14px 14px;
-  background:var(--glass);border:1px solid var(--glass-border);
-}
-.msg.user .bubble{
-  border-radius:14px 4px 14px 14px;
-  background:var(--gold-dim);border-color:rgba(212,168,83,0.12);
+.mascot-wrap.listening .wave-ring{animation:waveOut 2s ease-out infinite;}
+.mascot-wrap.listening .wave-ring:nth-child(2){animation-delay:.4s;}
+.mascot-wrap.listening .wave-ring:nth-child(3){animation-delay:.8s;}
+.mascot-wrap.speaking .wave-ring{animation:waveOut 1.6s ease-out infinite;border-color:var(--green-glow);}
+.mascot-wrap.speaking .wave-ring:nth-child(2){animation-delay:.3s;}
+.mascot-wrap.speaking .wave-ring:nth-child(3){animation-delay:.6s;}
+@keyframes waveOut{
+  0%{transform:scale(0.7);opacity:0.6;}
+  100%{transform:scale(1.4);opacity:0;}
 }
 
-/* Typing dots */
-.typing{display:inline-flex;gap:4px;padding:4px 0;}
-.typing span{width:6px;height:6px;border-radius:50%;background:var(--gold);animation:blink 1.4s infinite both;}
-.typing span:nth-child(2){animation-delay:.2s;}
-.typing span:nth-child(3){animation-delay:.4s;}
-@keyframes blink{0%,80%,100%{opacity:.25;}40%{opacity:1;}}
-
-/* ---- Tarjeta de confirmación ---- */
-.confirm-card{
-  background:var(--glass);border:1px solid var(--gold-glow);
-  border-radius:14px;overflow:hidden;margin-top:4px;
-  animation:cardPop .35s ease-out;
+/* La bolita */
+.mascot{
+  width:120px;height:120px;border-radius:50%;position:relative;cursor:pointer;z-index:2;
+  background:radial-gradient(circle at 40% 35%, #3a3a3a, #1a1a1a 70%);
+  box-shadow:0 0 40px rgba(0,0,0,0.5), inset 0 -8px 20px rgba(0,0,0,0.4), inset 0 8px 16px rgba(255,255,255,0.04);
+  transition:transform .2s ease-out;
 }
-@keyframes cardPop{from{opacity:0;transform:scale(0.95);}to{opacity:1;transform:scale(1);}}
-
-.confirm-card .card-header{
-  padding:10px 14px;font-weight:700;font-size:0.82rem;color:var(--gold);
-  background:var(--gold-dim);border-bottom:1px solid var(--glass-border);
+.mascot:active{transform:scale(0.94);}
+.mascot-wrap.listening .mascot{
+  box-shadow:0 0 50px var(--gold-glow), inset 0 -8px 20px rgba(0,0,0,0.4);
+}
+.mascot-wrap.speaking .mascot{
+  box-shadow:0 0 50px var(--green-glow), inset 0 -8px 20px rgba(0,0,0,0.4);
 }
 
-.confirm-item{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--glass-border);}
-.confirm-item:last-of-type{border-bottom:none;}
-.confirm-item img{width:52px;height:52px;object-fit:cover;border-radius:8px;flex-shrink:0;}
-.confirm-item .emoji-thumb{
-  width:52px;height:52px;border-radius:8px;background:var(--surface2);
-  display:flex;align-items:center;justify-content:center;font-size:1.5rem;flex-shrink:0;
+/* Ojos */
+.eyes{position:absolute;top:38%;left:50%;transform:translate(-50%,-50%);display:flex;gap:20px;}
+.eye{
+  width:16px;height:18px;background:#fff;border-radius:50%;position:relative;
+  box-shadow:0 0 8px rgba(255,255,255,0.3);
 }
-.confirm-item .item-info{flex:1;min-width:0;}
-.confirm-item .item-name{font-weight:600;font-size:0.88rem;}
-.confirm-item .item-desc{font-size:0.72rem;color:var(--text-dim);margin-top:1px;}
-.confirm-item .item-price{color:var(--gold);font-weight:700;font-size:0.85rem;flex-shrink:0;}
+.eye::after{
+  content:'';position:absolute;width:8px;height:9px;background:#111;border-radius:50%;
+  top:50%;left:50%;transform:translate(-50%,-50%);
+  transition:transform .1s ease-out;
+}
+.mascot-wrap.listening .eye{animation:eyeBlink 3s infinite;}
+@keyframes eyeBlink{0%,95%,100%{transform:scaleY(1);}96%{transform:scaleY(0.1);}}
 
-.confirm-card .qty-row{display:flex;align-items:center;gap:6px;margin-top:4px;}
-.confirm-card .qty-btn{
-  width:24px;height:24px;border-radius:6px;border:1px solid var(--glass-border);
-  background:var(--surface2);color:var(--text);font-size:0.8rem;cursor:pointer;
-  display:flex;align-items:center;justify-content:center;font-family:var(--font);
+/* Boca (ondas sonoras cuando habla) */
+.mouth{
+  position:absolute;bottom:28%;left:50%;transform:translateX(-50%);
+  display:flex;gap:3px;align-items:center;height:14px;
 }
-.confirm-card .qty-btn:active{transform:scale(0.9);}
-.confirm-card .qty-num{font-size:0.82rem;font-weight:700;min-width:16px;text-align:center;}
+.mouth span{
+  width:3px;border-radius:2px;background:var(--gold);opacity:0.5;
+  height:6px;transition:height .15s ease-out;
+}
+.mascot-wrap.speaking .mouth span{animation:mouthWave .8s ease-in-out infinite;}
+.mascot-wrap.speaking .mouth span:nth-child(1){animation-delay:0s;}
+.mascot-wrap.speaking .mouth span:nth-child(2){animation-delay:.1s;height:10px;}
+.mascot-wrap.speaking .mouth span:nth-child(3){animation-delay:.2s;height:14px;}
+.mascot-wrap.speaking .mouth span:nth-child(4){animation-delay:.1s;height:10px;}
+.mascot-wrap.speaking .mouth span:nth-child(5){animation-delay:0s;}
+.mascot-wrap.listening .mouth span{animation:mouthWave .6s ease-in-out infinite;background:var(--gold);}
+.mascot-wrap.listening .mouth span:nth-child(1){animation-delay:0s;}
+.mascot-wrap.listening .mouth span:nth-child(2){animation-delay:.08s;}
+.mascot-wrap.listening .mouth span:nth-child(3){animation-delay:.16s;}
+.mascot-wrap.listening .mouth span:nth-child(4){animation-delay:.08s;}
+.mascot-wrap.listening .mouth span:nth-child(5){animation-delay:0s;}
+@keyframes mouthWave{0%,100%{transform:scaleY(0.5);}50%{transform:scaleY(1.3);}}
 
-.confirm-footer{padding:10px 14px;display:flex;flex-direction:column;gap:8px;background:rgba(255,255,255,0.02);}
-.confirm-total{display:flex;justify-content:space-between;font-weight:700;font-size:0.95rem;}
-.confirm-total .amount{color:var(--gold);}
-.confirm-actions{display:flex;gap:8px;}
-.btn-confirm{
-  flex:1;border:none;cursor:pointer;
-  background:linear-gradient(135deg,var(--gold),#B8913D);color:#0D0D0D;
-  font-weight:700;padding:12px;border-radius:10px;font-size:0.88rem;font-family:var(--font);
-  transition:transform .15s;
+/* Status text debajo de la mascota */
+.status{
+  font-size:0.85rem;color:var(--text-dim);text-align:center;max-width:280px;
+  line-height:1.4;min-height:42px;display:flex;align-items:center;justify-content:center;
 }
-.btn-confirm:active{transform:scale(0.97);}
-.btn-more{
-  border:1px solid var(--glass-border);background:var(--surface2);color:var(--text-mid);
-  font-weight:600;padding:12px 16px;border-radius:10px;font-size:0.82rem;font-family:var(--font);
-  cursor:pointer;white-space:nowrap;
-}
-.btn-more:active{transform:scale(0.97);}
+.status.ai-talking{color:var(--text);font-weight:500;}
 
-/* ---- Input bar ---- */
-.input-area{
-  position:sticky;bottom:0;z-index:5;
-  background:rgba(13,13,13,0.95);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
-  border-top:1px solid var(--glass-border);
-  padding:10px 12px;padding-bottom:calc(10px + env(safe-area-inset-bottom,0px));
+/* Hint */
+.hint{
+  position:absolute;bottom:calc(24px + env(safe-area-inset-bottom,0px));left:0;right:0;
+  text-align:center;font-size:0.72rem;color:var(--text-dim);opacity:0.5;
 }
-.input-row{display:flex;align-items:center;gap:8px;}
-.input-row input{
-  flex:1;padding:11px 14px;border-radius:22px;
-  background:var(--surface2);border:1px solid var(--glass-border);
-  color:var(--text);font-family:var(--font);font-size:0.88rem;outline:none;
-}
-.input-row input::placeholder{color:var(--text-dim);}
-.input-row input:focus{border-color:rgba(212,168,83,0.3);}
 
-.mic-btn{
-  width:46px;height:46px;border-radius:50%;border:none;cursor:pointer;flex-shrink:0;
-  background:linear-gradient(145deg,rgba(212,168,83,0.18),rgba(212,168,83,0.06));
-  border:1.5px solid rgba(212,168,83,0.3);color:var(--gold);
-  display:flex;align-items:center;justify-content:center;transition:all .2s;position:relative;
+/* ========== CUADRO FLOTANTE DEL PEDIDO ========== */
+.order-float{
+  position:absolute;left:16px;right:16px;bottom:calc(80px + env(safe-area-inset-bottom,0px));
+  z-index:15;display:none;
 }
-.mic-btn svg{width:20px;height:20px;fill:currentColor;}
-.mic-btn.recording{background:var(--red);border-color:var(--red);color:#fff;animation:pulse 1.5s infinite;}
-@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(193,64,64,0.4);}70%{box-shadow:0 0 0 12px rgba(193,64,64,0);}100%{box-shadow:0 0 0 0 rgba(193,64,64,0);}}
+.order-float.visible{display:block;animation:floatIn .4s ease-out;}
+@keyframes floatIn{from{opacity:0;transform:translateY(30px) scale(0.95);}to{opacity:1;transform:translateY(0) scale(1);}}
 
-.rec-bar{display:none;flex:1;align-items:center;gap:8px;padding:0 4px;}
-.rec-bar.active{display:flex;}
-.rec-bar .wave{display:flex;gap:3px;align-items:center;height:20px;}
-.rec-bar .wave span{width:3px;border-radius:2px;background:var(--red);animation:wave 1s ease-in-out infinite;}
-.rec-bar .wave span:nth-child(1){height:6px;animation-delay:0s;}
-.rec-bar .wave span:nth-child(2){height:14px;animation-delay:.1s;}
-.rec-bar .wave span:nth-child(3){height:20px;animation-delay:.2s;}
-.rec-bar .wave span:nth-child(4){height:14px;animation-delay:.3s;}
-.rec-bar .wave span:nth-child(5){height:6px;animation-delay:.4s;}
-@keyframes wave{0%,100%{transform:scaleY(.4);}50%{transform:scaleY(1);}}
-.rec-bar .rec-text{font-size:0.82rem;color:var(--red);font-weight:500;}
-.rec-bar .rec-time{font-size:0.78rem;color:var(--text-dim);margin-left:auto;font-variant-numeric:tabular-nums;}
+.order-card{
+  background:rgba(22,22,22,0.95);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);
+  border:1px solid var(--gold-glow);border-radius:16px;overflow:hidden;
+  box-shadow:0 12px 48px rgba(0,0,0,0.6);
+}
+.order-card .card-title{
+  padding:12px 16px;font-weight:700;font-size:0.85rem;color:var(--gold);
+  background:var(--gold-dim);display:flex;align-items:center;justify-content:space-between;
+}
+.order-card .card-title .total-badge{
+  font-size:0.92rem;font-weight:700;
+}
+.order-item{
+  display:flex;align-items:center;gap:10px;padding:10px 16px;
+  border-bottom:1px solid rgba(255,255,255,0.05);
+}
+.order-item:last-of-type{border-bottom:none;}
+.order-item img{width:44px;height:44px;object-fit:cover;border-radius:8px;flex-shrink:0;}
+.order-item .emoji-thumb{
+  width:44px;height:44px;border-radius:8px;background:rgba(255,255,255,0.04);
+  display:flex;align-items:center;justify-content:center;font-size:1.3rem;flex-shrink:0;
+}
+.order-item .info{flex:1;min-width:0;}
+.order-item .name{font-weight:600;font-size:0.85rem;}
+.order-item .qty{font-size:0.75rem;color:var(--text-dim);margin-top:1px;}
+.order-item .price{color:var(--gold);font-weight:700;font-size:0.85rem;flex-shrink:0;}
+
+.order-card .card-footer{
+  padding:12px 16px;text-align:center;
+  font-size:0.78rem;color:var(--text-dim);
+  border-top:1px solid rgba(255,255,255,0.05);
+}
+.order-card .card-footer strong{color:var(--gold);}
+
+/* ========== CAJERO ========== */
+.cajero-view{padding:12px;overflow-y:auto;}
+.cajero-header{display:flex;align-items:baseline;justify-content:space-between;padding:4px 4px 12px;}
+.cajero-header h2{font-weight:700;font-size:1.05rem;}
+.badge{font-size:0.72rem;font-weight:700;background:var(--gold-dim);color:var(--gold);padding:3px 10px;border-radius:20px;}
+.caj-card{
+  background:var(--glass);border:1px solid var(--glass-border);border-radius:12px;
+  padding:14px;margin-bottom:10px;animation:cardIn .3s ease-out;
+}
+@keyframes cardIn{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:translateY(0);}}
+.caj-card .top{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;}
+.caj-card .num{font-weight:700;font-size:0.95rem;}
+.caj-card .time{font-size:0.72rem;color:var(--text-dim);}
+.caj-card .status{font-size:0.68rem;font-weight:700;padding:3px 8px;border-radius:20px;background:var(--gold-dim);color:var(--gold);}
+.caj-card .item{display:flex;justify-content:space-between;font-size:0.85rem;padding:2px 0;color:var(--text-dim);}
+.caj-card .total{display:flex;justify-content:space-between;font-weight:700;margin-top:6px;padding-top:6px;border-top:1px solid var(--glass-border);}
+.caj-card .total .amount{color:var(--gold);}
+.ready-btn{width:100%;margin-top:10px;border:none;background:var(--green-glow);color:var(--green);font-weight:700;padding:10px;border-radius:8px;cursor:pointer;font-size:0.82rem;font-family:var(--font);}
+.ready-btn:active{transform:scale(0.97);}
+.empty-queue{text-align:center;color:var(--text-dim);font-size:0.88rem;padding:48px 20px;}
 
 /* Toast */
 .toast{
@@ -171,64 +199,51 @@ main{flex:1;display:flex;flex-direction:column;}
   box-shadow:0 8px 32px rgba(0,0,0,0.4);transition:transform .3s ease-out;max-width:90%;text-align:center;
 }
 .toast.show{transform:translate(-50%,0);}
-
-/* Cajero */
-.cajero-scroll{flex:1;overflow-y:auto;padding:12px;}
-.cajero-header{display:flex;align-items:baseline;justify-content:space-between;padding:4px 4px 12px;}
-.cajero-header h2{font-weight:700;font-size:1.05rem;}
-.badge{font-size:0.72rem;font-weight:700;background:var(--gold-dim);color:var(--gold);padding:3px 10px;border-radius:20px;}
-.order-card{
-  background:var(--glass);border:1px solid var(--glass-border);border-radius:12px;
-  padding:14px;margin-bottom:10px;animation:cardIn .3s ease-out;
-}
-@keyframes cardIn{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:translateY(0);}}
-.order-card .top{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;}
-.order-card .num{font-weight:700;font-size:0.95rem;}
-.order-card .time{font-size:0.72rem;color:var(--text-dim);}
-.order-card .status{font-size:0.68rem;font-weight:700;padding:3px 8px;border-radius:20px;background:var(--gold-dim);color:var(--gold);}
-.order-card .item{display:flex;justify-content:space-between;font-size:0.85rem;padding:2px 0;color:var(--text-mid);}
-.order-card .total{display:flex;justify-content:space-between;font-weight:700;margin-top:6px;padding-top:6px;border-top:1px solid var(--glass-border);}
-.order-card .total .amount{color:var(--gold);}
-.ready-btn{width:100%;margin-top:10px;border:none;background:var(--green-dim);color:var(--green);font-weight:700;padding:10px;border-radius:8px;cursor:pointer;font-size:0.82rem;font-family:var(--font);}
-.ready-btn:active{transform:scale(0.97);}
-.empty-queue{text-align:center;color:var(--text-dim);font-size:0.88rem;padding:48px 20px;}
 </style>
 </head>
 <body>
 <div class="app">
   <header>
     <div class="logo">Sabor <span>Casero</span></div>
-    <div class="tabs">
-      <button id="tabCliente" class="active">Cliente</button>
-      <button id="tabCajero">Cajero</button>
-    </div>
+    <button class="tab-cajero" id="tabCajero">Cajero</button>
   </header>
 
   <main>
-    <section id="viewCliente" class="view active">
-      <div class="conversation" id="convo"></div>
-      <div class="input-area">
-        <div class="input-row">
-          <input id="textInput" type="text" placeholder="Diga o escriba qué se le antoja...">
-          <div class="rec-bar" id="recBar">
-            <div class="wave"><span></span><span></span><span></span><span></span><span></span></div>
-            <span class="rec-text">Escuchando</span>
-            <span class="rec-time" id="recTime">0s</span>
+    <!-- MASCOTA -->
+    <div class="view active" id="viewCliente">
+      <div class="mascot-view">
+        <div class="mascot-wrap" id="mascotWrap">
+          <div class="waves">
+            <div class="wave-ring"></div>
+            <div class="wave-ring"></div>
+            <div class="wave-ring"></div>
           </div>
-          <button class="mic-btn" id="micBtn">
-            <svg id="micIcon" viewBox="0 0 24 24"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm-1-9c0-.55.45-1 1-1s1 .45 1 1v6c0 .55-.45 1-1 1s-1-.45-1-1V5zm6 6c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/></svg>
-            <svg id="stopIcon" viewBox="0 0 24 24" style="display:none;"><rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor"/></svg>
-          </button>
+          <div class="mascot" id="mascot">
+            <div class="eyes">
+              <div class="eye"></div>
+              <div class="eye"></div>
+            </div>
+            <div class="mouth">
+              <span></span><span></span><span></span><span></span><span></span>
+            </div>
+          </div>
+          <div class="status" id="statusText">Tócame para hablar</div>
         </div>
+        <div class="hint">Toque la bolita y diga qué se le antoja</div>
       </div>
-    </section>
 
-    <section id="viewCajero" class="view">
-      <div class="cajero-scroll">
+      <div class="order-float" id="orderFloat">
+        <div class="order-card" id="orderCard"></div>
+      </div>
+    </div>
+
+    <!-- CAJERO -->
+    <div class="view" id="viewCajero">
+      <div class="cajero-view">
         <div class="cajero-header"><h2>Pedidos</h2><span class="badge" id="queueCount">0</span></div>
         <div id="queueList"></div>
       </div>
-    </section>
+    </div>
   </main>
 </div>
 <div class="toast" id="toast"></div>
@@ -250,158 +265,142 @@ let currentOrder = [];
 let queue = [];
 let orderCounter = 1;
 let recognizing = false;
+let awaitingConfirmation = false;
 let recTimer = null;
 let recSeconds = 0;
 
-const convo = document.getElementById('convo');
-const textInput = document.getElementById('textInput');
-const micBtn = document.getElementById('micBtn');
-const micIcon = document.getElementById('micIcon');
-const stopIcon = document.getElementById('stopIcon');
-const recBar = document.getElementById('recBar');
-const recTime = document.getElementById('recTime');
+const mascotWrap = document.getElementById('mascotWrap');
+const mascot = document.getElementById('mascot');
+const statusText = document.getElementById('statusText');
+const orderFloat = document.getElementById('orderFloat');
+const orderCard = document.getElementById('orderCard');
 const toast = document.getElementById('toast');
 
 // Sonidos
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-function playSound(f,d){const o=audioCtx.createOscillator(),g=audioCtx.createGain();o.frequency.setValueAtTime(f,audioCtx.currentTime);o.frequency.exponentialRampToValueAtTime(f*.6,audioCtx.currentTime+d);g.gain.setValueAtTime(.08,audioCtx.currentTime);g.gain.exponentialRampToValueAtTime(.001,audioCtx.currentTime+d);o.connect(g).connect(audioCtx.destination);o.start();o.stop(audioCtx.currentTime+d);}
+function playSound(f,d){const o=audioCtx.createOscillator(),g=audioCtx.createGain();o.frequency.setValueAtTime(f,audioCtx.currentTime);o.frequency.exponentialRampToValueAtTime(f*.6,audioCtx.currentTime+d);g.gain.setValueAtTime(.06,audioCtx.currentTime);g.gain.exponentialRampToValueAtTime(.001,audioCtx.currentTime+d);o.connect(g).connect(audioCtx.destination);o.start();o.stop(audioCtx.currentTime+d);}
 function popSound(){playSound(660,.1);}
 function dingSound(){playSound(880,.2);setTimeout(()=>playSound(1100,.15),100);}
 
-function scrollDown(){setTimeout(()=>convo.scrollTo({top:convo.scrollHeight,behavior:'smooth'}),50);}
-
-function addMsg(text, who){
-  const div = document.createElement('div');
-  div.className = 'msg ' + who;
-  if(who === 'ai'){
-    div.innerHTML = `<div class="ai-ava">🍲</div><div class="bubble">${text}</div>`;
-  } else {
-    div.innerHTML = `<div class="bubble">${text}</div>`;
-  }
-  convo.appendChild(div);
-  scrollDown();
+// ---- Mascota habla ----
+function mascotSay(text){
+  mascotWrap.classList.remove('listening');
+  mascotWrap.classList.add('speaking');
+  statusText.className = 'status ai-talking';
+  statusText.textContent = text;
+  speak(text, () => {
+    mascotWrap.classList.remove('speaking');
+    statusText.className = 'status';
+    // Si está esperando confirmación, volver a escuchar automáticamente
+    if(awaitingConfirmation){
+      setTimeout(() => startListening(), 600);
+    }
+  });
 }
 
-function showTyping(){
-  const div = document.createElement('div');
-  div.className = 'msg ai'; div.id = 'typing';
-  div.innerHTML = `<div class="ai-ava">🍲</div><div class="bubble"><div class="typing"><span></span><span></span><span></span></div></div>`;
-  convo.appendChild(div); scrollDown();
-}
-function hideTyping(){ const el = document.getElementById('typing'); if(el) el.remove(); }
-
-function speak(text){
-  if(!('speechSynthesis' in window)) return;
-  const u = new SpeechSynthesisUtterance(text); u.lang = 'es-ES';
+function speak(text, onEnd){
+  if(!('speechSynthesis' in window)){ if(onEnd) onEnd(); return; }
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = 'es-ES';
   const v = speechSynthesis.getVoices().find(v => v.lang && v.lang.startsWith('es'));
-  if(v) u.voice = v; speechSynthesis.cancel(); speechSynthesis.speak(u);
+  if(v) u.voice = v;
+  u.onend = () => { if(onEnd) onEnd(); };
+  u.onerror = () => { if(onEnd) onEnd(); };
+  speechSynthesis.speak(u);
 }
 
-function aiSay(text){ hideTyping(); addMsg(text, 'ai'); speak(text); }
-
-// ---- Tarjeta de confirmación (la IA seleccionó, el cliente confirma) ----
-function showConfirmCard(items){
-  hideTyping();
-  // Agregar items al pedido actual
-  items.forEach(item => {
-    const existing = currentOrder.find(l => l.id === item.id);
-    if(existing) existing.qty += 1;
-    else currentOrder.push({ ...item, qty: 1 });
-  });
-  popSound();
-  renderConfirmCard();
-}
-
-function renderConfirmCard(){
-  // Remover card anterior si existe
-  const old = document.getElementById('confirmCardWrap');
-  if(old) old.remove();
-
+// ---- Mostrar cuadro flotante del pedido ----
+function showOrderFloat(){
+  if(currentOrder.length === 0){ orderFloat.classList.remove('visible'); return; }
   const total = currentOrder.reduce((s,l) => s + l.price*l.qty, 0);
-  const div = document.createElement('div');
-  div.className = 'msg ai'; div.id = 'confirmCardWrap';
-
-  div.innerHTML = `<div class="ai-ava">🍲</div><div class="confirm-card">
-    <div class="card-header">Su pedido</div>
-    ${currentOrder.map((l,i) => `
-      <div class="confirm-item">
-        ${l.img ? `<img src="${l.img}" alt="${l.name}">` : `<div class="emoji-thumb">${l.emoji}</div>`}
-        <div class="item-info">
-          <div class="item-name">${l.name}</div>
-          <div class="item-desc">${l.desc}</div>
-          <div class="qty-row">
-            <button class="qty-btn" data-action="dec" data-idx="${i}">−</button>
-            <span class="qty-num">${l.qty}</span>
-            <button class="qty-btn" data-action="inc" data-idx="${i}">+</button>
-          </div>
-        </div>
-        <span class="item-price">$${(l.price*l.qty).toFixed(2)}</span>
-      </div>`).join('')}
-    <div class="confirm-footer">
-      <div class="confirm-total"><span>Total</span><span class="amount">$${total.toFixed(2)}</span></div>
-      <div class="confirm-actions">
-        <button class="btn-more" id="btnMore">Algo más</button>
-        <button class="btn-confirm" id="btnConfirm">Confirmar pedido</button>
-      </div>
+  orderCard.innerHTML = `
+    <div class="card-title">
+      <span>Su pedido</span>
+      <span class="total-badge">$${total.toFixed(2)}</span>
     </div>
-  </div>`;
+    ${currentOrder.map(l => `
+      <div class="order-item">
+        ${l.img ? `<img src="${l.img}" alt="${l.name}">` : `<div class="emoji-thumb">${l.emoji}</div>`}
+        <div class="info">
+          <div class="name">${l.name}</div>
+          <div class="qty">×${l.qty}</div>
+        </div>
+        <span class="price">$${(l.price*l.qty).toFixed(2)}</span>
+      </div>`).join('')}
+    <div class="card-footer">Diga <strong>"sí"</strong> para confirmar o <strong>"no"</strong> para cambiar</div>`;
+  orderFloat.classList.add('visible');
+  popSound();
+}
 
-  convo.appendChild(div);
-  scrollDown();
+function hideOrderFloat(){
+  orderFloat.classList.remove('visible');
+}
 
-  // Qty buttons
-  div.querySelectorAll('.qty-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const idx = parseInt(btn.dataset.idx);
-      if(btn.dataset.action === 'inc') currentOrder[idx].qty += 1;
-      else { currentOrder[idx].qty -= 1; if(currentOrder[idx].qty <= 0) currentOrder.splice(idx, 1); }
-      if(currentOrder.length === 0){ div.remove(); aiSay('Pedido vaciado. ¿Qué le sirvo?'); return; }
-      renderConfirmCard();
-    });
+// ---- Confirmar pedido ----
+function confirmOrder(){
+  if(currentOrder.length === 0) return;
+  audioCtx.resume(); dingSound();
+  const total = currentOrder.reduce((s,l) => s + l.price*l.qty, 0);
+  queue.push({
+    num: orderCounter++, items: [...currentOrder], total,
+    time: new Date().toLocaleTimeString('es-EC',{hour:'2-digit',minute:'2-digit'}), status:'nuevo'
   });
-
-  document.getElementById('btnConfirm').addEventListener('click', () => {
-    if(currentOrder.length === 0) return;
-    audioCtx.resume(); dingSound();
-    const order = {
-      num: orderCounter++, items: [...currentOrder], total,
-      time: new Date().toLocaleTimeString('es-EC',{hour:'2-digit',minute:'2-digit'}), status:'nuevo'
-    };
-    queue.push(order);
-    div.remove();
-    showToast(`Pedido #${String(order.num).padStart(3,'0')} enviado ✓`);
-    aiSay('¡Listo! Pedido enviado a caja. ¿Desea algo más?');
-    currentOrder = [];
-    renderQueue();
-  });
-
-  document.getElementById('btnMore').addEventListener('click', () => {
-    aiSay('Dígame qué más le apetece.');
-    textInput.focus();
-  });
+  hideOrderFloat();
+  showToast(`Pedido #${String(queue[queue.length-1].num).padStart(3,'0')} enviado ✓`);
+  mascotSay('¡Pedido enviado! Cuando quiera pedir algo más, tóqueme.');
+  currentOrder = [];
+  awaitingConfirmation = false;
+  renderQueue();
 }
 
 // ---- Matching ----
 function normalize(s){ return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''); }
-const UNSURE = ['no se','no sé','no tengo idea','sugiereme','sugiérame','recomiend','sorprend','que hay','qué hay','algo rico','algo bueno','que me recomienda','menu','menú'];
 
 function localMatch(raw){
   const n = normalize(raw);
-  if(UNSURE.some(w => n.includes(normalize(w)))){
-    return { matched_ids: [], suggest: true, reply: 'Tenemos encebollado, ceviche de camarón, seco de pollo, bolón, caldo de manguera y menestra. También Coca-Cola, agua y jugos. ¿Qué le provoca?' };
-  }
   const matches = MENU.filter(d => d.kw.some(k => n.includes(normalize(k))));
   if(matches.length){
-    return { matched_ids: matches.map(d => d.id), suggest: false,
-      reply: matches.length === 1 ? `¡${matches[0].name}, excelente elección!` : '¡Listo, aquí tiene lo que pidió!' };
+    return { matched_ids: matches.map(d => d.id), reply: matches.length === 1 ? `${matches[0].name}, ¡buena elección!` : '¡Listo, aquí tiene!' };
   }
-  return { matched_ids: [], suggest: true, reply: 'Hmm, eso no lo tenemos. Tenemos encebollado, ceviche, seco de pollo, bolón, menestra, bebidas... ¿Qué le provoca?' };
+  return { matched_ids: [], reply: 'No encontré eso en el menú. Tenemos encebollado, ceviche, seco de pollo, bolón, menestra y bebidas. ¿Qué le provoca?' };
 }
 
 async function handleInput(raw){
   if(!raw || !raw.trim()) return;
-  addMsg(raw, 'user');
-  showTyping();
+  const n = normalize(raw.trim());
+
+  // Si estamos esperando confirmación
+  if(awaitingConfirmation){
+    if(n.includes('si') || n.includes('sí') || n.includes('confirma') || n.includes('dale') || n.includes('eso') || n.includes('listo') || n.includes('manda')){
+      awaitingConfirmation = false;
+      confirmOrder();
+      return;
+    }
+    if(n.includes('no') || n.includes('cancel') || n.includes('quita') || n.includes('cambia')){
+      awaitingConfirmation = false;
+      currentOrder = [];
+      hideOrderFloat();
+      mascotSay('Cancelado. Dígame qué le sirvo.');
+      return;
+    }
+    if(n.includes('agrega') || n.includes('tambien') || n.includes('también') || n.includes('mas') || n.includes('más') || n.includes('otro') || n.includes('otra') || n.includes('quiero') || n.includes('dame') || n.includes('deme') || n.includes('pon')){
+      awaitingConfirmation = false;
+      // Procesar como nuevo pedido que se agrega
+      await processOrder(raw);
+      return;
+    }
+    // Si no entiende, volver a preguntar
+    mascotSay('Diga sí para confirmar, o dígame qué más quiere agregar.');
+    return;
+  }
+
+  await processOrder(raw);
+}
+
+async function processOrder(raw){
+  statusText.textContent = 'Procesando...';
+  mascotWrap.classList.remove('listening','speaking');
 
   let result;
   try {
@@ -415,23 +414,37 @@ async function handleInput(raw){
 
   if(result.matched_ids && result.matched_ids.length > 0){
     const matched = result.matched_ids.map(id => MENU.find(d => d.id === id)).filter(Boolean);
-    aiSay(result.reply || '¡Aquí tiene!');
-    setTimeout(() => showConfirmCard(matched), 400);
+    matched.forEach(item => {
+      const existing = currentOrder.find(l => l.id === item.id);
+      if(existing) existing.qty += 1;
+      else currentOrder.push({ ...item, qty: 1 });
+    });
+    showOrderFloat();
+    awaitingConfirmation = true;
+    mascotSay((result.reply || '¡Aquí tiene!') + ' ¿Confirma el pedido?');
   } else {
-    aiSay(result.reply || '¿Qué le puedo ofrecer?');
+    mascotSay(result.reply || '¿Qué le puedo ofrecer?');
   }
 }
 
-// ---- Micrófono (MediaRecorder + Whisper/Groq) ----
+// ---- Micrófono ----
 let mediaRecorder = null, audioChunks = [];
 
-micBtn.addEventListener('click', async () => {
+function startListening(){
+  if(recognizing) return;
+  mascot.click();
+}
+
+mascot.addEventListener('click', async () => {
   audioCtx.resume();
+  speechSynthesis.cancel(); // Cortar si está hablando
+  mascotWrap.classList.remove('speaking');
+
   if(recognizing){ mediaRecorder.stop(); return; }
 
   let stream;
   try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
-  catch(err) { aiSay('No puedo acceder al micrófono. Permítalo en la configuración del navegador, o escriba su pedido.'); return; }
+  catch(err) { mascotSay('No puedo escucharle. Permita el micrófono en su navegador.'); return; }
 
   audioChunks = [];
   mediaRecorder = new MediaRecorder(stream, {
@@ -441,53 +454,56 @@ micBtn.addEventListener('click', async () => {
   mediaRecorder.onstop = async () => {
     stream.getTracks().forEach(t => t.stop());
     recognizing = false; clearInterval(recTimer);
-    micBtn.classList.remove('recording');
-    micIcon.style.display = ''; stopIcon.style.display = 'none';
-    recBar.classList.remove('active'); textInput.style.display = '';
+    mascotWrap.classList.remove('listening');
+    statusText.textContent = 'Pensando...';
 
-    if(audioChunks.length === 0 || new Blob(audioChunks).size < 1000) return;
+    if(audioChunks.length === 0 || new Blob(audioChunks).size < 1000){
+      statusText.textContent = 'Tócame para hablar';
+      return;
+    }
     const blob = new Blob(audioChunks, { type: mediaRecorder.mimeType });
 
-    showTyping();
     try {
       const fd = new FormData();
       fd.append('file', blob, 'audio.' + (mediaRecorder.mimeType.includes('webm') ? 'webm' : 'm4a'));
       const res = await fetch('/api/transcribe', { method: 'POST', body: fd });
       if(!res.ok) throw new Error('fail');
       const data = await res.json();
-      hideTyping();
-      if(data.text && data.text.trim()) handleInput(data.text.trim());
-      else aiSay('No entendí — ¿puede repetir o escribir su pedido?');
-    } catch(err) { hideTyping(); aiSay('Hubo un problema — escriba su pedido en el campo de abajo.'); }
+      if(data.text && data.text.trim()){
+        handleInput(data.text.trim());
+      } else {
+        mascotSay('No entendí. Tóqueme e intente de nuevo.');
+      }
+    } catch(err) {
+      mascotSay('Hubo un error. Tóqueme e intente de nuevo.');
+    }
   };
 
   mediaRecorder.start();
   recognizing = true; recSeconds = 0;
-  micBtn.classList.add('recording');
-  micIcon.style.display = 'none'; stopIcon.style.display = '';
-  textInput.style.display = 'none';
-  recBar.classList.add('active');
-  recTime.textContent = '0s';
-  recTimer = setInterval(() => { recSeconds++; recTime.textContent = recSeconds + 's'; }, 1000);
-  setTimeout(() => { if(recognizing && mediaRecorder.state === 'recording') mediaRecorder.stop(); }, 10000);
+  mascotWrap.classList.add('listening');
+  mascotWrap.classList.remove('speaking');
+  statusText.textContent = 'Escuchando...';
+  recTimer = setInterval(() => {
+    recSeconds++;
+    statusText.textContent = `Escuchando... ${recSeconds}s`;
+  }, 1000);
+  // Auto-stop a los 8 segundos
+  setTimeout(() => { if(recognizing && mediaRecorder.state === 'recording') mediaRecorder.stop(); }, 8000);
 });
 
-textInput.addEventListener('keydown', (e) => {
-  if(e.key === 'Enter' && textInput.value.trim()){ handleInput(textInput.value.trim()); textInput.value = ''; }
-});
-
-// ---- Toast ----
-function showToast(msg){ toast.textContent = msg; toast.classList.add('show'); setTimeout(() => toast.classList.remove('show'), 2400); }
+// Toast
+function showToast(msg){ toast.textContent = msg; toast.classList.add('show'); setTimeout(() => toast.classList.remove('show'), 2800); }
 
 // ---- Cajero ----
 function renderQueue(){
   const ql = document.getElementById('queueList');
   const qc = document.getElementById('queueCount');
   qc.textContent = queue.length;
-  if(queue.length === 0){ ql.innerHTML = '<div class="empty-queue">Sin pedidos en cola</div>'; return; }
+  if(!queue.length){ ql.innerHTML = '<div class="empty-queue">Sin pedidos</div>'; return; }
   ql.innerHTML = '';
   queue.forEach(order => {
-    const card = document.createElement('div'); card.className = 'order-card';
+    const card = document.createElement('div'); card.className = 'caj-card';
     card.innerHTML = `
       <div class="top"><span class="num">#${String(order.num).padStart(3,'0')}</span><span class="status">${order.status}</span><span class="time">${order.time}</span></div>
       ${order.items.map(i => `<div class="item"><span>${i.name} ×${i.qty}</span><span>$${(i.price*i.qty).toFixed(2)}</span></div>`).join('')}
@@ -498,20 +514,19 @@ function renderQueue(){
   });
 }
 
-// ---- Tabs ----
-document.getElementById('tabCliente').addEventListener('click', () => switchTab('Cliente'));
-document.getElementById('tabCajero').addEventListener('click', () => switchTab('Cajero'));
-function switchTab(name){
-  document.getElementById('tabCliente').classList.toggle('active', name === 'Cliente');
-  document.getElementById('tabCajero').classList.toggle('active', name === 'Cajero');
-  document.getElementById('viewCliente').classList.toggle('active', name === 'Cliente');
-  document.getElementById('viewCajero').classList.toggle('active', name === 'Cajero');
-  if(name === 'Cajero') renderQueue();
-}
+// Tabs
+const tabCajero = document.getElementById('tabCajero');
+tabCajero.addEventListener('click', () => {
+  const showing = document.getElementById('viewCajero').classList.contains('active');
+  document.getElementById('viewCliente').classList.toggle('active', showing);
+  document.getElementById('viewCajero').classList.toggle('active', !showing);
+  tabCajero.classList.toggle('active', !showing);
+  if(!showing) renderQueue();
+});
 
-// ---- Inicio ----
-addMsg('¡Buenas! Dígame qué se le antoja, o pregunte por recomendaciones. Puede hablar o escribir.', 'ai');
+// Init
 renderQueue();
+setTimeout(() => mascotSay('¡Buenas! Tóqueme y dígame qué se le antoja.'), 500);
 </script>
 </body>
 </html>
