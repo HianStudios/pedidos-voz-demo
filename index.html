@@ -380,84 +380,80 @@ confirmBtn.addEventListener('click', () => {
   renderQueue();
 });
 
-// ---------- Reconocimiento de voz ----------
-const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-let recognition = null;
-let langIndex = 0;
-const LANGS = ['es-419','es-ES','es']; // fallback chain: latam → españa → genérico
+// ---------- Reconocimiento de voz (grabación local + Whisper via Groq) ----------
+// No depende de Google: graba audio localmente con MediaRecorder,
+// lo manda a /api/transcribe (Whisper en Groq), y de ahí al matching.
+// Funciona en Chrome, Firefox, Safari, y móviles.
 
-if(SR){
-  recognition = new SR();
-  recognition.lang = LANGS[langIndex];
-  recognition.continuous = false;
-  recognition.interimResults = false;
+let mediaRecorder = null;
+let audioChunks = [];
 
-  recognition.onstart = () => {
-    recognizing = true;
-    micBtn.classList.add('listening');
-    micLabel.textContent = 'Escuchando...';
-  };
+micBtn.addEventListener('click', async () => {
+  if(recognizing){
+    // Parar grabación
+    mediaRecorder.stop();
+    return;
+  }
 
-  recognition.onend = () => {
+  // Pedir permiso de micrófono
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  } catch(err) {
+    micLabel.textContent = 'Micrófono bloqueado — permítalo en la configuración del navegador';
+    voiceNote.textContent = 'Toque el candado (🔒) en la barra de direcciones > Micrófono > Permitir, luego recargue.';
+    return;
+  }
+
+  audioChunks = [];
+  mediaRecorder = new MediaRecorder(stream, { mimeType: MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus' : 'audio/mp4' });
+
+  mediaRecorder.ondataavailable = (e) => { if(e.data.size > 0) audioChunks.push(e.data); };
+
+  mediaRecorder.onstop = async () => {
+    stream.getTracks().forEach(t => t.stop());
     recognizing = false;
     micBtn.classList.remove('listening');
-    if(micLabel.textContent === 'Escuchando...') micLabel.textContent = 'Toque para hablar';
-  };
 
-  recognition.onerror = (e) => {
-    recognizing = false;
-    micBtn.classList.remove('listening');
-    console.error('SpeechRecognition error:', e.error);
+    if(audioChunks.length === 0){ micLabel.textContent = 'No se grabó audio — intente de nuevo'; return; }
 
-    switch(e.error){
-      case 'not-allowed':
-      case 'service-not-allowed':
-        micLabel.textContent = 'Micrófono bloqueado — toque el candado en la barra de direcciones y permítalo';
-        voiceNote.textContent = 'El navegador bloqueó el micrófono. Haga clic en el ícono de candado (🔒) arriba a la izquierda, busque Micrófono y cambie a Permitir, luego recargue la página.';
-        break;
-      case 'language-not-supported':
-        // Probar el siguiente idioma del fallback
-        langIndex++;
-        if(langIndex < LANGS.length){
-          recognition.lang = LANGS[langIndex];
-          micLabel.textContent = 'Ajustando idioma, intente de nuevo...';
-        } else {
-          micLabel.textContent = 'Idioma no soportado — use el campo de texto';
-        }
-        break;
-      case 'no-speech':
-        micLabel.textContent = 'No escuché nada — intente de nuevo';
-        break;
-      case 'network':
-        micLabel.textContent = 'Sin conexión al servicio de voz — revise su internet';
-        break;
-      case 'aborted':
-        micLabel.textContent = 'Toque para hablar';
-        break;
-      default:
-        micLabel.textContent = 'Error: ' + e.error + ' — use el campo de texto';
-    }
-  };
+    const blob = new Blob(audioChunks, { type: mediaRecorder.mimeType });
+    if(blob.size < 1000){ micLabel.textContent = 'Muy corto — mantenga presionado mientras habla'; return; }
 
-  recognition.onresult = (e) => { handleInput(e.results[0][0].transcript); };
+    micLabel.textContent = 'Procesando...';
+    setBusy(true);
 
-  micBtn.addEventListener('click', async () => {
-    if(recognizing){ recognition.stop(); return; }
-    // Pedir permiso de micrófono explícitamente antes de iniciar reconocimiento
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      stream.getTracks().forEach(t => t.stop()); // soltar el mic, solo queríamos el permiso
-      recognition.start();
+      const formData = new FormData();
+      const ext = mediaRecorder.mimeType.includes('webm') ? 'webm' : 'm4a';
+      formData.append('file', blob, 'audio.' + ext);
+
+      const res = await fetch('/api/transcribe', { method: 'POST', body: formData });
+      if(!res.ok) throw new Error('transcribe failed');
+      const data = await res.json();
+
+      setBusy(false);
+      if(data.text && data.text.trim()){
+        micLabel.textContent = 'Toque para hablar';
+        handleInput(data.text.trim());
+      } else {
+        micLabel.textContent = 'No entendí nada — intente de nuevo';
+      }
     } catch(err) {
-      micLabel.textContent = 'Micrófono bloqueado — permítalo en la configuración del navegador';
-      voiceNote.textContent = 'Haga clic en el candado (🔒) de la barra de direcciones > Micrófono > Permitir, luego recargue.';
+      setBusy(false);
+      micLabel.textContent = 'Error al procesar audio — use el campo de texto';
+      console.error('Transcribe error:', err);
     }
-  });
-} else {
-  voiceNote.textContent = 'Este navegador no soporta reconocimiento de voz — use el campo de texto.';
-  micBtn.disabled = true;
-  micBtn.style.opacity = '0.4';
-}
+  };
+
+  mediaRecorder.start();
+  recognizing = true;
+  micBtn.classList.add('listening');
+  micLabel.textContent = 'Escuchando... (toque de nuevo para enviar)';
+
+  // Auto-parar a los 10 segundos para no grabar infinito
+  setTimeout(() => { if(recognizing && mediaRecorder.state === 'recording') mediaRecorder.stop(); }, 10000);
+});
 
 sendBtn.addEventListener('click', () => { handleInput(textInput.value); textInput.value = ''; });
 textInput.addEventListener('keydown', (e) => { if(e.key === 'Enter'){ handleInput(textInput.value); textInput.value = ''; } });
