@@ -267,25 +267,58 @@ function normalize(s){
 
 const UNSURE_WORDS = ['no se','no sé','no tengo idea','sugiereme','sugiérame','recomiend','sorprend','que hay','qué hay','algo rico','algo bueno'];
 
-function handleInput(raw){
-  if(!raw || !raw.trim()) return;
-  addBubble(raw, 'user');
+// Respaldo local (sin IA) por si /api/match falla o no hay conexión
+function localMatch(raw){
   const n = normalize(raw);
-
   if(UNSURE_WORDS.some(w => n.includes(normalize(w)))){
-    aiSay('Sin problema, le recomiendo estos:');
-    showCards(shuffle(MENU).slice(0,3));
-    return;
+    return { matched_ids: [], suggest: true, reply: 'Sin problema, le recomiendo estos:' };
   }
-
   const matches = MENU.filter(d => d.kw.some(k => n.includes(normalize(k))));
   if(matches.length){
-    aiSay(matches.length === 1 ? `Encontré esto: ${matches[0].name}.` : 'Encontré estas opciones:');
-    showCards(matches.slice(0,3));
-  } else {
-    aiSay('No encontré eso en el menú. ¿Le muestro algunas opciones?');
-    showCards(shuffle(MENU).slice(0,3));
+    return {
+      matched_ids: matches.slice(0,3).map(d => d.id), suggest: false,
+      reply: matches.length === 1 ? `Encontré esto: ${matches[0].name}.` : 'Encontré estas opciones:'
+    };
   }
+  return { matched_ids: [], suggest: true, reply: 'No encontré eso en el menú. ¿Le muestro algunas opciones?' };
+}
+
+async function handleInput(raw){
+  if(!raw || !raw.trim()) return;
+  addBubble(raw, 'user');
+  setBusy(true);
+
+  let result;
+  try {
+    const res = await fetch('/api/match', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        transcript: raw,
+        menu: MENU.map(d => ({ id: d.id, name: d.name, desc: d.desc }))
+      })
+    });
+    if(!res.ok) throw new Error('match API failed');
+    result = await res.json();
+  } catch(err) {
+    result = localMatch(raw); // respaldo local si el endpoint falla
+  }
+
+  setBusy(false);
+  aiSay(result.reply || 'Déjeme ver qué tenemos...');
+
+  if(result.suggest || !result.matched_ids || result.matched_ids.length === 0){
+    showCards(shuffle(MENU).slice(0,3));
+  } else {
+    const matched = result.matched_ids.map(id => MENU.find(d => d.id === id)).filter(Boolean);
+    showCards(matched.length ? matched : shuffle(MENU).slice(0,3));
+  }
+}
+
+function setBusy(busy){
+  micBtn.disabled = busy;
+  sendBtn.disabled = busy;
+  micLabel.textContent = busy ? 'Pensando...' : 'Toque para hablar';
 }
 
 function shuffle(arr){ return [...arr].sort(() => Math.random() - 0.5); }

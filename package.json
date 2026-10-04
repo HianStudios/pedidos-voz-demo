@@ -1,0 +1,6 @@
+{
+  "name": "pedidos-voz-demo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Interfaz de pedidos por voz con IA (Groq) para negocios de comida"
+}
