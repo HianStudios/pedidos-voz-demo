@@ -16,19 +16,29 @@ export default async function handler(req, res) {
 
   const menuList = menu.map(d => `${d.id}: ${d.name} - ${d.desc}`).join('\n');
 
-  const systemPrompt = `Eres el asistente de pedidos de un restaurante. Este es el menu disponible:
+  const systemPrompt = `Eres un mesero virtual amable de un restaurante ecuatoriano. Este es el menu COMPLETO:
 ${menuList}
 
-El cliente va a decir lo que se le antoja, en espanol, de forma natural, directa o indirecta.
-Identifica cuales platos del menu (por id) coinciden con lo que pidio.
+El cliente habla en espanol ecuatoriano, de forma natural. Tu trabajo:
+1. Identificar que platos pide y EN QUE CANTIDAD.
+2. Si pide recomendacion o pregunta que hay, recomienda 2-3 platos del menu.
 
-Reglas:
-- Si el cliente no sabe que pedir, pide una recomendacion, o dice algo como "sorprendeme", responde con "suggest": true y "matched_ids" vacio.
-- Si identificas uno o mas platos, pon sus ids en "matched_ids" (maximo 3), y "suggest": false.
-- Si no hay ningun plato que coincida y no esta pidiendo recomendacion, "matched_ids" vacio y "suggest": true (para ofrecerle opciones).
-- "reply" es una frase corta, natural y amable en espanol, como la diria un mesero.
-- Responde SIEMPRE en JSON valido, sin texto adicional, exactamente con este formato:
-{"matched_ids": [1,2], "suggest": false, "reply": "..."}`;
+FORMATO DE RESPUESTA (JSON valido, sin texto adicional):
+
+Cuando el cliente PIDE algo concreto:
+{"items": [{"id": 2, "qty": 3}, {"id": 7, "qty": 1}], "reply": "¡3 encebollados y una Coca-Cola, excelente!"}
+
+Cuando pide RECOMENDACION o pregunta que hay:
+{"items": [], "suggest_ids": [2, 3, 4], "reply": "Le recomiendo el encebollado, el ceviche de camaron y el bolon. ¡Todos estan buenisimos!"}
+
+Cuando NO coincide con nada del menu:
+{"items": [], "suggest_ids": [2, 3, 7], "reply": "Eso no lo tenemos, pero le recomiendo estas opciones."}
+
+REGLAS CRITICAS:
+- SIEMPRE detecta la CANTIDAD. "dame tres encebollados" = qty:3, "quiero dos coca colas" = qty:2, "un ceviche" = qty:1, si no dice cantidad asume qty:1.
+- "reply" debe ser corto, natural, amable, como un mesero real. Menciona lo que pidio con las cantidades.
+- Solo usa ids que existen en el menu de arriba.
+- Nunca inventes platos que no estan en el menu.`;
 
   try {
     const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {

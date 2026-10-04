@@ -227,11 +227,14 @@ main{flex:1;position:relative;}
               <span></span><span></span><span></span><span></span><span></span>
             </div>
           </div>
-          <div class="status" id="statusText">Tócame para hablar</div>
+          <div class="status" id="statusText">Tócame para llamar al mesero</div>
         </div>
-        <div class="hint">Toque la bolita y diga qué se le antoja</div>
+        <div class="hint">Toque la bolita para llamar al mesero</div>
       </div>
 
+      <div class="reco-float" id="recoFloat" style="display:none;position:absolute;left:16px;right:16px;bottom:calc(80px + env(safe-area-inset-bottom,0px));z-index:14;">
+        <div id="recoCard" style="background:rgba(22,22,22,0.95);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border:1px solid var(--glass-border);border-radius:16px;overflow:hidden;box-shadow:0 12px 48px rgba(0,0,0,0.6);"></div>
+      </div>
       <div class="order-float" id="orderFloat">
         <div class="order-card" id="orderCard"></div>
       </div>
@@ -265,25 +268,46 @@ let currentOrder = [];
 let queue = [];
 let orderCounter = 1;
 let recognizing = false;
+let sessionActive = false; // sesion activa = mesero despierto
 let awaitingConfirmation = false;
 let recTimer = null;
-let recSeconds = 0;
 
 const mascotWrap = document.getElementById('mascotWrap');
 const mascot = document.getElementById('mascot');
 const statusText = document.getElementById('statusText');
 const orderFloat = document.getElementById('orderFloat');
 const orderCard = document.getElementById('orderCard');
+const recoFloat = document.getElementById('recoFloat');
+const recoCard = document.getElementById('recoCard');
 const toast = document.getElementById('toast');
 
-// Sonidos
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 function playSound(f,d){const o=audioCtx.createOscillator(),g=audioCtx.createGain();o.frequency.setValueAtTime(f,audioCtx.currentTime);o.frequency.exponentialRampToValueAtTime(f*.6,audioCtx.currentTime+d);g.gain.setValueAtTime(.06,audioCtx.currentTime);g.gain.exponentialRampToValueAtTime(.001,audioCtx.currentTime+d);o.connect(g).connect(audioCtx.destination);o.start();o.stop(audioCtx.currentTime+d);}
 function popSound(){playSound(660,.1);}
 function dingSound(){playSound(880,.2);setTimeout(()=>playSound(1100,.15),100);}
 
+// ---- Sesión del mesero ----
+function startSession(){
+  sessionActive = true;
+  mascotSay('¡Buenas! ¿Qué se le antoja?', () => listenLoop());
+}
+
+function endSession(){
+  sessionActive = false;
+  awaitingConfirmation = false;
+  mascotWrap.classList.remove('listening','speaking');
+  mascotSay('¡Fue un gusto atenderle! Tóqueme cuando necesite algo.', () => {
+    statusText.textContent = 'Tócame para llamar al mesero';
+  });
+}
+
+function listenLoop(){
+  if(!sessionActive) return;
+  setTimeout(() => { if(sessionActive && !recognizing) startRecording(); }, 800);
+}
+
 // ---- Mascota habla ----
-function mascotSay(text){
+function mascotSay(text, onDone){
   mascotWrap.classList.remove('listening');
   mascotWrap.classList.add('speaking');
   statusText.className = 'status ai-talking';
@@ -291,10 +315,7 @@ function mascotSay(text){
   speak(text, () => {
     mascotWrap.classList.remove('speaking');
     statusText.className = 'status';
-    // Si está esperando confirmación, volver a escuchar automáticamente
-    if(awaitingConfirmation){
-      setTimeout(() => startListening(), 600);
-    }
+    if(onDone) onDone();
   });
 }
 
@@ -310,32 +331,43 @@ function speak(text, onEnd){
   speechSynthesis.speak(u);
 }
 
-// ---- Mostrar cuadro flotante del pedido ----
+// ---- Cuadro flotante del pedido ----
 function showOrderFloat(){
   if(currentOrder.length === 0){ orderFloat.classList.remove('visible'); return; }
+  recoFloat.style.display = 'none'; // ocultar recomendaciones si hay
   const total = currentOrder.reduce((s,l) => s + l.price*l.qty, 0);
   orderCard.innerHTML = `
-    <div class="card-title">
-      <span>Su pedido</span>
-      <span class="total-badge">$${total.toFixed(2)}</span>
-    </div>
+    <div class="card-title"><span>Su pedido</span><span class="total-badge">$${total.toFixed(2)}</span></div>
     ${currentOrder.map(l => `
       <div class="order-item">
         ${l.img ? `<img src="${l.img}" alt="${l.name}">` : `<div class="emoji-thumb">${l.emoji}</div>`}
-        <div class="info">
-          <div class="name">${l.name}</div>
-          <div class="qty">×${l.qty}</div>
-        </div>
+        <div class="info"><div class="name">${l.name}</div><div class="qty">×${l.qty}</div></div>
         <span class="price">$${(l.price*l.qty).toFixed(2)}</span>
       </div>`).join('')}
-    <div class="card-footer">Diga <strong>"sí"</strong> para confirmar o <strong>"no"</strong> para cambiar</div>`;
+    <div class="card-footer">Diga <strong>"sí"</strong> para confirmar o <strong>"agregar"</strong> algo más</div>`;
   orderFloat.classList.add('visible');
   popSound();
 }
 
-function hideOrderFloat(){
+// ---- Mostrar recomendaciones con imágenes ----
+function showRecommendations(ids){
+  const dishes = ids.map(id => MENU.find(d => d.id === id)).filter(Boolean);
+  if(!dishes.length) return;
   orderFloat.classList.remove('visible');
+  recoCard.innerHTML = `
+    <div style="padding:10px 14px;font-weight:700;font-size:0.82rem;color:var(--gold);background:var(--gold-dim);">Le recomiendo</div>
+    ${dishes.map(d => `
+      <div class="order-item">
+        ${d.img ? `<img src="${d.img}" alt="${d.name}">` : `<div class="emoji-thumb">${d.emoji}</div>`}
+        <div class="info"><div class="name">${d.name}</div><div class="qty" style="color:var(--text-dim)">${d.desc}</div></div>
+        <span class="price">$${d.price.toFixed(2)}</span>
+      </div>`).join('')}
+    <div style="padding:10px 14px;text-align:center;font-size:0.75rem;color:var(--text-dim);">Dígame cuál quiere o pida lo que guste</div>`;
+  recoFloat.style.display = 'block';
+  recoFloat.style.animation = 'floatIn .4s ease-out';
 }
+
+function hideRecommendations(){ recoFloat.style.display = 'none'; }
 
 // ---- Confirmar pedido ----
 function confirmOrder(){
@@ -346,55 +378,51 @@ function confirmOrder(){
     num: orderCounter++, items: [...currentOrder], total,
     time: new Date().toLocaleTimeString('es-EC',{hour:'2-digit',minute:'2-digit'}), status:'nuevo'
   });
-  hideOrderFloat();
+  orderFloat.classList.remove('visible');
   showToast(`Pedido #${String(queue[queue.length-1].num).padStart(3,'0')} enviado ✓`);
-  mascotSay('¡Pedido enviado! Cuando quiera pedir algo más, tóqueme.');
   currentOrder = [];
   awaitingConfirmation = false;
   renderQueue();
+  mascotSay('¡Pedido enviado! ¿Desea algo más, o le digo gracias?', () => listenLoop());
 }
 
-// ---- Matching ----
+// ---- Procesar lo que dijo el cliente ----
 function normalize(s){ return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''); }
 
-function localMatch(raw){
-  const n = normalize(raw);
-  const matches = MENU.filter(d => d.kw.some(k => n.includes(normalize(k))));
-  if(matches.length){
-    return { matched_ids: matches.map(d => d.id), reply: matches.length === 1 ? `${matches[0].name}, ¡buena elección!` : '¡Listo, aquí tiene!' };
-  }
-  return { matched_ids: [], reply: 'No encontré eso en el menú. Tenemos encebollado, ceviche, seco de pollo, bolón, menestra y bebidas. ¿Qué le provoca?' };
-}
+const GOODBYE = ['gracias','eso es todo','no nada mas','no nada más','ya no','hasta luego','chao','no gracias','nada mas','nada más'];
+const CONFIRM = ['si','sí','confirma','confirmar','dale','eso','listo','mandalo','mándalo','correcto','esta bien','está bien'];
+const DENY = ['no','cancel','cancela','quita','elimina','borra'];
+const ADDMORE = ['agrega','tambien','también','ademas','además','mas','más','otro','otra','quiero','dame','deme','pon','ponme','y tambien','y también'];
 
 async function handleInput(raw){
   if(!raw || !raw.trim()) return;
   const n = normalize(raw.trim());
 
-  // Si estamos esperando confirmación
+  // Chequear despedida
+  if(GOODBYE.some(w => n.includes(normalize(w))) && !n.includes('quiero') && !n.includes('dame')){
+    endSession();
+    return;
+  }
+
+  // Si esperamos confirmación
   if(awaitingConfirmation){
-    if(n.includes('si') || n.includes('sí') || n.includes('confirma') || n.includes('dale') || n.includes('eso') || n.includes('listo') || n.includes('manda')){
+    if(CONFIRM.some(w => n.includes(normalize(w)))){
       awaitingConfirmation = false;
       confirmOrder();
       return;
     }
-    if(n.includes('no') || n.includes('cancel') || n.includes('quita') || n.includes('cambia')){
+    if(DENY.some(w => n.includes(normalize(w))) && !ADDMORE.some(w => n.includes(normalize(w)))){
       awaitingConfirmation = false;
       currentOrder = [];
-      hideOrderFloat();
-      mascotSay('Cancelado. Dígame qué le sirvo.');
+      orderFloat.classList.remove('visible');
+      mascotSay('Cancelado. ¿Qué le sirvo entonces?', () => listenLoop());
       return;
     }
-    if(n.includes('agrega') || n.includes('tambien') || n.includes('también') || n.includes('mas') || n.includes('más') || n.includes('otro') || n.includes('otra') || n.includes('quiero') || n.includes('dame') || n.includes('deme') || n.includes('pon')){
-      awaitingConfirmation = false;
-      // Procesar como nuevo pedido que se agrega
-      await processOrder(raw);
-      return;
-    }
-    // Si no entiende, volver a preguntar
-    mascotSay('Diga sí para confirmar, o dígame qué más quiere agregar.');
-    return;
+    // Si quiere agregar más, procesar como pedido nuevo
+    awaitingConfirmation = false;
   }
 
+  hideRecommendations();
   await processOrder(raw);
 }
 
@@ -410,41 +438,50 @@ async function processOrder(raw){
     });
     if(!res.ok) throw new Error('fail');
     result = await res.json();
-  } catch(err) { result = localMatch(raw); }
+  } catch(err) {
+    // Fallback local
+    result = { items: [], reply: 'Hubo un problema. ¿Puede repetir?' };
+  }
 
-  if(result.matched_ids && result.matched_ids.length > 0){
-    const matched = result.matched_ids.map(id => MENU.find(d => d.id === id)).filter(Boolean);
-    matched.forEach(item => {
+  // Manejar items con cantidades
+  if(result.items && result.items.length > 0){
+    result.items.forEach(item => {
+      const dish = MENU.find(d => d.id === item.id);
+      if(!dish) return;
+      const qty = item.qty || 1;
       const existing = currentOrder.find(l => l.id === item.id);
-      if(existing) existing.qty += 1;
-      else currentOrder.push({ ...item, qty: 1 });
+      if(existing) existing.qty += qty;
+      else currentOrder.push({ ...dish, qty });
     });
     showOrderFloat();
     awaitingConfirmation = true;
-    mascotSay((result.reply || '¡Aquí tiene!') + ' ¿Confirma el pedido?');
-  } else {
-    mascotSay(result.reply || '¿Qué le puedo ofrecer?');
+    mascotSay((result.reply || '¡Aquí tiene!') + ' ¿Confirma el pedido?', () => listenLoop());
+    return;
   }
+
+  // Manejar recomendaciones
+  if(result.suggest_ids && result.suggest_ids.length > 0){
+    showRecommendations(result.suggest_ids);
+    mascotSay(result.reply || '¡Le recomiendo estas opciones!', () => listenLoop());
+    return;
+  }
+
+  // Sin match
+  mascotSay(result.reply || '¿Qué le puedo ofrecer?', () => listenLoop());
 }
 
 // ---- Micrófono ----
 let mediaRecorder = null, audioChunks = [];
 
-function startListening(){
-  if(recognizing) return;
-  mascot.click();
-}
-
-mascot.addEventListener('click', async () => {
+async function startRecording(){
+  if(recognizing || !sessionActive) return;
   audioCtx.resume();
-  speechSynthesis.cancel(); // Cortar si está hablando
+  speechSynthesis.cancel();
   mascotWrap.classList.remove('speaking');
-
-  if(recognizing){ mediaRecorder.stop(); return; }
 
   let stream;
   try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
-  catch(err) { mascotSay('No puedo escucharle. Permita el micrófono en su navegador.'); return; }
+  catch(err) { mascotSay('No puedo escucharle. Permita el micrófono.'); return; }
 
   audioChunks = [];
   mediaRecorder = new MediaRecorder(stream, {
@@ -453,15 +490,16 @@ mascot.addEventListener('click', async () => {
   mediaRecorder.ondataavailable = (e) => { if(e.data.size > 0) audioChunks.push(e.data); };
   mediaRecorder.onstop = async () => {
     stream.getTracks().forEach(t => t.stop());
-    recognizing = false; clearInterval(recTimer);
+    recognizing = false;
+    clearInterval(recTimer);
     mascotWrap.classList.remove('listening');
-    statusText.textContent = 'Pensando...';
 
     if(audioChunks.length === 0 || new Blob(audioChunks).size < 1000){
-      statusText.textContent = 'Tócame para hablar';
+      if(sessionActive) listenLoop();
       return;
     }
     const blob = new Blob(audioChunks, { type: mediaRecorder.mimeType });
+    statusText.textContent = 'Pensando...';
 
     try {
       const fd = new FormData();
@@ -469,27 +507,35 @@ mascot.addEventListener('click', async () => {
       const res = await fetch('/api/transcribe', { method: 'POST', body: fd });
       if(!res.ok) throw new Error('fail');
       const data = await res.json();
-      if(data.text && data.text.trim()){
-        handleInput(data.text.trim());
-      } else {
-        mascotSay('No entendí. Tóqueme e intente de nuevo.');
-      }
-    } catch(err) {
-      mascotSay('Hubo un error. Tóqueme e intente de nuevo.');
-    }
+      if(data.text && data.text.trim()) handleInput(data.text.trim());
+      else { mascotSay('No entendí, ¿puede repetir?', () => listenLoop()); }
+    } catch(err) { mascotSay('Hubo un error. ¿Puede repetir?', () => listenLoop()); }
   };
 
   mediaRecorder.start();
-  recognizing = true; recSeconds = 0;
+  recognizing = true;
+  let secs = 0;
   mascotWrap.classList.add('listening');
   mascotWrap.classList.remove('speaking');
   statusText.textContent = 'Escuchando...';
-  recTimer = setInterval(() => {
-    recSeconds++;
-    statusText.textContent = `Escuchando... ${recSeconds}s`;
-  }, 1000);
-  // Auto-stop a los 8 segundos
+  recTimer = setInterval(() => { secs++; statusText.textContent = `Escuchando... ${secs}s`; }, 1000);
   setTimeout(() => { if(recognizing && mediaRecorder.state === 'recording') mediaRecorder.stop(); }, 8000);
+}
+
+// Tocar la mascota: si no hay sesion, iniciar. Si hay sesion y esta grabando, parar.
+mascot.addEventListener('click', () => {
+  audioCtx.resume();
+  if(!sessionActive){
+    startSession();
+    return;
+  }
+  if(recognizing){
+    mediaRecorder.stop();
+  } else {
+    speechSynthesis.cancel();
+    mascotWrap.classList.remove('speaking');
+    startRecording();
+  }
 });
 
 // Toast
@@ -526,7 +572,7 @@ tabCajero.addEventListener('click', () => {
 
 // Init
 renderQueue();
-setTimeout(() => mascotSay('¡Buenas! Tóqueme y dígame qué se le antoja.'), 500);
+
 </script>
 </body>
 </html>
