@@ -54,7 +54,7 @@ export function interpretLocal(text,cart,menu,lastId=null){
   if(/^(cancelar|cancela|borra) (?:todo|el pedido|mi pedido)$/.test(n)) return answer('cancel','¿Quieres vaciar todo el borrador? Confírmalo con el botón de cancelar.');
   if(/^(gracias|hasta luego|chao|adios)$/.test(n)) return answer(cart.length?'review':'goodbye',cart.length?'Tienes un pedido pendiente. Vamos a revisarlo.':'Gracias por visitarnos. Aquí estaré cuando me necesites.');
   if(/\b(menu|carta)\b/.test(n)) return answer('menu','Aquí tienes nuestro menú. ¿Qué se te antoja?');
-  if(/\b(recomienda|recomiendas|recomendacion|que hay|que tienes)\b/.test(n)) return answer('recommend','Puedes probar el cuarto de pollo o compartir un combo familiar.',{suggest_ids:['cuarto','familiar']});
+  if(/\b(recomienda|recomiendas|recomendacion|que hay|que tienes)\b/.test(n)) return answer('recommend','Puedes probar el cuarto de pollo o un combo familiar.',{suggest_ids:['cuarto','combo-familiar']});
   const hits=[]; let remaining=n;
   const aliases=menu.flatMap(p=>p.aliases.map(a=>({id:p.id,a:normalize(a)}))).sort((a,b)=>b.a.length-a.a.length);
   // Buscar primero la coincidencia más larga y no contar de nuevo sus subcadenas.

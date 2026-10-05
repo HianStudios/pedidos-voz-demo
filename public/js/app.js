@@ -165,6 +165,25 @@ async function handleInput(raw){
     endSession();return;
   }
 
+  // ---- Navegación local (ANTES de llamar a la API) ----
+  // Frases naturales que un cliente diría
+  const nav=normalize(raw);
+  if(/\b(menu|carta|que tienes|qué tienes|que hay|qué hay|muestrame|muéstrame|ver opciones|opciones|que venden|qué venden|que ofrecen)\b/.test(nav)){
+    showCategoryChoice();return;
+  }
+  if(/\b(solo|solos|platos?|individual|sin combo|nada de combo|no combo|plato solo|platos solos|quiero solo)\b/.test(nav)&&!/\b(combo|combos)\b/.test(nav)){
+    showProductCards('Platos','Nuestros platos');return;
+  }
+  if(/\b(combo|combos|paquete|promocion|promo)\b/.test(nav)&&!/\b(no|sin|nada)\b/.test(nav)){
+    showProductCards('Combos','Nuestros combos');return;
+  }
+  if(/\b(bebida|bebidas|gaseosa|gaseosas|tomar|refresco|algo de tomar|para tomar)\b/.test(nav)){
+    showDrinkCards();return;
+  }
+  if(/\b(extra|extras|acompañamiento|acompañamientos|algo mas|algo más|adicional)\b/.test(nav)&&!/\b(no|sin|nada)\b/.test(nav)){
+    showProductCards('Extras','Extras');return;
+  }
+
   closeAllModals();
   busy=true;request=new AbortController();
 
@@ -194,7 +213,7 @@ async function handleInput(raw){
       busy=false;return;
     }
 
-    if(result.intent==='menu'||/\b(menu|carta|que tienes|qué tienes)\b/i.test(n)){
+    if(result.intent==='menu'){
       showCategoryChoice();busy=false;return;
     }
 
@@ -212,19 +231,6 @@ async function handleInput(raw){
         openModal('Te recomiendo',html);
       }
       reply(result.reply||'¿Qué te gustaría?');busy=false;return;
-    }
-
-    // Ver platos solos
-    if(/\b(platos? solos?|solos?|individual)\b/i.test(n)){
-      showProductCards('Pollo','Nuestros platos');busy=false;return;
-    }
-    // Ver combos
-    if(/\b(combos?)\b/i.test(n)){
-      showProductCards('Combos','Nuestros combos');busy=false;return;
-    }
-    // Ver bebidas
-    if(/\b(bebidas?|gaseosas?|tomar)\b/i.test(n)){
-      showDrinkCards();busy=false;return;
     }
 
     if(result.intent==='review'&&cart.length){
