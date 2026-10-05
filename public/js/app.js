@@ -166,31 +166,37 @@ async function handleInput(raw){
   }
 
   // ---- Navegación local (ANTES de llamar a la API) ----
-  // Frases naturales que un cliente diría
+  // SOLO navegación pura. Si tiene verbo de acción o cantidad → es un PEDIDO, va a la API.
   const nav=normalize(raw);
-  if(/\b(menu|carta|que tienes|qué tienes|que hay|qué hay|muestrame|muéstrame|ver opciones|opciones|que venden|qué venden|que ofrecen|que me ofreces)\b/.test(nav)){
-    showCategoryChoice();
-    reply('Para hoy tenemos platos sueltos y combos. Dígame qué prefiere.');
-    return;
-  }
-  if(/\b(solo|solos|platos?|individual|sin combo|nada de combo|no combo|plato solo|platos solos|quiero solo|suelto|sueltos)\b/.test(nav)&&!/\b(combo|combos)\b/.test(nav)){
-    showProductCards('Platos','Nuestros platos');
-    reply('Estos son nuestros platos. Dígame cuál le gusta.');
-    return;
-  }
-  if(/\b(combo|combos|paquete|promocion|promo|armado|armados)\b/.test(nav)&&!/\b(no|sin|nada)\b/.test(nav)){
-    showProductCards('Combos','Nuestros combos');
-    reply('Aquí están los combos. ¿Cuál le sirvo?');
-    return;
-  }
-  if(/\b(bebida|bebidas|gaseosa|gaseosas|tomar|refresco|algo de tomar|para tomar|cola|colas)\b/.test(nav)&&!/\b(quiero|dame|deme|ponme|echale|una|un|dos|tres)\b/.test(nav)){
-    showDrinkCards();
-    return;
-  }
-  if(/\b(extra|extras|acompañamiento|acompañamientos|adicional|aparte)\b/.test(nav)&&!/\b(no|sin|nada)\b/.test(nav)){
-    showProductCards('Extras','Extras');
-    reply('¿Qué extra le agrego?');
-    return;
+  const esAccion=/\b(dame|deme|quiero|ponme|echale|traeme|agrega|agregame|tráeme|ponle|dime)\b/.test(nav);
+  const esCantidad=/\b(un|una|uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|\d+)\b/.test(nav);
+  const esNavegacionPura=!esAccion&&!esCantidad;
+
+  if(esNavegacionPura){
+    if(/\b(menu|carta|que tienes|que hay|muestrame|muéstrame|opciones|que venden|que ofrecen|que me ofreces|ver)\b/.test(nav)){
+      showCategoryChoice();
+      reply('Para hoy tenemos platos sueltos y combos. Dígame qué prefiere.');
+      return;
+    }
+    if(/\b(solo|solos|platos?|individual|suelto|sueltos)\b/.test(nav)&&!/\b(combo|combos)\b/.test(nav)){
+      showProductCards('Platos','Nuestros platos');
+      reply('Estos son nuestros platos. Dígame cuál le gusta.');
+      return;
+    }
+    if(/\b(combo|combos|paquete|promocion|promo)\b/.test(nav)){
+      showProductCards('Combos','Nuestros combos');
+      reply('Aquí están los combos. ¿Cuál le sirvo?');
+      return;
+    }
+    if(/\b(bebida|bebidas|gaseosa|gaseosas|tomar|refresco|para tomar)\b/.test(nav)){
+      showDrinkCards();
+      return;
+    }
+    if(/\b(extra|extras|acompañamiento|adicional)\b/.test(nav)){
+      showProductCards('Extras','Extras');
+      reply('¿Qué extra le agrego?');
+      return;
+    }
   }
 
   closeAllModals();

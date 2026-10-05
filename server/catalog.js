@@ -13,11 +13,11 @@ export const menu = [
   {id:'pechuga',name:'Pechuga a la plancha',category:'Platos',price:500,desc:'Pechuga jugosa con arroz y ensalada.',emoji:'🍗',aliases:['pechuga','pechuga a la plancha','una pechuga','pechuga plancha'],options:['sin ensalada','sin arroz']},
 
   // === COMBOS (5) ===
-  {id:'combo-personal',name:'Combo personal',category:'Combos',price:575,desc:'Cuarto de pollo, papas y gaseosa.',emoji:'🍱',tag:'El más pedido',aliases:['combo personal','combo individual','combos personales','un combo personal'],options:['sin papas']},
-  {id:'combo-pareja',name:'Combo en pareja',category:'Combos',price:1100,desc:'Medio pollo, papas grandes, ensalada y 2 gaseosas.',emoji:'🍱',aliases:['combo pareja','combo en pareja','combo de pareja','combo para dos','un combo pareja'],options:['sin ensalada','sin papas']},
-  {id:'combo-familiar',name:'Combo familiar',category:'Combos',price:1850,desc:'Pollo entero, papas grandes, ensalada y gaseosa de litro.',emoji:'🍱',aliases:['combo familiar','combos familiares','un combo familiar','el familiar'],options:['sin ensalada','sin papas','sin cebolla']},
-  {id:'combo-alitas',name:'Combo de alitas',category:'Combos',price:700,desc:'8 alitas BBQ, papas y gaseosa.',emoji:'🍱',aliases:['combo de alitas','combo alitas','un combo de alitas'],options:['sin papas']},
-  {id:'combo-pechuga',name:'Combo pechuga',category:'Combos',price:650,desc:'Pechuga a la plancha, arroz, ensalada y gaseosa.',emoji:'🍱',aliases:['combo pechuga','combo de pechuga','un combo pechuga'],options:['sin ensalada','sin arroz']},
+  {id:'combo-personal',name:'Combo personal',category:'Combos',price:575,desc:'Cuarto de pollo, papas y gaseosa.',emoji:'🍱',tag:'El más pedido',aliases:['combo personal','combo individual','combos personales','un combo personal','personal','el personal','el individual'],options:['sin papas']},
+  {id:'combo-pareja',name:'Combo en pareja',category:'Combos',price:1100,desc:'Medio pollo, papas grandes, ensalada y 2 gaseosas.',emoji:'🍱',aliases:['combo pareja','combo en pareja','combo de pareja','combo para dos','un combo pareja','pareja','el de pareja','para dos'],options:['sin ensalada','sin papas']},
+  {id:'combo-familiar',name:'Combo familiar',category:'Combos',price:1850,desc:'Pollo entero, papas grandes, ensalada y gaseosa de litro.',emoji:'🍱',aliases:['combo familiar','combos familiares','un combo familiar','el familiar','familiar','familiares','tres familiares'],options:['sin ensalada','sin papas','sin cebolla']},
+  {id:'combo-alitas',name:'Combo de alitas',category:'Combos',price:700,desc:'8 alitas BBQ, papas y gaseosa.',emoji:'🍱',aliases:['combo de alitas','combo alitas','combos de alitas','un combo de alitas','el de alitas','combo de alita'],options:['sin papas']},
+  {id:'combo-pechuga',name:'Combo pechuga',category:'Combos',price:650,desc:'Pechuga a la plancha, arroz, ensalada y gaseosa.',emoji:'🍱',aliases:['combo pechuga','combo de pechuga','un combo pechuga','el de pechuga','combo pechuga plancha'],options:['sin ensalada','sin arroz']},
 
   // === EXTRAS (3) ===
   {id:'papas',name:'Papas doradas',category:'Extras',price:250,desc:'Porción extra, crujiente y recién hecha.',emoji:'🍟',aliases:['papas doradas','papas fritas','papas','unas papas'],options:['sin sal']},
