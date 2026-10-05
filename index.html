@@ -2,42 +2,60 @@
 <html lang="es">
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#f6f3ec"><meta name="description" content="Conoce a Milo, tu mesero virtual. Pide pollo a la brasa con tu voz o explora el menú.">
+  <meta name="theme-color" content="#f6f3ec"><meta name="description" content="Conoce a Milo, tu mesero virtual. Pide pollo a la brasa con tu voz.">
   <title>Brasa · Tu mesa, a tu manera</title>
   <link rel="icon" href="/public/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="/public/styles.css">
 </head>
 <body>
-  <header class="site-header"><a class="brand" href="/" aria-label="Brasa, inicio"><span class="brand-icon">b<span>•</span></span><span id="brandName">brasa</span><span class="brand-dot">®</span></a><div class="header-right"><span class="demo-badge" id="modeBadge">Cargando…</span><button class="text-button" id="cashierOpen">Caja <span aria-hidden="true">↗</span></button></div></header>
-  <main class="layout">
-    <section class="assistant-panel" aria-labelledby="welcomeTitle">
+  <header class="site-header">
+    <a class="brand" href="/" aria-label="Brasa, inicio"><span class="brand-icon">b<span>•</span></span><span id="brandName">brasa</span><span class="brand-dot">®</span></a>
+    <div class="header-right"><span class="demo-badge" id="modeBadge">Cargando…</span><button class="text-button" id="cashierOpen">Caja <span aria-hidden="true">↗</span></button></div>
+  </header>
+
+  <main class="milo-layout">
+    <section class="milo-panel" aria-labelledby="welcomeTitle">
       <div class="eyebrow"><span class="live-dot"></span> TU MESERO VIRTUAL</div>
       <h1 id="welcomeTitle">Buen pollo.<br>Una buena <em>charla.</em></h1>
       <p class="intro">Soy Milo. Tú dime qué se te antoja,<br>yo me encargo de tomar tu pedido.</p>
+
       <div class="mascot-stage" id="mascotStage" data-state="off">
         <div class="orb-aura"></div><div class="rings" aria-hidden="true"><i></i><i></i><i></i></div>
         <button id="mascot" class="mascot" aria-label="Hablar con Milo"><span class="orb-highlight"></span><span class="face" aria-hidden="true"><span class="eyes"><i></i><i></i></span><span class="cheeks"><i></i><i></i></span><span class="mouth"></span></span></button>
         <div class="orb-shadow"></div><span class="mascot-tag">MILO <span>✦</span></span>
       </div>
+
       <div class="voice-status"><span id="stateDot" class="state-dot"></span><span id="voiceState" role="status">Listo para ayudarte</span></div>
-      <div class="reply" id="reply" aria-live="polite">¿Empezamos? Activa mi voz o elige algo del menú.</div>
+      <div class="reply" id="reply" aria-live="polite">Toca a Milo o di su nombre para empezar.</div>
       <p class="transcript" id="transcript"></p>
-      <div class="voice-actions"><button class="primary-button" id="voiceEnable"><span aria-hidden="true">◉</span> Activar voz</button><button class="icon-button" id="voiceStop" aria-label="Desactivar micrófono" hidden>■</button></div>
-      <p class="voice-help" id="voiceHelp">Después de activar, puedes llamarme «mesero».</p>
-      <div class="quick-prompts"><button data-prompt="Muéstrame el menú">Ver el menú <span>↗</span></button><button data-prompt="¿Qué me recomiendas?">Recomiéndame algo <span>✧</span></button></div>
-      <form id="chatForm" class="chat-input"><label for="chatText" class="sr-only">Escribe tu pedido</label><input id="chatText" maxlength="1200" autocomplete="off" placeholder="O escríbeme por aquí…" required><button aria-label="Enviar mensaje" id="sendText">↑</button></form>
+      <p class="voice-help" id="voiceHelp">Di «Milo» para llamarme.</p>
       <div class="privacy-note"><span aria-hidden="true">⌁</span> Tú decides cuándo encender el micrófono.</div>
     </section>
-    <section class="menu-panel" id="menuPanel" aria-labelledby="menuTitle">
-      <div class="menu-heading"><div><span class="eyebrow">HECHO AL FUEGO. HECHO CON GANAS.</span><h2 id="menuTitle">¿Qué se te antoja?</h2></div><span class="menu-stamp">AL<br>FUEGO <span>✳</span></span></div>
-      <p class="menu-note">Menú y precios de ejemplo · USD</p>
-      <div class="categories" role="group" aria-label="Categorías" id="categories"></div>
-      <div class="menu-grid" id="menuGrid"><p>Cargando el menú…</p></div>
-      <div class="menu-footer"><span>PREPARADO AL MOMENTO</span><span>CONVERSA. ELIGE. DISFRUTA.</span></div>
-    </section>
   </main>
-  <button class="cart-bar" id="cartOpen" hidden><span><b id="cartCount">0</b> Ver mi pedido</span><strong id="cartTotal">$0.00</strong><span>↗</span></button>
-  <dialog id="cartDialog" class="drawer"><div class="dialog-heading"><div><span class="eyebrow">A TU GUSTO</span><h2>Tu pedido</h2></div><button class="close-button" data-close="cartDialog" aria-label="Cerrar pedido">×</button></div><div class="drawer-content"><div id="cartItems"></div><div class="customer-field"><label for="customerName">Nombre para retirar</label><input id="customerName" maxlength="60" placeholder="¿Cómo te llamas?" autocomplete="given-name"><small>Modalidad de esta demo: retiro en mostrador.</small></div><div class="total-line"><span>Total</span><strong id="drawerTotal"></strong></div><p id="confirmHelp" class="muted"></p><p id="orderError" role="alert"></p><button class="primary-button wide" id="confirmButton">Revisar y confirmar</button><button class="text-button danger wide" id="clearButton">Vaciar borrador</button><div id="clearConfirm" hidden><p>¿Eliminar todos los productos del borrador?</p><button class="secondary-button" id="clearYes">Sí, vaciar</button><button class="text-button" id="clearNo">Conservar</button></div></div></dialog>
-  <dialog id="cashierDialog" class="cashier-dialog"><div class="dialog-heading"><div><span class="eyebrow">MOSTRADOR</span><h2>Pedidos en caja</h2></div><button class="close-button" data-close="cashierDialog" aria-label="Cerrar caja">×</button></div><div class="drawer-content"><p id="cashierInfo" class="muted"></p><form id="staffForm" hidden><label for="staffToken">Clave de personal</label><div class="staff-entry"><input type="password" id="staffToken" autocomplete="off" required><button class="primary-button">Entrar</button></div></form><div class="cashier-toolbar"><button class="text-button" id="refreshOrders">Actualizar ↻</button><button class="text-button" id="staffLogout" hidden>Cerrar acceso</button></div><div id="queue" aria-live="polite"></div></div></dialog>
+
+  <!-- Popup de opciones (menú, bebidas, extras, recomendaciones) -->
+  <dialog id="optionsModal" class="options-modal">
+    <div class="modal-header">
+      <h2 id="modalTitle">Menú</h2>
+      <button class="close-button" data-close="optionsModal" aria-label="Cerrar">×</button>
+    </div>
+    <div class="modal-body" id="modalBody"></div>
+  </dialog>
+
+  <!-- Popup de resumen del pedido -->
+  <dialog id="summaryModal" class="options-modal">
+    <div class="modal-header">
+      <h2>Tu pedido</h2>
+      <button class="close-button" data-close="summaryModal" aria-label="Cerrar">×</button>
+    </div>
+    <div class="modal-body" id="summaryBody"></div>
+  </dialog>
+
+  <!-- Caja (se mantiene igual) -->
+  <dialog id="cashierDialog" class="cashier-dialog">
+    <div class="dialog-heading"><div><span class="eyebrow">MOSTRADOR</span><h2>Pedidos en caja</h2></div><button class="close-button" data-close="cashierDialog" aria-label="Cerrar caja">×</button></div>
+    <div class="drawer-content"><p id="cashierInfo" class="muted"></p><form id="staffForm" hidden><label for="staffToken">Clave de personal</label><div class="staff-entry"><input type="password" id="staffToken" autocomplete="off" required><button class="primary-button">Entrar</button></div></form><div class="cashier-toolbar"><button class="text-button" id="refreshOrders">Actualizar ↻</button><button class="text-button" id="staffLogout" hidden>Cerrar acceso</button></div><div id="queue" aria-live="polite"></div></div>
+  </dialog>
+
   <div class="toast" id="toast" role="status"></div>
   <script type="module" src="/public/js/app.js"></script>
 </body>

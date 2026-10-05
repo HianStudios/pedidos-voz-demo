@@ -3,4 +3,35 @@
 @media(min-width:1450px){.assistant-panel{padding-left:15%;padding-right:15%}.menu-panel{padding-left:9%;padding-right:9%}.product-art{height:175px}}
 @media(max-width:950px){.site-header{height:80px}.layout{grid-template-columns:42% 58%}.assistant-panel{padding:40px 22px}.menu-panel{padding:40px 24px 95px}h1{font-size:35px}.menu-heading h2{font-size:25px}.product-art{height:125px}.product-body{padding:12px}.menu-stamp{display:none}.menu-heading .eyebrow{font-size:7px}}
 @media(max-width:680px){.site-header{height:72px;padding:0 22px}.brand{font-size:28px}.header-right{gap:15px}.demo-badge{font-size:8px}.layout{display:block}.assistant-panel{padding:33px 24px 32px;position:relative}.assistant-panel h1{font-size:39px;margin:18px 0 12px}.intro{font-size:12px}.mascot-stage{height:230px}.rings{top:17px}.orb-shadow{top:192px}.mascot-tag{bottom:1px}.reply{min-height:0}.voice-help{margin-bottom:19px}.menu-panel{border-left:0;border-top:1px solid var(--line);padding:30px 22px 110px}.menu-heading h2{font-size:29px}.menu-heading .eyebrow{font-size:7px}.menu-stamp{display:flex}.menu-grid{gap:12px}.product-art{height:135px}.product h3{font-size:12px}.product p{font-size:10px;min-height:48px}.product-bottom{margin-top:10px}.product-body{padding:12px}.menu-footer{font-size:6px}.categories{padding-bottom:20px}.categories button{padding:9px 13px}.dialog-heading{padding:20px}.drawer-content{padding:20px}.drawer{max-height:88dvh}.menu-note{margin-bottom:20px}.privacy-note{font-size:9px}}
+/* ---- Milo-only layout ---- */
+.milo-layout{max-width:600px;margin:0 auto;min-height:calc(100dvh - 100px);display:flex;align-items:center;justify-content:center}
+.milo-panel{text-align:center;padding:30px 24px 40px;width:100%}
+.milo-panel>.eyebrow{justify-content:center}
+
+/* ---- Popup modal de opciones ---- */
+.options-modal{border:0;border-radius:18px;background:var(--paper);color:var(--ink);width:min(520px,calc(100% - 32px));max-height:80dvh;padding:0;box-shadow:0 20px 100px #0003;animation:modalIn .3s ease-out}
+.options-modal::backdrop{background:#20221980;backdrop-filter:blur(5px)}
+@keyframes modalIn{from{opacity:0;transform:translateY(20px) scale(.97)}to{opacity:1;transform:translateY(0) scale(1)}}
+.modal-header{padding:20px 24px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--line)}
+.modal-header h2{font-size:22px;margin:0}
+.modal-body{padding:20px 24px;overflow-y:auto;max-height:calc(80dvh - 80px);scroll-behavior:smooth}
+
+/* Producto dentro de popup */
+.popup-product{display:flex;align-items:center;gap:14px;padding:14px 0;border-bottom:1px solid var(--line)}
+.popup-product:last-child{border-bottom:none}
+.popup-product.suggested{background:#fef6ea;margin:0 -24px;padding:14px 24px;border-radius:8px}
+.popup-art{width:80px;height:60px;flex-shrink:0;border-radius:8px;overflow:hidden;background:#eeeee5;display:grid;place-items:center}
+.popup-art svg{width:90%;height:90%}
+.popup-info{flex:1;min-width:0;text-align:left}
+.popup-info h3{font-size:14px;margin:0 0 3px;font-weight:700}
+.popup-info p{font-size:11px;color:var(--muted);margin:0;line-height:1.4}
+.popup-price{font-size:14px;font-weight:700;color:var(--orange);margin-top:4px;display:inline-block}
+
+/* Resumen del pedido */
+.summary-line{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--line);font-size:14px}
+.summary-line:last-of-type{border-bottom:none}
+.summary-total{display:flex;justify-content:space-between;padding:16px 0 8px;border-top:2px solid var(--ink);margin-top:8px;font-size:18px}
+.summary-name{font-size:13px;color:var(--muted);padding-top:8px}
+
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;transition:none!important;scroll-behavior:auto!important}.mascot-stage[data-state=listening] .mascot{transform:translateY(-7px)}}
+@media(max-width:680px){.milo-panel h1{font-size:35px;margin:14px 0 10px}.mascot-stage{height:220px}.milo-panel{padding:20px 20px 30px}}

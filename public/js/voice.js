@@ -14,7 +14,7 @@ export class VoiceController{
       const Context=window.AudioContext||window.webkitAudioContext;
       if(Context){this.context=new Context();await this.context.resume();this.analyser=this.context.createAnalyser();this.analyser.fftSize=1024;this.source=this.context.createMediaStreamSource(stream);this.source.connect(this.analyser);this.samples=new Float32Array(this.analyser.fftSize);this.measure();}
       if(token!==this.generation)return;
-      if(direct)await this.call();else {await this.say(Recognition?'Puedes llamarme mesero cuando quieras.':'Toca mi carita cuando quieras hablar.');if(this.enabled)this.wait();}
+      if(direct)await this.call();else {await this.say(Recognition?'Puedes llamarme diciendo Milo cuando quieras.':'Toca mi carita cuando quieras hablar.');if(this.enabled)this.wait();}
     }catch(e){if(token===this.generation){this.disable();this.onError(e.name==='NotAllowedError'?'Permite el micrófono en tu navegador o escribe tu pedido.':'No pude abrir el micrófono. Puedes continuar por texto.');}}
     finally{this.activatePending=false;}
   }
@@ -33,7 +33,7 @@ export class VoiceController{
     this.speechDone?.();this.speechDone=null;window.speechSynthesis?.cancel();this.onLevel(0);
   }
   disable(){this.pause();this.enabled=false;this.stream?.getTracks().forEach(t=>t.stop());this.stream=null;cancelAnimationFrame(this.meter);this.source?.disconnect();this.context?.close().catch(()=>{});this.context=null;this.state('off');}
-  wait(){if(!this.enabled)return;this.pause();this.state('waiting');if(Recognition&&!this.nativeFailed)this.recognize('wake');else this.onError('Micrófono activado. Toca a Milo para hablar; la activación «mesero» no está disponible aquí.');}
+  wait(){if(!this.enabled)return;this.pause();this.state('waiting');if(Recognition&&!this.nativeFailed)this.recognize('wake');else this.onError('Micrófono activado. Toca a Milo para hablar; la activación por voz no está disponible aquí.');}
   async call(){
     if(!this.enabled)return this.enable(true);
     this.pause();const token=this.generation+1;await this.say(this.greeting);if(this.enabled&&token===this.generation)this.listen();
@@ -70,7 +70,7 @@ export class VoiceController{
     rec.onend=()=>{
       clearTimeout(this.timer);if(token!==this.generation||failed||!this.enabled)return;this.recognition=null;text=finalText;
       if(kind==='wake'){
-        const match=text.match(/\bmesero\b[\s,.:;!?]*(.*)/i);
+        const match=text.match(/\b(?:milo|m0|melo|millo|miro|nilo|mila)\b[\s,.:;!?]*(.*)/i);
         if(match){if(match[1].trim()){this.state('thinking');this.onInput(match[1].trim());}else this.call();}
         else this.restart=setTimeout(()=>{if(token===this.generation)this.recognize('wake');},700);
       }else if(text){this.state('thinking');this.onInput(text);}
