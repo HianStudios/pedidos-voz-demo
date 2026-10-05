@@ -8,6 +8,33 @@
 .milo-panel{text-align:center;padding:30px 24px 40px;width:100%}
 .milo-panel>.eyebrow{justify-content:center}
 
+/* ---- Tarjetas grandes (categorías Solo/Combo) ---- */
+.big-cards{display:grid;grid-template-columns:1fr 1fr;gap:14px;padding:8px 0}
+.big-card{border:2px solid var(--line);background:#fffcf5;border-radius:16px;padding:28px 16px;text-align:center;cursor:pointer;transition:transform .2s,border-color .2s,box-shadow .2s;display:flex;flex-direction:column;align-items:center;gap:8px}
+.big-card:hover{transform:translateY(-3px);border-color:var(--orange);box-shadow:0 8px 24px #ce502d15}
+.big-card:active{transform:scale(.96)}
+.big-emoji{font-size:48px;display:block}
+.big-label{font-family:Manrope,var(--font);font-weight:800;font-size:22px;letter-spacing:-.5px}
+.big-desc{font-size:11px;color:var(--muted)}
+
+/* ---- Carrusel de productos (tarjetas individuales) ---- */
+.card-carousel{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:8px 0}
+.product-card{border:2px solid var(--line);background:#fffcf5;border-radius:14px;padding:0;overflow:hidden;cursor:pointer;text-align:center;transition:transform .2s,border-color .2s,box-shadow .2s}
+.product-card:hover{transform:translateY(-3px);border-color:var(--orange);box-shadow:0 8px 24px #ce502d15}
+.product-card:active{transform:scale(.96)}
+.card-art{height:100px;background:radial-gradient(ellipse at center,#ebd8b5,#e5e3d6 80%);display:grid;place-items:center;overflow:hidden}
+.card-art svg{width:85%;height:85%;filter:drop-shadow(0 6px 5px #473f2e20);transform:rotate(-5deg)}
+.product-card h3{font-size:13px;margin:10px 12px 4px;font-weight:700;letter-spacing:-.2px}
+.product-card p{font-size:10px;color:var(--muted);margin:0 12px;line-height:1.4;min-height:28px}
+.card-price{display:block;font-size:16px;font-weight:700;color:var(--orange);margin:8px 0 12px}
+
+/* ---- Tarjetas de bebidas ---- */
+.drink-card{padding:20px 12px!important;display:flex;flex-direction:column;align-items:center;gap:6px}
+.drink-emoji{font-size:36px}
+.drink-card h3{margin:0!important;font-size:14px}
+.no-drink{border-style:dashed;opacity:.7}
+.no-drink:hover{opacity:1}
+
 /* ---- Popup modal de opciones ---- */
 .options-modal{border:0;border-radius:18px;background:var(--paper);color:var(--ink);width:min(520px,calc(100% - 32px));max-height:80dvh;padding:0;box-shadow:0 20px 100px #0003;animation:modalIn .3s ease-out}
 .options-modal::backdrop{background:#20221980;backdrop-filter:blur(5px)}

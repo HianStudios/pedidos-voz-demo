@@ -13,6 +13,8 @@ export const menu = [
   {id:'papas',name:'Papas doradas',category:'Extras',price:250,desc:'Una porción extra, crujiente y recién preparada.',emoji:'🍟',aliases:['papas doradas','papas fritas','papas'],options:['sin sal']},
   {id:'arroz',name:'Arroz blanco',category:'Extras',price:150,desc:'Porción de arroz blanco para acompañar.',emoji:'🍚',aliases:['arroz blanco','arroz'],options:[]},
   {id:'ensalada',name:'Ensalada fresca',category:'Extras',price:200,desc:'Lechuga, tomate y cebolla. Preparada al momento.',emoji:'🥗',aliases:['ensalada fresca','ensalada'],options:['sin cebolla','sin tomate']},
-  {id:'cola',name:'Gaseosa personal',category:'Bebidas',price:125,desc:'Botella de 400 ml. Bien fría.',emoji:'🥤',aliases:['gaseosa personal','coca cola','coca','cola','colas','gaseosa','gaseosas'],options:[]},
+  {id:'cocacola',name:'Coca-Cola',category:'Bebidas',price:125,desc:'Botella de 400 ml. Bien fría.',emoji:'🥤',aliases:['coca cola','coca','cocacola'],options:[]},
+  {id:'sprite',name:'Sprite',category:'Bebidas',price:125,desc:'Botella de 400 ml. Refrescante.',emoji:'🥤',aliases:['sprite','esprite'],options:[]},
+  {id:'pepsi',name:'Pepsi',category:'Bebidas',price:125,desc:'Botella de 400 ml.',emoji:'🥤',aliases:['pepsi'],options:[]},
   {id:'agua',name:'Agua mineral',category:'Bebidas',price:100,desc:'Botella de 500 ml, sin gas.',emoji:'💧',aliases:['agua mineral','aguas','agua'],options:[]},
 ].map(item=>({...item,available:true}));
