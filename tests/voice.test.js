@@ -8,8 +8,8 @@ globalThis.SpeechSynthesisUtterance=class{constructor(text){this.text=text;}};
 globalThis.cancelAnimationFrame=()=>{};
 const {VoiceController}=await import('../public/js/voice.js');
 function setup(){let inputs=[],states=[],errors=[];const voice=new VoiceController({greeting:'Dígame',onState:s=>states.push(s),onLevel(){},onText(){},onInput:s=>inputs.push(s),onError:s=>errors.push(s)});voice.enabled=true;return {voice,inputs,states,errors};}
-test('mesero conserva el pedido en la misma frase',()=>{
-  const {voice,inputs}=setup();voice.wait();const rec=voice.recognition;const result=[{transcript:'mesero, dame dos cuartos de pollo'}];result.isFinal=true;rec.onresult({results:[result]});rec.onend();assert.deepEqual(inputs,['dame dos cuartos de pollo']);voice.disable();
+test('milo conserva el pedido en la misma frase',()=>{
+  const {voice,inputs}=setup();voice.wait();const rec=voice.recognition;const result=[{transcript:'milo, dame dos cuartos de pollo'}];result.isFinal=true;rec.onresult({results:[result]});rec.onend();assert.deepEqual(inputs,['dame dos cuartos de pollo']);voice.disable();
 });
 test('texto provisional nunca se procesa como confirmación',()=>{
   const {voice,inputs}=setup();voice.listen();const rec=voice.recognition;const result=[{transcript:'sí'}];result.isFinal=false;rec.onresult({results:[result]});rec.onend();assert.deepEqual(inputs,[]);voice.disable();

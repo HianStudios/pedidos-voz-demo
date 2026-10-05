@@ -168,20 +168,29 @@ async function handleInput(raw){
   // ---- Navegación local (ANTES de llamar a la API) ----
   // Frases naturales que un cliente diría
   const nav=normalize(raw);
-  if(/\b(menu|carta|que tienes|qué tienes|que hay|qué hay|muestrame|muéstrame|ver opciones|opciones|que venden|qué venden|que ofrecen)\b/.test(nav)){
-    showCategoryChoice();return;
+  if(/\b(menu|carta|que tienes|qué tienes|que hay|qué hay|muestrame|muéstrame|ver opciones|opciones|que venden|qué venden|que ofrecen|que me ofreces)\b/.test(nav)){
+    showCategoryChoice();
+    reply('Para hoy tenemos platos sueltos y combos. Dígame qué prefiere.');
+    return;
   }
-  if(/\b(solo|solos|platos?|individual|sin combo|nada de combo|no combo|plato solo|platos solos|quiero solo)\b/.test(nav)&&!/\b(combo|combos)\b/.test(nav)){
-    showProductCards('Platos','Nuestros platos');return;
+  if(/\b(solo|solos|platos?|individual|sin combo|nada de combo|no combo|plato solo|platos solos|quiero solo|suelto|sueltos)\b/.test(nav)&&!/\b(combo|combos)\b/.test(nav)){
+    showProductCards('Platos','Nuestros platos');
+    reply('Estos son nuestros platos. Dígame cuál le gusta.');
+    return;
   }
-  if(/\b(combo|combos|paquete|promocion|promo)\b/.test(nav)&&!/\b(no|sin|nada)\b/.test(nav)){
-    showProductCards('Combos','Nuestros combos');return;
+  if(/\b(combo|combos|paquete|promocion|promo|armado|armados)\b/.test(nav)&&!/\b(no|sin|nada)\b/.test(nav)){
+    showProductCards('Combos','Nuestros combos');
+    reply('Aquí están los combos. ¿Cuál le sirvo?');
+    return;
   }
-  if(/\b(bebida|bebidas|gaseosa|gaseosas|tomar|refresco|algo de tomar|para tomar)\b/.test(nav)){
-    showDrinkCards();return;
+  if(/\b(bebida|bebidas|gaseosa|gaseosas|tomar|refresco|algo de tomar|para tomar|cola|colas)\b/.test(nav)&&!/\b(quiero|dame|deme|ponme|echale|una|un|dos|tres)\b/.test(nav)){
+    showDrinkCards();
+    return;
   }
-  if(/\b(extra|extras|acompañamiento|acompañamientos|algo mas|algo más|adicional)\b/.test(nav)&&!/\b(no|sin|nada)\b/.test(nav)){
-    showProductCards('Extras','Extras');return;
+  if(/\b(extra|extras|acompañamiento|acompañamientos|adicional|aparte)\b/.test(nav)&&!/\b(no|sin|nada)\b/.test(nav)){
+    showProductCards('Extras','Extras');
+    reply('¿Qué extra le agrego?');
+    return;
   }
 
   closeAllModals();

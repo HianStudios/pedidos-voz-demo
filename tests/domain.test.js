@@ -2,14 +2,14 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {menu} from '../server/catalog.js';
 import {applyOperations,interpretLocal,isConfirmation,validateCart,validateResult,total} from '../public/js/domain.js';
-const cart=[{id:'cuarto',qty:2,notes:[]},{id:'cola',qty:2,notes:[]}];
+const cart=[{id:'cuarto',qty:2,notes:[]},{id:'cocacola',qty:2,notes:[]}];
 test('confirmación exige una frase completa, nunca subcadenas ni negaciones',()=>{
   for(const text of ['sin cebolla','no confirmes todavía','sí, agrega papas','eso es todo','quiero seis pollos','no está bien','sí pero quita la cola'])assert.equal(isConfirmation(text),false,text);
   for(const text of ['Sí','Sí, por favor','confirmar pedido','envía el pedido'])assert.equal(isConfirmation(text),true,text);
 });
 test('pedido con varias cantidades y unidades de pollo',()=>{
-  const result=interpretLocal('Quiero dos cuartos de pollo y una cola',[],menu);
-  assert.deepEqual(result.operations,[{type:'add',id:'cuarto',qty:2},{type:'add',id:'cola',qty:1}]);
+  const result=interpretLocal('Quiero dos cuartos de pollo y una coca cola',[],menu);
+  assert.deepEqual(result.operations,[{type:'add',id:'cuarto',qty:2},{type:'add',id:'cocacola',qty:1}]);
   assert.equal(total(applyOperations([],result.operations,menu),menu),1025);
 });
 test('sin cebolla modifica el último producto; no confirma ni añade',()=>{
@@ -20,9 +20,9 @@ test('terminar y gracias con carrito piden revisión',()=>{
   for(const s of ['eso es todo','terminé mi pedido','gracias'])assert.equal(interpretLocal(s,cart,menu).intent,'review');
   assert.equal(interpretLocal('gracias',[],menu).intent,'goodbye');
 });
-test('quita una cola y quita la cola no borran todo el carrito',()=>{
-  assert.equal(applyOperations(cart,interpretLocal('quita una cola',cart,menu).operations,menu)[1].qty,1);
-  assert.deepEqual(applyOperations(cart,interpretLocal('quita la cola',cart,menu).operations,menu),[cart[0]]);
+test('quita una coca y quita la coca',()=>{
+  assert.equal(applyOperations(cart,interpretLocal('quita una coca cola',cart,menu).operations,menu)[1].qty,1);
+  assert.deepEqual(applyOperations(cart,interpretLocal('quita la coca cola',cart,menu).operations,menu),[cart[0]]);
 });
 test('correcciones establecen cantidades, no suman',()=>{
   assert.equal(applyOperations(cart,interpretLocal('mejor tres',cart,menu,'cuarto').operations,menu)[0].qty,3);
