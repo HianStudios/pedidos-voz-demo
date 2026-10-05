@@ -1,0 +1,14 @@
+// Ilustraciones vectoriales de platos; no representan fotos del restaurante.
+export function foodArt(product){
+  const plate='<ellipse cx="120" cy="85" rx="97" ry="60" fill="#faf6e8"/><ellipse cx="120" cy="84" rx="82" ry="47" fill="#ebe4ce" stroke="#e3dbc4"/>';
+  const fries='<g fill="#e9b543" stroke="#d69b31" stroke-width="1"><rect x="145" y="47" width="9" height="50" rx="3" transform="rotate(18 150 72)"/><rect x="160" y="50" width="9" height="54" rx="3" transform="rotate(35 165 77)"/><rect x="173" y="64" width="9" height="43" rx="3" transform="rotate(42 177 84)"/><rect x="146" y="68" width="9" height="45" rx="3" transform="rotate(50 150 90)"/><rect x="166" y="58" width="9" height="46" rx="3" transform="rotate(64 170 80)"/></g>';
+  const leaves='<g fill="#76934c"><ellipse cx="68" cy="59" rx="16" ry="10" transform="rotate(-30 68 59)"/><ellipse cx="57" cy="73" rx="14" ry="9"/><ellipse cx="80" cy="52" rx="14" ry="10"/></g><circle cx="69" cy="63" r="9" fill="#cd5b37"/><circle cx="55" cy="72" r="7" fill="#e57b45"/>';
+  const chicken='<defs><radialGradient id="chicken-'+product.id+'"><stop stop-color="#dd9137"/><stop offset=".65" stop-color="#bd6626"/><stop offset="1" stop-color="#8d451c"/></radialGradient></defs><g transform="rotate(-15 112 86)"><path d="M90 60c-19 4-24 23-17 39 8 19 37 26 51 14l20-18c9-15-7-36-23-36z" fill="url(#chicken-'+product.id+')"/><path d="M110 75c-11-6-22 3-21 15 2 12 18 15 29 7l28-10 8 1 2-8-11-6-28 7z" fill="#c47730"/><path d="M149 78l12-7c8-9 18 1 10 6 3 8-7 14-12 6l-10 4" fill="#f8edca"/><g stroke="#87451d" stroke-width="2" opacity=".55"><path d="M87 75l15 5m-21 5l11 5m7 15l12 4m-3-39l10 3"/></g></g>';
+  let content;
+  if(product.category==='Bebidas')content='<ellipse cx="121" cy="130" rx="35" ry="7" fill="#81947f25"/><g transform="rotate(7 120 80)"><rect x="100" y="22" width="37" height="14" rx="4" fill="'+(product.id==='agua'?'#829e8d':'#b43d27')+'"/><path d="M101 36h35v13l8 12v60q0 11-12 11h-27q-12 0-12-11V61l8-12z" fill="'+(product.id==='agua'?'#bed8d3':'#623c2b')+'"/><path d="M94 72h50v36H94z" fill="'+(product.id==='agua'?'#e5f0e2':'#cb5130')+'"/><path d="M103 78h33m-29 9h25m-19 9h14" stroke="#fff8" stroke-width="3" stroke-linecap="round"/><path d="M101 58v9m0 46v9" stroke="#fff5" stroke-width="3" stroke-linecap="round"/></g>';
+  else if(product.id==='papas')content=plate+fries+'<g transform="translate(-54 0)">'+fries+'</g>';
+  else if(product.id==='arroz')content=plate+'<ellipse cx="120" cy="85" rx="55" ry="34" fill="#fffbed"/><path d="M78 82l7 2m15-14l6 2m18 19l7 3m-16 14l7-2m20-33l7 2m-53 17l6 3m49-5l8 2m-36-32l7 2" stroke="#ded6b5" stroke-width="3" stroke-linecap="round"/>';
+  else if(product.id==='ensalada')content=plate+'<g transform="translate(47 14) scale(1.2)">'+leaves+'</g><g transform="translate(9 20)">'+leaves+'</g>';
+  else content=plate+fries+leaves+chicken;
+  return `<svg viewBox="0 0 240 160" aria-hidden="true">${content}</svg>`;
+}
