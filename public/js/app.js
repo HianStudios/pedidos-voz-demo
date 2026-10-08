@@ -1,352 +1,108 @@
 import {money,total,validateCart,applyOperations,isConfirmation,normalize} from './domain.js';
+import {navigation,plausibleName,cartSignature} from './conversation.js';
 import {foodArt} from './art.js';
 import {VoiceController} from './voice.js';
+import {mountCarousel} from './carousel.js';
+import {storageKey,ordersKey,readStore,saveOrders} from './order-store.js';
 const $=id=>document.getElementById(id);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-
-let menu=[],restaurant,mode='demo',cart=[],history=[],busy=false,epoch=0,request=null,
-    lastId=null,customerName='',pending=null,sending=false,staffToken='',poll=null,
-    sessionActive=false,awaitingName=false;
-const storageKey='mesero-brasa-v2';
-function readStore(key,fb){try{return JSON.parse(localStorage.getItem(key))??fb;}catch{return fb;}}
-function store(key,v){localStorage.setItem(key,JSON.stringify(v));}
-function saveDraft(){try{store(storageKey,{cart,pending,customer:customerName});}catch{}}
+let menu=[],restaurant,mode='demo',cart=[],history=[],busy=false,epoch=0,request=null,lastId=null,
+ customerName='',pending=null,sending=false,sessionActive=false,awaitingName=false,reviewed=null,
+ category=null,carousel=null,awaitingCancel=false;
+function saveDraft(){try{localStorage.setItem(storageKey,JSON.stringify({cart,pending,customer:customerName}));}catch{}}
 let toastTimer;
 function toast(text){$('toast').textContent=text;$('toast').classList.add('visible');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').classList.remove('visible'),4500);}
-
-const states={off:'Listo para ayudarte',waiting:'Toca a Milo para empezar',listening:'Te escucho…',transcribing:'Transcribiendo…',thinking:'Pensando…',speaking:'Milo habla',sending:'Enviando pedido…'};
-
-const voice=new VoiceController({
-  greeting:'¡Hola! ¿Qué se te antoja hoy?',
-  onState:s=>{$('mascotStage').dataset.state=s;$('voiceState').textContent=states[s]||states.off;},
-  onLevel:v=>$('mascotStage').style.setProperty('--level',v.toFixed(3)),
-  onText:t=>$('transcript').textContent=`Tú: ${t}`,
-  onInput:t=>handleInput(t),
-  onError:t=>{$('voiceHelp').textContent=t;}
-});
-
-function reply(text,next='listen'){
-  $('reply').textContent=text;
-  history.push({role:'assistant',content:text});
-  history=history.slice(-8);
-  if(voice.enabled && sessionActive) voice.respond(text,next);
-  else voice.state('off');
+const states={off:'Listo para ayudarte',waiting:'Toca para continuar',listening:'Te escucho…',transcribing:'Entendiendo tu voz…',thinking:'Un momento…',speaking:'Milo te cuenta',sending:'Registrando pedido…'};
+const voice=new VoiceController({greeting:'¡Hola! ¿Qué se te antoja hoy?',
+ onState:s=>{$('mascotStage').dataset.state=s;$('voiceState').textContent=states[s]||states.off;carousel?.hold(['listening','thinking','transcribing'].includes(s));$('stopVoice').hidden=!voice.enabled;document.querySelectorAll('[data-talk]').forEach(b=>b.textContent=s==='listening'?'Terminar frase':s==='speaking'?'Interrumpir y hablar':'Hablar con Milo');},
+ onLevel:v=>$('mascotStage').style.setProperty('--level',v.toFixed(3)),onText:t=>$('transcript').textContent=`Tú: ${t}`,
+ onInput:t=>handleInput(t),onError:t=>{$('voiceHelp').textContent=t;}});
+async function reply(text,next='listen'){
+ $('reply').textContent=text;document.querySelectorAll('.dialog-reply').forEach(el=>el.textContent=text);
+ history.push({role:'assistant',content:text});history=history.slice(-10);
+ if(voice.enabled&&sessionActive)await voice.respond(text,next);else voice.state('off');
 }
-
 function interrupt(){epoch++;request?.abort();request=null;voice.pause();busy=false;}
-function setCart(next){cart=next;saveDraft();}
-
-// ---- Sesión ----
-function startSession(){
-  sessionActive=true;
-  voice.enable(true);
+function setCart(next){cart=next;reviewed=null;saveDraft();$('cartCount').textContent=cart.reduce((n,l)=>n+l.qty,0);}
+function talk(){if(busy||sending)return;if(!sessionActive){sessionActive=true;voice.enable(true);}else if(voice.mode==='listening')voice.finish();else voice.listen();}
+function closeModals(){carousel?.destroy();carousel=null;for(const id of ['optionsModal','summaryModal'])if($(id).open)$(id).close();}
+function openModal(title,html){closeModals();$('modalTitle').textContent=title;$('modalBody').innerHTML=html;$('optionsModal').showModal();}
+function showCategories(){category=null;openModal('¿Qué se te antoja?',`<div class="big-cards">${[['Platos','Solo','Platos a tu manera','🍗'],['Combos','Combo','Todo en un solo pedido','🍱'],['Extras','Extras','Un poco más de sabor','🍟'],['Bebidas','Bebidas','Algo para acompañar','🥤']].map(([c,n,d,e])=>`<button class="big-card" data-category="${c}"><span class="big-emoji">${e}</span><span class="big-label">${n}</span><span class="big-desc">${d}</span></button>`).join('')}</div>`);}
+function showProducts(items,title,cat=null){
+ category=cat;
+ if(!items.length){reply('No hay productos disponibles en esta categoría.');return;}
+ openModal(title,`<p class="runway-hint">Mira con calma. <strong>Dime el nombre de lo que prefieres.</strong></p><section class="runway" aria-label="Pasarela de productos" aria-roledescription="carrusel"><div class="runway-viewport" tabindex="0" aria-label="Productos; desliza para explorar"><div class="runway-track">${items.map(p=>`<article class="runway-card" data-product="${p.id}"><div class="runway-art">${foodArt(p)}</div><div class="runway-copy"><span class="runway-category">${esc(p.category)}</span><h3>${esc(p.name)}</h3><p>${esc(p.desc)}</p><div class="runway-bottom"><strong>${money(p.price)}</strong><button class="add-product" data-add="${p.id}" aria-label="Agregar ${esc(p.name)}">Agregar +</button></div></div></article>`).join('')}</div></div><div class="runway-controls"><button data-carousel="prev" aria-label="Producto anterior">←</button><button data-carousel="pause" aria-pressed="false">Pausar</button><button data-carousel="next" aria-label="Producto siguiente">→</button></div></section>`);
+ carousel=mountCarousel($('modalBody').querySelector('.runway'));carousel.hold(voice.mode==='listening');
 }
-function endSession(){
-  sessionActive=false;awaitingName=false;
-  closeAllModals();
-  voice.pause();voice.state('off');
-  $('reply').textContent='Toca a Milo cuando quieras pedir.';
-  $('voiceHelp').textContent='';
+function showCategory(cat){showProducts(menu.filter(p=>p.category===cat&&p.available),{Platos:'Algo solo, a tu gusto',Combos:'Más para compartir',Extras:'Ese extra que provoca',Bebidas:'Para acompañar'}[cat],cat);}
+function review(){
+ closeModals();if(!cart.length){reply('Todavía no tienes productos. ¿Qué se te antoja?');return;}
+ $('summaryBody').innerHTML=cart.map(l=>{const p=menu.find(p=>p.id===l.id);return `<div class="summary-line"><span>${l.qty} × ${esc(p.name)}<small>${l.notes.map(esc).join(', ')}</small></span><strong>${money(p.price*l.qty)}</strong></div>`;}).join('')+`<div class="summary-total"><span>Total</span><strong>${money(total(cart,menu))}</strong></div><div class="customer-field"><label for="customerName">Nombre para retirar</label><input id="customerName" ${pending?'disabled':''} value="${esc(customerName)}" maxlength="60" autocomplete="given-name" placeholder="Tu nombre"></div><p class="muted">${mode==='demo'?'Pedido de prueba · no llega a un restaurante real.':'Para retirar en el restaurante.'}</p><button class="primary-button wide" id="confirmButton">${pending?'Reintentar el mismo envío':'Confirmar pedido'}</button>`;
+ $('summaryModal').showModal();reviewed=cartSignature(cart,customerName);awaitingName=!customerName;
+ reply(customerName?`Tu pedido suma ${money(total(cart,menu))}. ¿Lo envío?`:'¿A qué nombre va el pedido?');
 }
-
-// ---- Modales con tarjetas grandes ----
-function openModal(title,html){
-  $('modalTitle').textContent=title;
-  $('modalBody').innerHTML=html;
-  if(!$('optionsModal').open) $('optionsModal').showModal();
-}
-function closeAllModals(){
-  if($('optionsModal').open)$('optionsModal').close();
-  if($('summaryModal').open)$('summaryModal').close();
-}
-
-function showCategoryChoice(){
-  openModal('¿Qué prefieres?',`
-    <div class="big-cards">
-      <button class="big-card" data-say="Quiero ver los platos solos">
-        <span class="big-emoji">🍗</span>
-        <span class="big-label">Solo</span>
-        <span class="big-desc">Platos individuales</span>
-      </button>
-      <button class="big-card" data-say="Quiero ver los combos">
-        <span class="big-emoji">🍱</span>
-        <span class="big-label">Combo</span>
-        <span class="big-desc">Plato + papas + bebida</span>
-      </button>
-    </div>`);
-  reply('¿Prefieres algo solo o un combo?');
-}
-
-function showProductCards(category, title){
-  const items = menu.filter(p=>p.category===category && p.available);
-  if(!items.length){reply('No hay opciones en esa categoría.');return;}
-  const html = `<div class="card-carousel">${items.map(p=>`
-    <button class="product-card" data-say="Quiero un ${p.name}">
-      <div class="card-art">${foodArt(p)}</div>
-      <h3>${esc(p.name)}</h3>
-      <p>${esc(p.desc)}</p>
-      <span class="card-price">${money(p.price)}</span>
-    </button>`).join('')}</div>`;
-  openModal(title, html);
-}
-
-function showDrinkCards(){
-  const drinks = menu.filter(p=>p.category==='Bebidas' && p.available);
-  const html = `<div class="card-carousel">${drinks.map(p=>`
-    <button class="product-card drink-card" data-say="Quiero una ${p.name}">
-      <span class="drink-emoji">${p.emoji}</span>
-      <h3>${esc(p.name)}</h3>
-      <span class="card-price">${money(p.price)}</span>
-    </button>`).join('')}
-    <button class="product-card drink-card no-drink" data-say="No quiero bebida">
-      <span class="drink-emoji">🚫</span>
-      <h3>Sin bebida</h3>
-    </button>
-  </div>`;
-  openModal('¿Qué bebida deseas?', html);
-  reply('¿Qué bebida te gustaría? También puedes decir que no quieres.');
-}
-
-function showSummary(){
-  if(!cart.length) return;
-  const sum=total(cart,menu);
-  const html=cart.map(l=>{const p=menu.find(p=>p.id===l.id);return `
-    <div class="summary-line"><span>${l.qty} × ${esc(p.name)}</span><strong>${money(p.price*l.qty)}</strong></div>`;
-  }).join('') + `<div class="summary-total"><span>Total</span><strong>${money(sum)}</strong></div>` +
-  (customerName?`<div class="summary-name">A nombre de: <strong>${esc(customerName)}</strong></div>`:'');
-  $('summaryBody').innerHTML=html;
-  if(!$('summaryModal').open)$('summaryModal').showModal();
-}
-
-// Click en tarjetas → se procesa como si lo hubiera dicho por voz
-$('modalBody').addEventListener('click',e=>{
-  const card=e.target.closest('[data-say]');
-  if(card && !busy){closeAllModals();handleInput(card.dataset.say);}
-});
-
-// ---- Procesamiento ----
 async function handleInput(raw){
-  if(!raw?.trim()||!menu.length||busy) return;
-  if(sending){toast('Hay un envío en curso.');return;}
-  interrupt();const turn=epoch;voice.state('thinking');
-  $('transcript').textContent=`Tú: ${raw}`;
-  history.push({role:'user',content:raw});
-  const n=normalize(raw);
-
-  // Nombre
-  const nameMatch=raw.trim().match(/^(?:me llamo|mi nombre es|a nombre de|soy)\s+(.{2,60})$/i);
-  if(nameMatch||awaitingName){
-    customerName=(nameMatch?nameMatch[1]:raw).trim();
-    awaitingName=false;saveDraft();
-    if(cart.length){showSummary();reply(`Perfecto, ${customerName}. ¿Confirmo el pedido?`);}
-    else reply(`Gracias, ${customerName}. ¿Qué deseas pedir?`);
-    return;
-  }
-
-  // Confirmación
-  if(isConfirmation(raw)&&cart.length){
-    if(!customerName){awaitingName=true;reply('¿A qué nombre registro el pedido?');return;}
-    await submit();return;
-  }
-
-  // No quiere bebida
-  if(/\b(no quiero bebida|sin bebida|no deseo bebida|no gracias)\b/i.test(raw)){
-    closeAllModals();
-    if(cart.length){
-      if(!customerName){awaitingName=true;reply('¡Buena elección! ¿A qué nombre va el pedido?');}
-      else{showSummary();reply(`Tienes ${cart.reduce((s,l)=>s+l.qty,0)} productos. ¿Confirmo?`);}
-    } else reply('¿Qué deseas pedir?');
-    return;
-  }
-
-  // Despedida
-  if(/^(gracias|chao|adios|hasta luego)$/i.test(n)&&!cart.length){
-    reply('¡Que tengas buen día! Tócame cuando quieras pedir.','wait');
-    endSession();return;
-  }
-
-  // ---- Navegación local (ANTES de llamar a la API) ----
-  // SOLO navegación pura. Si tiene verbo de acción o cantidad → es un PEDIDO, va a la API.
-  const nav=normalize(raw);
-  const esAccion=/\b(dame|deme|quiero|ponme|echale|traeme|agrega|agregame|tráeme|ponle|dime)\b/.test(nav);
-  const esCantidad=/\b(un|una|uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|\d+)\b/.test(nav);
-  const esNavegacionPura=!esAccion&&!esCantidad;
-
-  if(esNavegacionPura){
-    if(/\b(menu|carta|que tienes|que hay|muestrame|muéstrame|opciones|que venden|que ofrecen|que me ofreces|ver)\b/.test(nav)){
-      showCategoryChoice();
-      reply('Para hoy tenemos platos sueltos y combos. Dígame qué prefiere.');
-      return;
-    }
-    if(/\b(solo|solos|platos?|individual|suelto|sueltos)\b/.test(nav)&&!/\b(combo|combos)\b/.test(nav)){
-      showProductCards('Platos','Nuestros platos');
-      reply('Estos son nuestros platos. Dígame cuál le gusta.');
-      return;
-    }
-    if(/\b(combo|combos|paquete|promocion|promo)\b/.test(nav)){
-      showProductCards('Combos','Nuestros combos');
-      reply('Aquí están los combos. ¿Cuál le sirvo?');
-      return;
-    }
-    if(/\b(bebida|bebidas|gaseosa|gaseosas|tomar|refresco|para tomar)\b/.test(nav)){
-      showDrinkCards();
-      return;
-    }
-    if(/\b(extra|extras|acompañamiento|adicional)\b/.test(nav)){
-      showProductCards('Extras','Extras');
-      reply('¿Qué extra le agrego?');
-      return;
-    }
-  }
-
-  closeAllModals();
-  busy=true;request=new AbortController();
-
-  try{
-    const response=await fetch('/api/match',{
-      method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({transcript:raw,cart,lastId,history:history.slice(0,-1).slice(-6)}),
-      signal:AbortSignal.any([request.signal,AbortSignal.timeout(22000)])
-    });
-    const result=await response.json();
-    if(turn!==epoch)return;
-    if(!response.ok) throw new Error(result.error||'No pude entender.');
-
-    if(result.intent==='edit'&&result.operations?.length){
-      setCart(applyOperations(cart,result.operations,menu));
-      lastId=result.operations.at(-1)?.id;
-      // Después de agregar comida, preguntar por bebida si no tiene
-      const hasDrink=cart.some(l=>menu.find(p=>p.id===l.id)?.category==='Bebidas');
-      if(!hasDrink){
-        reply((result.reply||'¡Agregado!')+ ' ¿Deseas agregar una bebida?');
-        setTimeout(()=>showDrinkCards(),800);
-        busy=false;return;
-      }
-      // Si ya tiene bebida, ir a confirmación
-      if(!customerName){awaitingName=true;reply((result.reply||'¡Listo!')+ ' ¿A qué nombre va el pedido?');busy=false;return;}
-      showSummary();reply((result.reply||'¡Listo!')+ ' ¿Confirmo el pedido?');
-      busy=false;return;
-    }
-
-    if(result.intent==='menu'){
-      showCategoryChoice();busy=false;return;
-    }
-
-    if(result.intent==='recommend'){
-      const ids=result.suggest_ids||[];
-      if(ids.length){
-        const items=ids.map(id=>menu.find(p=>p.id===id)).filter(Boolean);
-        const html=`<div class="card-carousel">${items.map(p=>`
-          <button class="product-card" data-say="Quiero un ${p.name}">
-            <div class="card-art">${foodArt(p)}</div>
-            <h3>${esc(p.name)}</h3>
-            <p>${esc(p.desc)}</p>
-            <span class="card-price">${money(p.price)}</span>
-          </button>`).join('')}</div>`;
-        openModal('Te recomiendo',html);
-      }
-      reply(result.reply||'¿Qué te gustaría?');busy=false;return;
-    }
-
-    if(result.intent==='review'&&cart.length){
-      if(!customerName){awaitingName=true;reply('¿A qué nombre va el pedido?');busy=false;return;}
-      showSummary();reply('¿Confirmo el pedido?');busy=false;return;
-    }
-
-    if(result.intent==='cancel'){setCart([]);reply('Pedido cancelado. ¿Empezamos de nuevo?');busy=false;return;}
-    if(result.intent==='goodbye'){
-      if(cart.length){showSummary();reply('Tienes un pedido pendiente. ¿Lo confirmo?');busy=false;return;}
-      reply('¡Que tengas buen provecho! Tócame cuando necesites algo.','wait');
-      endSession();busy=false;return;
-    }
-
-    reply(result.reply||'Dime qué se te antoja.');
-  }catch(e){
-    if(turn===epoch) reply(e.name==='TimeoutError'?'Tardó mucho. Intenta de nuevo.':e.message);
-  }finally{if(turn===epoch) busy=false;}
+ raw=raw?.trim();if(!raw||!menu.length||busy||sending)return;
+ interrupt();const turn=epoch;voice.state('thinking');$('transcript').textContent=`Tú: ${raw}`;history.push({role:'user',content:raw});const n=normalize(raw);
+ if(pending){if(isConfirmation(raw))return submit();reply('Hay un envío pendiente de comprobar. Reintenta el mismo pedido desde el resumen.');return;}
+ if(awaitingCancel){awaitingCancel=false;if(isConfirmation(raw)){setCart([]);closeModals();reply('Borrador borrado. ¿Qué se te antoja?');return;}if(/^(no|no gracias)$/.test(n)){reply('Conservo tu pedido.');return;}}
+ if(/^(cierra|cierra eso|cierra la ventana|cerrar)$/.test(n)){closeModals();reviewed=null;reply('Listo.');return;}
+ if(isConfirmation(raw)){
+  if(cart.length&&customerName&&reviewed===cartSignature(cart,customerName))return submit();
+  review();return;
+ }
+ const nav=navigation(raw);
+ if(nav){awaitingName=false;reviewed=null;if(nav==='all'){showCategories();reply('Puedes elegir platos solos, combos, extras o bebidas.');}else{showCategory(nav);reply(`Aquí tienes ${nav==='Platos'?'los platos solos':nav.toLowerCase()}. Dime cuál prefieres.`);}return;}
+ const explicit=raw.match(/^(?:me llamo|mi nombre es|a nombre de)\s+(.{2,60})$/i);
+ if((explicit&&plausibleName(explicit[1]))||(awaitingName&&plausibleName(raw))){customerName=(explicit?explicit[1]:raw).trim();awaitingName=false;saveDraft();review();return;}
+ if(/^(no quiero bebida|sin bebida|no deseo bebida|no gracias)$/.test(n)){reviewed=null;awaitingName=false;reply('De acuerdo. Dime si quieres algo más o revisar tu pedido.');return;}
+ reviewed=null;awaitingName=false;busy=true;$('sendText').disabled=true;request=new AbortController();
+ try{
+  const res=await fetch('/api/match',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({transcript:raw,cart,lastId,category,history:history.slice(0,-1).slice(-6)}),signal:AbortSignal.any([request.signal,AbortSignal.timeout(22000)])});
+  const result=await res.json();if(turn!==epoch)return;if(!res.ok)throw new Error(result.error||'No pude entender.');
+  if(result.intent==='edit'){
+   setCart(applyOperations(cart,result.operations,menu));lastId=result.operations.at(-1)?.id;
+   closeModals();reply(result.reply||'Pedido actualizado. ¿Algo más?');
+  }else if(result.intent==='menu'){
+   if(result.category&&result.category!=='all')showCategory(result.category);else showCategories();reply(result.reply||'Dime qué prefieres.');
+  }else if(result.intent==='recommend'){
+   const items=(result.suggest_ids||[]).map(id=>menu.find(p=>p.id===id&&p.available)).filter(Boolean);if(items.length)showProducts(items,'Para ti');reply(result.reply);
+  }else if(result.intent==='review')review();
+  else if(result.intent==='cancel'){awaitingCancel=true;reply('¿Quieres borrar todo el borrador?');}
+  else if(result.intent==='goodbye'&&!cart.length){await reply('Hasta pronto. Aquí estaré.','wait');sessionActive=false;voice.disable();}
+  else reply(result.reply||'¿Qué producto prefieres?');
+ }catch(e){if(turn===epoch)reply(e.name==='TimeoutError'?'Tardé demasiado. Conservé tu pedido; puedes intentarlo otra vez.':e.message);}
+ finally{if(turn===epoch){busy=false;$('sendText').disabled=false;}}
 }
-
-// ---- Envío ----
 async function submit(){
-  if(sending||!cart.length||!customerName) return;
-  closeAllModals();voice.pause();sending=true;voice.state('sending');
-  pending=pending||{key:crypto.randomUUID(),items:structuredClone(cart),customer:customerName,confirmed:true};
-  saveDraft();
-  try{
-    let order;
-    if(mode==='demo'){
-      let orders=readStore(`${storageKey}-orders`,[]);
-      order=orders.find(o=>o.id===pending.key);
-      if(!order){
-        order={id:pending.key,number:pending.key.slice(0,6).toUpperCase(),
-          items:pending.items.map(l=>({...l,name:menu.find(p=>p.id===l.id).name,price:menu.find(p=>p.id===l.id).price})),
-          total:total(pending.items,menu),customer:pending.customer,status:'nuevo',createdAt:new Date().toISOString()};
-        orders=[order,...orders].slice(0,200);store(`${storageKey}-orders`,orders);
-      }
-    }else{
-      const res=await fetch('/api/orders',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(pending),signal:AbortSignal.timeout(15000)});
-      const data=await res.json();if(!res.ok)throw new Error(data.error);order=data.order;
-    }
-    pending=null;setCart([]);history=[];lastId=null;customerName='';awaitingName=false;
-    toast(`Pedido #${order.number} enviado ✓`);
-    reply(`¡Listo, ${order.customer}! Tu pedido #${order.number} ya está en camino. ¡Buen provecho!`,'wait');
-    setTimeout(()=>endSession(),3000);
-  }catch(e){reply(`Error: ${e.message}. Di "confirmar" para reintentar.`);voice.state('off');}
-  finally{sending=false;}
+ if(sending||!cart.length||!customerName)return;
+ if(!pending&&reviewed!==cartSignature(cart,customerName)){review();return;}
+ closeModals();voice.pause();sending=true;voice.state('sending');
+ pending=pending||{key:crypto.randomUUID(),items:structuredClone(cart),customer:customerName,confirmed:true};saveDraft();
+ try{
+  let order;
+  if(mode==='demo'){
+   const orders=readStore(ordersKey,[]);order=orders.find(o=>o.id===pending.key);
+   if(!order){order={id:pending.key,number:pending.key.slice(0,6).toUpperCase(),items:pending.items.map(l=>({...l,name:menu.find(p=>p.id===l.id).name,price:menu.find(p=>p.id===l.id).price})),total:total(pending.items,menu),customer:pending.customer,status:'nuevo',createdAt:new Date().toISOString()};saveOrders([order,...orders].slice(0,200));}
+  }else{const res=await fetch('/api/orders',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(pending),signal:AbortSignal.timeout(15000)});const data=await res.json();if(!res.ok)throw new Error(data.error);order=data.order;}
+  pending=null;customerName='';setCart([]);lastId=null;awaitingName=false;history=[];
+  toast(`Pedido ${mode==='demo'?'de prueba ':''}#${order.number} registrado`);
+  await reply(mode==='demo'?`Listo, ${order.customer}. Tu pedido de prueba quedó registrado.`:`Listo, ${order.customer}. Tu pedido quedó registrado con el número ${order.number}.`,'wait');
+ }catch(e){reply(`No pude confirmar el registro. Conservé el mismo envío para reintentar. ${e.message}`);}
+ finally{sending=false;}
 }
-
-// ---- Cajero ----
-async function loadQueue(){
-  const queue=$('queue');
-  try{
-    let orders;
-    if(mode==='demo') orders=readStore(`${storageKey}-orders`,[]);
-    else{if(!staffToken)return;const res=await fetch('/api/orders',{headers:{Authorization:`Bearer ${staffToken}`},signal:AbortSignal.timeout(12000)});const data=await res.json();if(!res.ok)throw new Error(data.error);orders=data.orders;}
-    const next={nuevo:'aceptado',aceptado:'preparando',preparando:'listo',listo:'entregado'};
-    queue.innerHTML=orders.length?orders.map(o=>`<article class="queue-card"><header><h3>#${esc(o.number)} · ${esc(o.customer)}</h3><span class="status-pill">${esc(o.status)}</span></header><p>${o.items.map(l=>`${l.qty} × ${esc(l.name)}`).join('<br>')}</p><strong>${money(o.total)}</strong><small class="muted"> · ${new Date(o.createdAt).toLocaleTimeString('es-EC',{hour:'2-digit',minute:'2-digit'})}</small><div class="queue-actions">${next[o.status]?`<button class="secondary-button" data-status="${next[o.status]}" data-order="${o.id}">Marcar ${next[o.status]}</button>`:''}${['nuevo','aceptado','preparando'].includes(o.status)?`<button class="text-button danger" data-status="cancelado" data-order="${o.id}">Cancelar</button>`:''}</div></article>`).join(''):'<p class="muted">Sin pedidos.</p>';
-  }catch(e){queue.textContent=e.message;}
-}
-function startPolling(){clearInterval(poll);poll=setInterval(()=>{if($('cashierDialog').open&&!document.hidden)loadQueue();},5000);}
-
-// ---- Eventos ----
-$('mascot').addEventListener('click',()=>{
-  if(busy||sending)return;
-  if(sessionActive){if(voice.mode==='listening')voice.finish();else voice.call();}
-  else startSession();
-});
+$('mascot').addEventListener('click',talk);document.querySelectorAll('[data-talk]').forEach(b=>b.addEventListener('click',talk));
+$('stopVoice').addEventListener('click',()=>{sessionActive=false;voice.disable();});
+$('voiceRate').addEventListener('change',e=>{voice.rate=Number(e.target.value);});
+$('menuOpen').addEventListener('click',()=>handleInput('ver menú'));
+$('cartOpen').addEventListener('click',()=>{interrupt();review();});
+for(const form of document.querySelectorAll('[data-chat]'))form.addEventListener('submit',e=>{e.preventDefault();const input=form.querySelector('input');const text=input.value;input.value='';handleInput(text);});
+$('modalBody').addEventListener('click',e=>{const cat=e.target.closest('[data-category]');const add=e.target.closest('[data-add]');if(cat)handleInput(`ver ${cat.dataset.category}`);if(add)handleInput(`Dame un ${menu.find(p=>p.id===add.dataset.add)?.name||''}`);});
+$('summaryBody').addEventListener('click',e=>{if(e.target.id==='confirmButton'){const value=$('customerName').value.trim();if(value.length<2){$('customerName').focus();toast('Escribe un nombre para retirar.');return;}customerName=value;reviewed=cartSignature(cart,customerName);saveDraft();submit();}});
+$('summaryBody').addEventListener('input',()=>{reviewed=null;});
 for(const b of document.querySelectorAll('[data-close]'))b.addEventListener('click',()=>$(b.dataset.close).close());
-$('cashierOpen').addEventListener('click',()=>{
-  $('cashierInfo').textContent=mode==='demo'?'Caja de prueba.':'Pedidos conectados.';
-  $('staffForm').hidden=mode==='demo'||Boolean(staffToken);
-  $('cashierDialog').showModal();loadQueue();startPolling();
-});
-$('cashierDialog').addEventListener('close',()=>clearInterval(poll));
-$('staffForm').addEventListener('submit',async e=>{e.preventDefault();staffToken=$('staffToken').value;$('staffToken').value='';$('staffForm').hidden=true;$('staffLogout').hidden=false;await loadQueue();if(staffToken)startPolling();});
-$('staffLogout').addEventListener('click',()=>{staffToken='';$('queue').textContent='';$('staffForm').hidden=false;$('staffLogout').hidden=true;clearInterval(poll);});
-$('refreshOrders').addEventListener('click',loadQueue);
-$('queue').addEventListener('click',async e=>{
-  const b=e.target.closest('[data-order]');if(!b)return;b.disabled=true;
-  try{
-    if(mode==='demo'){const orders=readStore(`${storageKey}-orders`,[]);const o=orders.find(o=>o.id===b.dataset.order);if(o)o.status=b.dataset.status;store(`${storageKey}-orders`,orders);}
-    else{const res=await fetch('/api/orders',{method:'PATCH',headers:{'Content-Type':'application/json',Authorization:`Bearer ${staffToken}`},body:JSON.stringify({id:b.dataset.order,status:b.dataset.status}),signal:AbortSignal.timeout(12000)});if(!res.ok)throw new Error((await res.json()).error);}
-    await loadQueue();
-  }catch(er){toast(er.message);b.disabled=false;}
-});
-window.addEventListener('storage',e=>{if(e.key===`${storageKey}-orders`&&$('cashierDialog').open)loadQueue();});
-document.addEventListener('visibilitychange',()=>{if(document.hidden){interrupt();voice.disable();sessionActive=false;}else if($('cashierDialog').open)loadQueue();});
-
-// ---- Init ----
-async function init(){
-  try{
-    const res=await fetch('/api/menu');const data=await res.json();
-    if(!res.ok)throw new Error(data.error);
-    ({menu,restaurant,mode}=data);
-    voice.greeting=restaurant.greeting;
-    $('brandName').textContent=restaurant.name.toLowerCase();
-    $('modeBadge').textContent=mode==='demo'?'Demo interactiva':'Conectado';
-    const saved=readStore(storageKey,{});
-    try{cart=validateCart(saved.cart||[],menu);pending=saved.pending||null;}catch{cart=[];pending=null;}
-    customerName=saved.customer||'';
-  }catch(e){$('reply').textContent='Error cargando. Recarga la página.';$('mascot').disabled=true;}
-}
+$('optionsModal').addEventListener('close',()=>{if(!$('optionsModal').open){carousel?.destroy();carousel=null;}});
+$('summaryModal').addEventListener('close',()=>{if(!$('summaryModal').open){reviewed=null;awaitingName=false;}});
+document.addEventListener('visibilitychange',()=>{if(document.hidden){interrupt();voice.disable();sessionActive=false;}});
+async function init(){try{const res=await fetch('/api/menu');const data=await res.json();if(!res.ok)throw new Error(data.error);({menu,restaurant,mode}=data);$('brandName').textContent=restaurant.name.toLowerCase();$('modeBadge').textContent=mode==='demo'?'Demo interactiva':'Conectado';const saved=readStore(storageKey,{});try{cart=validateCart(saved.cart||[],menu);pending=saved.pending||null;}catch{cart=[];pending=null;}customerName=saved.customer||'';setCart(cart);$('menuOpen').disabled=false;}catch{$('reply').textContent='No pude cargar el menú. Recarga la página.';$('mascot').disabled=true;}}
 init();

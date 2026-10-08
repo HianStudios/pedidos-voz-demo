@@ -1,6 +1,6 @@
 const Recognition=window.SpeechRecognition||window.webkitSpeechRecognition;
 export class VoiceController{
-  constructor({onState,onLevel,onText,onInput,onError,greeting}){Object.assign(this,{onState,onLevel,onText,onInput,onError,greeting});this.enabled=false;this.generation=0;this.recognition=null;this.recorder=null;this.stream=null;this.speechDone=null;this.meter=0;this.level=0;this.activatePending=false;}
+  constructor({onState,onLevel,onText,onInput,onError,greeting}){Object.assign(this,{onState,onLevel,onText,onInput,onError,greeting});this.rate=1.15;this.enabled=false;this.generation=0;this.recognition=null;this.recorder=null;this.stream=null;this.speechDone=null;this.meter=0;this.level=0;this.activatePending=false;}
   state(value){this.mode=value;this.onState(value);}
   async enable(direct=false){
     if(this.activatePending)return;
@@ -14,7 +14,7 @@ export class VoiceController{
       const Context=window.AudioContext||window.webkitAudioContext;
       if(Context){this.context=new Context();await this.context.resume();this.analyser=this.context.createAnalyser();this.analyser.fftSize=1024;this.source=this.context.createMediaStreamSource(stream);this.source.connect(this.analyser);this.samples=new Float32Array(this.analyser.fftSize);this.measure();}
       if(token!==this.generation)return;
-      if(direct)await this.call();else {await this.say(Recognition?'Puedes llamarme diciendo Milo cuando quieras.':'Toca mi carita cuando quieras hablar.');if(this.enabled)this.wait();}
+      if(direct)await this.call();else this.listen();
     }catch(e){if(token===this.generation){this.disable();this.onError(e.name==='NotAllowedError'?'Permite el micrófono en tu navegador o escribe tu pedido.':'No pude abrir el micrófono. Puedes continuar por texto.');}}
     finally{this.activatePending=false;}
   }
@@ -33,7 +33,7 @@ export class VoiceController{
     this.speechDone?.();this.speechDone=null;window.speechSynthesis?.cancel();this.onLevel(0);
   }
   disable(){this.pause();this.enabled=false;this.stream?.getTracks().forEach(t=>t.stop());this.stream=null;cancelAnimationFrame(this.meter);this.source?.disconnect();this.context?.close().catch(()=>{});this.context=null;this.state('off');}
-  wait(){if(!this.enabled)return;this.pause();this.state('waiting');if(Recognition&&!this.nativeFailed)this.recognize('wake');else this.onError('Micrófono activado. Toca a Milo para hablar; la activación por voz no está disponible aquí.');}
+  wait(){if(!this.enabled)return;this.pause();this.state('waiting');}
   async call(){
     if(!this.enabled)return this.enable(true);
     this.pause();const token=this.generation+1;await this.say(this.greeting);if(this.enabled&&token===this.generation)this.listen();
@@ -45,8 +45,10 @@ export class VoiceController{
     this.state('speaking');
     await new Promise(resolve=>{
       const done=()=>{clearTimeout(this.speechTimer);if(this.speechDone===done)this.speechDone=null;resolve();};this.speechDone=done;
-      const utterance=new SpeechSynthesisUtterance(text);utterance.lang='es-EC';utterance.rate=1.02;
-      const voices=speechSynthesis.getVoices();utterance.voice=voices.find(v=>v.lang==='es-EC')||voices.find(v=>/^es-(MX|US|CO)/i.test(v.lang))||voices.find(v=>v.lang.startsWith('es'))||null;
+      const utterance=new SpeechSynthesisUtterance(text);utterance.lang='es-EC';utterance.rate=this.rate;
+      const voices=speechSynthesis.getVoices().filter(v=>/^es/i.test(v.lang));
+      const score=v=>(/natural|neural|online|google/i.test(v.name)?20:0)+(/^es-(EC|MX|US|CO)/i.test(v.lang)?10:0);
+      utterance.voice=voices.sort((a,b)=>score(b)-score(a))[0]||null;
       utterance.onend=done;utterance.onerror=done;this.speechTimer=setTimeout(()=>{speechSynthesis.cancel();done();},Math.max(10000,text.length*120));speechSynthesis.speak(utterance);
     });
     if(token===this.generation)this.state('waiting');
@@ -69,12 +71,8 @@ export class VoiceController{
     };
     rec.onend=()=>{
       clearTimeout(this.timer);if(token!==this.generation||failed||!this.enabled)return;this.recognition=null;text=finalText;
-      if(kind==='wake'){
-        const match=text.match(/\b(?:milo|m0|melo|millo|miro|nilo|mila)\b[\s,.:;!?]*(.*)/i);
-        if(match){if(match[1].trim()){this.state('thinking');this.onInput(match[1].trim());}else this.call();}
-        else this.restart=setTimeout(()=>{if(token===this.generation)this.recognize('wake');},700);
-      }else if(text){this.state('thinking');this.onInput(text);}
-      else{this.wait();this.onError('No escuché un pedido. Puedes llamarme otra vez o escribirlo.');}
+      if(text){this.state('thinking');this.onInput(text.replace(/^milo[\s,]+/i,''));}
+      else{this.wait();this.onError('No escuché un pedido. Toca a Milo para continuar o escribe.');}
     };
     try{rec.start();if(kind==='command')this.timer=setTimeout(()=>{if(token===this.generation)try{rec.stop();}catch{}},25000);}
     catch{this.nativeFailed=true;this.state('waiting');this.onError('Toca a Milo para usar la grabación alternativa.');}
@@ -97,7 +95,7 @@ export class VoiceController{
       catch(e){if(token===this.generation){this.wait();this.onError(e.name==='TimeoutError'?'La transcripción tardó demasiado. Usa texto o intenta de nuevo.':e.message);}}
     };
     recorder.start();
-    this.vad=setInterval(()=>{if(token!==this.generation)return;const now=Date.now();if((this.rms||0)>.018){hadVoice=true;lastVoice=now;}if((hadVoice&&now-lastVoice>1250)||(!hadVoice&&now-started>8000&&this.analyser)){if(recorder.state==='recording')recorder.stop();}},100);
+    this.vad=setInterval(()=>{if(token!==this.generation)return;const now=Date.now();if((this.rms||0)>.018){hadVoice=true;lastVoice=now;}if((hadVoice&&now-lastVoice>900)||(!hadVoice&&now-started>8000&&this.analyser)){if(recorder.state==='recording')recorder.stop();}},100);
     this.timer=setTimeout(()=>{if(token===this.generation&&recorder.state==='recording')recorder.stop();},25000);
   }
   finish(){if(this.recorder?.state==='recording')this.recorder.stop();else if(this.recognition&&this.mode==='listening')try{this.recognition.stop();}catch{}else this.call();}

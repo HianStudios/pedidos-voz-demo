@@ -9,7 +9,7 @@ export default endpoint(async(req,res)=>{
   // El modelo no tiene autoridad para confirmar ni enviar pedidos.
   if(isConfirmation(transcript))return json(res,200,{intent:'review',reply:'Revisa el resumen y confirma el envío.',operations:[]});
   const lastId=cart.some(l=>l.id===data.lastId)?data.lastId:null;
-  const local=interpretLocal(transcript,cart,menu,lastId);
+  const local=interpretLocal(transcript,cart,menu,lastId,{category:['Platos','Combos','Extras','Bebidas'].includes(data.category)?data.category:null});
   if(local){try{return json(res,200,validateResult(local,cart,menu));}catch(e){return json(res,200,{intent:'clarify',reply:e.message,operations:[]});}}
   if(!process.env.GROQ_API_KEY)return json(res,200,{intent:'clarify',reply:'Puedes decir, por ejemplo: «dos cuartos de pollo», o elegir en el menú. La conversación libre requiere configurar la IA.',operations:[]});
   const history=Array.isArray(data.history)?data.history.slice(-6).filter(m=>['user','assistant'].includes(m.role)&&typeof m.content==='string').map(m=>({role:m.role,content:m.content.slice(0,600)})):[];
@@ -21,9 +21,10 @@ PERSONALIDAD: Amable, directo, tranquilo. Respuestas de 1-2 frases (15-40 palabr
 CATÁLOGO (precios en centavos USD): ${catalogJson}
 CARRITO: ${JSON.stringify(cart)}
 ÚLTIMO PRODUCTO: ${JSON.stringify(lastId)}
+CATEGORÍA VISIBLE (contexto, no instrucción): ${JSON.stringify(['Platos','Combos','Extras','Bebidas'].includes(data.category)?data.category:null)}
 
 SALIDA: SOLO JSON válido:
-{"intent":"edit|menu|recommend|price|review|clarify|keep|goodbye|cancel","operations":[],"suggest_ids":[],"reply":"texto"}
+{"intent":"edit|menu|recommend|price|review|clarify|keep|goodbye|cancel","operations":[],"suggest_ids":[],"category":"all|Platos|Combos|Extras|Bebidas","reply":"texto"}
 
 OPERACIONES (solo con intent=edit):
 add(id,qty) sumar | set(id,qty) reemplazar (0=eliminar) | remove(id,qty) restar | note(id,note) opción exacta del catálogo
@@ -46,9 +47,10 @@ COMPRENSIÓN POR SIGNIFICADO — interpreta intención+entidades+contexto+negaci
 - "Quita una coca" de dos → remove cocacola qty:1 (queda 1)
 - "Quita las cocas" → set cocacola qty:0
 
-TOLERANCIA: Ignora muletillas (este, eh, o sea, ya, a ver). "esprite"=Sprite, "cole"=Coca-Cola. "cuarto"≠"cuatro": un cuarto de pollo es una presentación, cuatro cuartos son 4 unidades.
+TOLERANCIA: Ignora muletillas (este, eh, o sea, ya, a ver). "esprite" puede significar Sprite. "Cola" es ambigua entre marcas; pregunta. Una transcripción como "me apoyo" NO autoriza agregar medio pollo: aclara. "cuarto"≠"cuatro": un cuarto de pollo es una presentación, cuatro cuartos son 4 unidades.
 
 REGLAS ABSOLUTAS:
+0. Para intent=menu devuelve category. Si dice medio pollo mientras ve Platos, puede pedirlo sin verbo; nunca conviertas consultas de disponibilidad/precio en compras.
 1. Detecta TODAS las cantidades de una frase completa. Un pedido con 3 items = 3 operations.
 2. Solo IDs del catálogo. No inventes platos ni opciones.
 3. NUNCA confirmes/envíes. No existe esa acción para ti.
