@@ -1,25 +1,32 @@
-// Ejecutar con Playwright instalado: node tests/browser.cjs (servidor local activo).
+// Local integration tests: no audio hardware or paid services needed.
 const {chromium}=require(require.resolve('playwright',{paths:[process.env.CODEX_PRIMARY_RUNTIME_NODE_MODULES||process.cwd()]}));
-const assert=require('node:assert/strict');
+const assert=require('node:assert/strict');const fs=require('node:fs');
 (async()=>{
-  const browser=await chromium.launch({headless:true,executablePath:process.env.PLAYWRIGHT_EXECUTABLE_PATH||undefined,args:['--no-sandbox']});const context=await browser.newContext({viewport:{width:1440,height:1100}});const page=await context.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));
-  await page.goto('http://localhost:3000');await page.locator('.product').first().waitFor();assert.equal(await page.locator('.product').count(),10);
-  await page.screenshot({path:'test-results/desktop.png',fullPage:true});
-  async function say(text){await page.locator('#chatText').fill(text);await page.locator('#sendText').click();await page.waitForFunction(()=>!document.getElementById('sendText').disabled);}
-  await say('quiero dos cuartos de pollo y una cola');assert.equal(await page.locator('#cartCount').textContent(),'3');
-  await say('sin cebolla');assert.equal(await page.locator('#cartCount').textContent(),'3'); // last cola => clarification, no submit
-  await say('eso es todo');await page.locator('#cartDialog[open]').waitFor();
-  await page.locator('[data-close="cartDialog"]').click();await say('no confirmes todavía');assert.equal(await page.locator('#cartCount').textContent(),'3');assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('mesero-brasa-v2-orders')||'[]').length),0);
-  await say('quita una cola');assert.equal(await page.locator('#cartCount').textContent(),'2');
-  await say('sin cebolla'); // lastId cola removed: clarification, no corruption
-  await say('mejor tres cuartos de pollo');assert.equal(await page.locator('#cartCount').textContent(),'3');
-  await say('sin cebolla');assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('mesero-brasa-v2')).cart[0].notes[0]),'sin cebolla');
-  await page.reload();await page.locator('.product').first().waitFor();assert.equal(await page.locator('#cartCount').textContent(),'3');
-  await page.locator('#cartOpen').click();await page.locator('#customerName').fill('Hian');await page.locator('#confirmButton').click();await page.locator('#confirmButton').click();await page.waitForFunction(()=>!document.getElementById('cartDialog').open);assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('mesero-brasa-v2-orders')).length),1);
-  await page.locator('#cashierOpen').click();await page.locator('.queue-card').waitFor();assert.match(await page.locator('.queue-card').textContent(),/Hian/);await page.locator('[data-status="aceptado"]').click();await page.waitForFunction(()=>document.querySelector('.status-pill')?.textContent==='aceptado');
-  await page.reload();await page.locator('.product').first().waitFor();await page.locator('#cashierOpen').click();assert.equal(await page.locator('.status-pill').textContent(),'aceptado');await page.locator('[data-close="cashierDialog"]').click();
-  await page.setViewportSize({width:390,height:844});await page.screenshot({path:'test-results/mobile.png',fullPage:true});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
-  await page.locator('[data-add="cuarto"]').click();await page.locator('#cartOpen').click();await page.screenshot({path:'test-results/mobile-cart.png'});assert.equal(await page.evaluate(()=>document.getElementById('cartDialog').getBoundingClientRect().width<innerWidth),true);await page.locator('[data-close="cartDialog"]').click();
-  assert.deepEqual(errors,[]);console.log('PASS: menú, conversación, negaciones, edición, confirmación, caja, recarga y móvil.');
-  await browser.close();
+ fs.mkdirSync('test-results',{recursive:true});const browser=await chromium.launch({headless:true,executablePath:process.env.PLAYWRIGHT_EXECUTABLE_PATH||undefined,args:['--no-sandbox']});const ctx=await browser.newContext({viewport:{width:1440,height:1080}});const page=await ctx.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.goto('http://localhost:3000');await page.locator('#menuOpen:not([disabled])').waitFor();
+ await page.screenshot({path:'test-results/home-desktop.png',fullPage:true});
+ assert.equal(await page.locator('#cashierDialog').count(),0);assert.equal(await page.getByText('di su nombre',{exact:false}).count(),0);
+ const cash=await ctx.newPage();cash.on('pageerror',e=>errors.push(e.message));await cash.goto('http://localhost:3000/caja.html');await cash.locator('#workspace:not([hidden])').waitFor();
+ await page.bringToFront();await page.locator('#menuOpen').click();await page.locator('[data-category="Platos"]').click();await page.locator('.runway').waitFor();await page.mouse.move(0,0);
+ assert.equal(await page.locator('.runway-group').count(),3);assert.equal(await page.locator('.runway-group').nth(1).locator('.runway-card').count(),5);
+ const pos=await page.locator('.runway-viewport').evaluate(e=>e.scrollLeft);await page.waitForTimeout(700);const later=await page.locator('.runway-viewport').evaluate(e=>e.scrollLeft);assert.ok(later>pos,'pasarela se mueve');
+ await page.locator('[data-carousel="pause"]').click();const paused=await page.locator('.runway-viewport').evaluate(e=>e.scrollLeft);await page.waitForTimeout(250);assert.equal(await page.locator('.runway-viewport').evaluate(e=>e.scrollLeft),paused);
+ await page.screenshot({path:'test-results/solo-desktop.png',fullPage:true});
+ async function say(text){const modal=await page.locator('#optionsModal').evaluate(e=>e.open);const summary=await page.locator('#summaryModal').evaluate(e=>e.open);if(!modal&&!summary)await page.locator('.text-alternative').evaluate(e=>e.open=true);const id=modal?'modalText':summary?'summaryText':'chatText';await page.locator('#'+id).fill(text);await page.locator('#'+id).press('Enter');await page.waitForTimeout(160);await page.waitForFunction(()=>!document.getElementById('sendText').disabled);}
+ await say('me apoyo');assert.match(await page.locator('#reply').textContent(),/medio pollo/);assert.equal(await page.locator('#cartCount').textContent(),'0');
+ await say('medio pollo');assert.equal(await page.locator('#cartCount').textContent(),'1');
+ await say('me llamo Hian');await page.locator('#summaryModal[open]').waitFor();await page.locator('[data-close="summaryModal"]').click();
+ await say('muéstrame las bebidas');await say('sí');assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('mesero-brasa-v2-orders')||'[]').length),0,'sí fuera de revisión no envía');
+ await page.locator('[data-close="summaryModal"]').click();await say('sin cebolla');
+ await say('eso es todo');await page.locator('#summaryModal[open]').waitFor();assert.match(await page.locator('#summaryBody').textContent(),/sin cebolla/);
+ await page.locator('#confirmButton').click();await cash.locator('.queue-card').waitFor();assert.match(await cash.locator('.queue-card').textContent(),/Hian/);assert.match(await cash.locator('.queue-card').textContent(),/sin cebolla/);
+ assert.equal(await cash.locator('.queue-card').count(),1);await cash.locator('[data-status="aceptado"][data-order]').click();await cash.locator('.status-pill[data-status="aceptado"]').waitFor();
+ const cash2=await ctx.newPage();await cash2.goto('http://localhost:3000/caja.html');await cash2.locator('.status-pill[data-status="aceptado"]').waitFor();
+ await cash.locator('[data-status="preparando"][data-order]').click();await cash2.locator('.status-pill[data-status="preparando"]').waitFor();
+ await cash.screenshot({path:'test-results/caja-desktop.png',fullPage:true});
+ await page.setViewportSize({width:390,height:844});await page.reload();await page.locator('#menuOpen:not([disabled])').waitFor();await page.screenshot({path:'test-results/home-mobile.png',fullPage:true});
+ await page.locator('#menuOpen').click();await page.locator('[data-category="Platos"]').click();await page.waitForTimeout(400);await page.screenshot({path:'test-results/solo-mobile.png',fullPage:true});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
+ await page.emulateMedia({reducedMotion:'reduce'});await page.locator('[data-close="optionsModal"]').click();await page.locator('#menuOpen').click();await page.locator('[data-category="Combos"]').click();assert.equal(await page.locator('[data-carousel="pause"]').textContent(),'Reanudar');
+ await cash.setViewportSize({width:390,height:844});await cash.screenshot({path:'test-results/caja-mobile.png',fullPage:true});assert.equal(await cash.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
+ assert.deepEqual(errors,[]);await browser.close();console.log('PASS: Solo, voz vía transcripción, aclaración, revisión segura, pasarela, caja en vivo entre pestañas, estados y móvil.');
 })().catch(e=>{console.error(e);process.exit(1);});

@@ -14,26 +14,22 @@ npm run dev
 
 Abrir http://localhost:3000. **No abrir index.html directamente:** las rutas `/api` necesitan servidor. `npm test` ejecuta las pruebas de dominio, API y controlador de voz. `npm run build` crea el frontend publicable en `dist/` sin incluir secretos o código del servidor.
 
-## Qué se puede hacer
+## Experiencia actual
 
-- Activar el micrófono, decir «mesero» y recibir «Dígame, señor. ¿Qué desea pedir?» cuando SpeechRecognition esté disponible.
-- Decir «mesero, muéstrame el menú» en una sola frase, o tocar la mascota para hablar.
-- Pedir «dos cuartos de pollo y una cola», «quita una cola», «mejor tres cuartos de pollo», «sin cebolla», «eso es todo» y «me llamo Hian».
-- Editar cantidades/opciones con botones, escribir mensajes y confirmar después de revisar el resumen.
-- Consultar productos y precios; abrir categorías, recomendaciones y el carrito.
-- Ver pedidos en caja y pasar por nuevo → aceptado → preparando → listo → entregado. Cancelación disponible antes de listo.
+- La pantalla principal conserva a Milo como protagonista; menú y productos aparecen bajo demanda en modales.
+- Tocar a Milo inicia una sesión de voz. No requiere decir su nombre. Al responder, vuelve a escuchar; tocarlo mientras habla interrumpe la respuesta. «Apagar micrófono» detiene la sesión.
+- «Solo», «quiero ver los platos solos» y «medio pollo» con Platos abierto funcionan sin IA externa. Una transcripción ambigua como «me apoyo» en Platos pide aclaración.
+- Productos en pasarela horizontal circular a 24 px/s, con pausa, anterior/siguiente, selección por nombre y alternativa «Agregar». Respeta movimiento reducido y pausa al enfocar/interactuar o al escuchar/procesar voz.
+- Resumen con notas y nombre. La confirmación verbal solo envía si corresponde a una revisión vigente. Una consulta o edición invalida la revisión anterior.
+- Texto disponible tanto en la pantalla principal como dentro de los modales.
 
-La confirmación es exacta y contextual. «Sin cebolla», «no confirmes» y «sí, agrega papas» nunca envían automáticamente. Cualquier edición invalida el resumen aprobado. Para retirar se solicita nombre, que también puede darse por voz con «me llamo…».
+## Voz y límites
 
-## Voz y limitaciones reales
+La síntesis del navegador usa velocidad inicial 1.15, ajustable a pausada/natural/ágil. Prioriza voces españolas identificadas como naturales cuando el dispositivo las ofrece; no incorpora un servicio TTS neuronal externo. La calidad y la latencia dependen del navegador y sus voces. No se probó aquí la acústica en micrófonos físicos.
 
-El usuario debe activar voz y conceder permiso. Se requiere HTTPS en despliegue; localhost sirve para desarrollo. No hay escucha con la página cerrada: al ocultarla se detiene el micrófono. SpeechRecognition no está disponible de forma uniforme y puede enviar audio al servicio del navegador. **No se promete reconocimiento local/offline.**
+Se requiere permiso del usuario y HTTPS (o localhost). Al ocultar la pestaña se desactiva el micrófono. Si no funciona SpeechRecognition se ofrece MediaRecorder y transcripción por Groq; la grabación alternativa termina tras 900 ms de silencio detectado, con espera inicial de 8 s y máximo de 25 s. El umbral debe probarse en el ruido real del local. No existe escucha con la página cerrada ni interrupción simultánea por voz con control de eco; se interrumpe tocando el control.
 
-Si el reconocimiento nativo falla o no existe, tocar a Milo inicia MediaRecorder y `/api/transcribe` usa Groq Whisper. La detección de silencio se usa en esta grabación alternativa: 1,25 s tras voz, espera inicial de 8 s y máximo de 25 s. El reconocimiento nativo utiliza su propia segmentación y un máximo de 25 s por turno. El umbral RMS de la alternativa es orientativo y requiere calibración en el ruido real del local.
-
-Mientras Milo habla no se aceptan órdenes de voz; puede interrumpirse tocando la mascota. No se implementa interrupción simultánea por voz (barge-in). La activación «mesero» depende del reconocimiento nativo: si no está disponible se muestra la alternativa táctil, sin subir silencio continuamente a Whisper.
-
-Las ondas de entrada responden al volumen real del micrófono. La boca/ondas de salida siguen los eventos de la locución del navegador: no son un análisis de amplitud de speechSynthesis. Se respeta movimiento reducido. Las voces disponibles dependen del dispositivo.
+Una respuesta se reproduce por turno. Se eliminaron los temporizadores que abrían bebidas y cortaban otra locución, y las ofertas automáticas tras cada edición.
 
 ## IA
 
@@ -45,7 +41,7 @@ Los comandos comunes son deterministas y no consumen IA. Para frases libres, `/a
 
 ### Demo automática
 
-Sin todas las credenciales de caja, la interfaz indica **Demo interactiva**. El borrador y los pedidos se conservan en localStorage, sobreviven a recargas y se ven entre pestañas del mismo navegador/origen. No se comparten entre dispositivos. La interfaz dice «pedido de prueba», nunca que se envió a un restaurante real. La navegación privada o la limpieza de datos puede borrar esta demo.
+Sin todas las credenciales de caja, la interfaz indica **Demo interactiva**. El borrador y los pedidos se conservan en localStorage, sobreviven a recargas y se ven entre pestañas del mismo navegador/origen con eventos de almacenamiento y BroadcastChannel. La página de caja se actualiza automáticamente al registrar pedidos o cambiar estados. No se comparten entre dispositivos. La interfaz dice «pedido de prueba», nunca que se envió a un restaurante real. La navegación privada o la limpieza de datos puede borrar esta demo.
 
 ### Caja compartida
 
@@ -57,9 +53,9 @@ Configurar en Vercel (o en .env local):
 
 Generar dos valores aleatorios distintos, por ejemplo ejecutando dos veces `node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"` en un entorno privado. No pegar secretos en commits, chats o capturas.
 
-Con las cuatro variables configuradas, `/api/menu` anuncia modo conectado y emite una cookie de sesión HttpOnly/SameSite. La pantalla Caja solicita la clave; se mantiene solo en memoria y se elimina al cerrar el acceso o recargar.
+Con las cuatro variables configuradas, `/api/menu` anuncia modo conectado y emite una cookie de sesión HttpOnly/SameSite. La página `/caja.html` solicita la clave; se mantiene solo en memoria y se elimina al cerrar el acceso o recargar.
 
-El backend valida catálogo/cantidades, calcula centavos y crea pedidos e identificadores de reintento atómicamente con Redis Lua. Un timeout conserva el mismo envío para reintentar sin duplicarlo, bloqueando ediciones hasta resolverlo. Solo se muestra éxito tras la respuesta del servidor. Caja se actualiza por polling cada 5 segundos, recuperándose tras recarga o desconexión. Los pedidos y claves de idempotencia se retienen 30 días; la lista muestra hasta los 200 pedidos más recientes.
+El backend valida catálogo/cantidades, calcula centavos y crea pedidos e identificadores de reintento atómicamente con Redis Lua. Un timeout conserva el mismo envío para reintentar sin duplicarlo, bloqueando ediciones hasta resolverlo. Solo se muestra éxito tras la respuesta del servidor. Caja está en `/caja.html`. Recibe un canal SSE autenticado en `/api/order-events`: snapshot al conectar, actualizaciones cuando cambian pedidos y latidos. El servidor consulta Redis cada 1.5 s; por tanto, la actualización no es instantánea ni usa Redis Pub/Sub. Cada conexión dura hasta 20 s y se renueva automáticamente. Tras cortes se reconecta con espera progresiva de hasta 15 s y recupera el snapshot completo. La pestaña oculta pausa la conexión. No requiere servicios adicionales a Redis existente; cada caja activa genera aproximadamente 40 lecturas de snapshot por minuto, además de autenticación/límites y acciones de estado. Revisar el consumo del plan antes de escalar. Los pedidos y claves de idempotencia se retienen 30 días; la lista muestra hasta los 200 pedidos más recientes.
 
 **Alcance:** un restaurante por despliegue, modalidad retiro. No hay mesas verificadas, pagos, inventario con reserva, impresora, panel de edición de catálogo ni cuentas individuales de personal. Para operar varios restaurantes, usar despliegues y credenciales separados o implementar multitenencia autenticada antes de compartir una base. Cambiar el catálogo es un cambio de código.
 
@@ -73,7 +69,12 @@ El campo `id` del restaurante separa claves de almacenamiento en Redis; no se ac
 
 ## Estructura
 
-- `index.html`: estructura accesible de cliente, carrito y caja.
+- `index.html`: cliente, pasarela y resumen.
+- `caja.html`, `public/js/cashier.js`: página independiente del personal.
+- `public/js/carousel.js`: movimiento, ciclo y pausa de la pasarela.
+- `public/js/conversation.js`: navegación semántica básica y estado de revisión.
+- `api/order-events.js`, `server/order-feed.js`, `public/js/live-feed.js`: stream autenticado, snapshots y reconexión.
+- `prompts/Mejoras_Milo_Pasarela_Caja.md`: encargo profesional usado en esta iteración.
 - `public/styles.css`, `public/favicon.svg`: identidad y diseño responsive.
 - `public/js/app.js`: interfaz, sesión de pedido y caja.
 - `public/js/voice.js`: micrófono, reconocimiento, grabación, locución y cancelación.
@@ -107,3 +108,9 @@ node tests/browser.cjs
 Las pruebas automatizadas de voz usan dobles de navegador: verifican transiciones/cancelación, no calidad acústica. El acceso real a Groq, Redis y la captura de micrófono en Android/iPhone requieren credenciales/dispositivos y no deben darse por validados solo porque pase npm test. Probar especialmente ruido de restaurante, eco del altavoz, permisos, Safari/iOS, pérdida de conexión y reintento del mismo pedido.
 
 Documentación técnica: [Groq](https://console.groq.com/docs/api-reference), [Upstash REST](https://upstash.com/docs/redis/features/restapi), [getUserMedia](https://developer.mozilla.org/en-US/docs/Web/API/MediaDevices/getUserMedia), [SpeechRecognition](https://developer.mozilla.org/en-US/docs/Web/API/SpeechRecognition).
+
+## Validación de esta iteración
+
+Ejecutar `npm test`, `npm run build` y, con el servidor activo, `node tests/browser.cjs`. El recorrido automatizado comprueba Solo, medio pollo, aclaración de transcripción, resumen con notas, confirmación contextual, caja entre pestañas, cambios de estado y tamaños móvil/escritorio. Las pruebas de SSE comprueban snapshots, cambios, cierre, parsing fragmentado y rechazo sin autorización.
+
+La sincronización entre dispositivos necesita las credenciales de Redis y personal descritas arriba. Las pruebas locales no validan credenciales de producción, servicios Groq reales ni el audio físico del usuario. La documentación de streaming utilizada es [Vercel Functions Streaming](https://vercel.com/docs/functions/streaming-functions). Verificar el canal en el despliegue antes de declarar servicio real en vivo.

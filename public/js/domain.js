@@ -1,3 +1,4 @@
+import {navigation} from './conversation.js';
 export const normalize = s => String(s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[¿?¡!.,;:]/g,' ').replace(/\s+/g,' ').trim();
 export const money = cents => new Intl.NumberFormat('es-EC',{style:'currency',currency:'USD'}).format(cents/100);
 export function validateCart(cart, menu) {
@@ -39,24 +40,30 @@ export function validateResult(result,cart,menu){
   applyOperations(cart,operations,menu);
   const ids=result.suggest_ids??[];
   if(!Array.isArray(ids)||ids.length>10||ids.some(id=>!menu.some(p=>p.id===id&&p.available))) throw new Error('Sugerencias inválidas.');
-  return {intent:result.intent,reply:result.reply,operations,suggest_ids:ids};
+  const category=['all','Platos','Combos','Extras','Bebidas'].includes(result.category)?result.category:null;
+  return {intent:result.intent,reply:result.reply,operations,suggest_ids:ids,...(category?{category}:{})};
 }
 const numbers={un:1,una:1,uno:1,dos:2,tres:3,cuatro:4,cinco:5,seis:6,siete:7,ocho:8,nueve:9,diez:10};
 const count=s=>numbers[s]??Number(s);
 export function isConfirmation(text){return /^(si|si por favor|si confirma|si confirmo|confirmo|confirmar|confirma|confirmar pedido|enviar pedido|envia el pedido|mandalo|si envialo|correcto|dale)$/.test(normalize(text));}
 const answer=(intent,reply,extra={})=>({intent,reply,operations:[],...extra});
 // Determinista para órdenes comunes; la IA resuelve las frases no cubiertas.
-export function interpretLocal(text,cart,menu,lastId=null){
+export function interpretLocal(text,cart,menu,lastId=null,context={}){
   const n=normalize(text);
+  const category=navigation(text);
+  if(category)return answer('menu','Aquí tienes las opciones.',{category});
+  if(context.category==='Platos'&&/^(me apoyo|medio apoyo|medio de apoyo)$/.test(n))return answer('clarify','¿Te refieres a un medio pollo? Puedes decir «medio pollo».');
   if(/\b(alergia|alergico|celiaco|gluten)\b/.test(n)) return answer('clarify','Para confirmar ingredientes y alergias, consulte con el personal del restaurante.');
   if(/^(no|no gracias|no confirmes(?: todavia)?|no lo envies|todavia no|espera|espera un momento)$/.test(n)) return answer('keep','De acuerdo. Tu pedido sigue en borrador.');
   if(/^(eso es todo|termine(?: mi pedido)?|he terminado|listo|nada mas|ver (?:mi )?pedido|mi pedido|resumen)$/.test(n)) return answer('review',cart.length?'Revisemos tu pedido antes de enviarlo.':'Todavía no has agregado productos.');
   if(/^(cancelar|cancela|borra) (?:todo|el pedido|mi pedido)$/.test(n)) return answer('cancel','¿Quieres vaciar todo el borrador? Confírmalo con el botón de cancelar.');
   if(/^(gracias|hasta luego|chao|adios)$/.test(n)) return answer(cart.length?'review':'goodbye',cart.length?'Tienes un pedido pendiente. Vamos a revisarlo.':'Gracias por visitarnos. Aquí estaré cuando me necesites.');
-  if(/\b(menu|carta)\b/.test(n)) return answer('menu','Aquí tienes nuestro menú. ¿Qué se te antoja?');
+
   if(/\b(recomienda|recomiendas|recomendacion|que hay|que tienes)\b/.test(n)) return answer('recommend','Puedes probar el cuarto de pollo o un combo familiar.',{suggest_ids:['cuarto','combo-familiar']});
+  const single=menu.find(p=>p.available&&[p.name,...p.aliases].some(a=>normalize(a).replace(/^(un|una) /,'')===n));
+  if(single&&context.category===single.category)return answer('edit',`Va un ${single.name}.`,{operations:[{type:'add',id:single.id,qty:1}]});
   const hits=[]; let remaining=n;
-  const aliases=menu.flatMap(p=>p.aliases.map(a=>({id:p.id,a:normalize(a)}))).sort((a,b)=>b.a.length-a.a.length);
+  const aliases=menu.flatMap(p=>[p.name,...p.aliases].map(a=>({id:p.id,a:normalize(a).replace(/^(?:un|una|unas|unos|dos|tres) /,'')}))).sort((a,b)=>b.a.length-a.a.length);
   // Buscar primero la coincidencia más larga y no contar de nuevo sus subcadenas.
   for(const {id,a} of aliases){
     const re=new RegExp(`(^|\\s)(${a})(?=\\s|$)`,'g');

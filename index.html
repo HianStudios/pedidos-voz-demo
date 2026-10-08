@@ -6,10 +6,10 @@
   <title>Brasa · Tu mesa, a tu manera</title>
   <link rel="icon" href="/public/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="/public/styles.css">
 </head>
-<body>
+<body class="ordering-page">
   <header class="site-header">
     <a class="brand" href="/" aria-label="Brasa, inicio"><span class="brand-icon">b<span>•</span></span><span id="brandName">brasa</span><span class="brand-dot">®</span></a>
-    <div class="header-right"><span class="demo-badge" id="modeBadge">Cargando…</span><button class="text-button" id="cashierOpen">Caja <span aria-hidden="true">↗</span></button></div>
+    <div class="header-right"><span class="demo-badge" id="modeBadge">Cargando…</span><a class="text-button" href="/caja.html" target="_blank" rel="noopener">Caja <span aria-hidden="true">↗</span></a></div>
   </header>
 
   <main class="milo-layout">
@@ -25,10 +25,10 @@
       </div>
 
       <div class="voice-status"><span id="stateDot" class="state-dot"></span><span id="voiceState" role="status">Listo para ayudarte</span></div>
-      <div class="reply" id="reply" aria-live="polite">Toca a Milo o di su nombre para empezar.</div>
+      <div class="reply" id="reply" aria-live="polite">Toca a Milo y cuéntame qué se te antoja.</div>
       <p class="transcript" id="transcript"></p>
-      <p class="voice-help" id="voiceHelp">Di «Milo» para llamarme.</p>
-      <div class="privacy-note"><span aria-hidden="true">⌁</span> Tú decides cuándo encender el micrófono.</div>
+      <p class="voice-help" id="voiceHelp">Sin prisa. Estoy aquí para ayudarte.</p>
+      <div class="minimal-actions"><button id="menuOpen" disabled>Explorar menú ↗</button><button id="cartOpen">Mi pedido <span id="cartCount">0</span></button><button id="stopVoice" hidden>Apagar micrófono</button></div><details class="text-alternative"><summary>Prefiero escribir · ajustes de voz</summary><form class="chat-input" data-chat><label for="chatText" class="sr-only">Tu mensaje</label><input id="chatText" autocomplete="off" placeholder="Escribe lo que se te antoja…" maxlength="1200"><button id="sendText" aria-label="Enviar mensaje">↑</button></form><label class="rate-label" for="voiceRate">Ritmo de voz <select id="voiceRate"><option value="1">Pausado</option><option value="1.15" selected>Natural</option><option value="1.3">Ágil</option></select></label></details><div class="privacy-note"><span aria-hidden="true">⌁</span> Tú decides cuándo encender el micrófono.</div>
     </section>
   </main>
 
@@ -38,7 +38,7 @@
       <h2 id="modalTitle">Menú</h2>
       <button class="close-button" data-close="optionsModal" aria-label="Cerrar">×</button>
     </div>
-    <div class="modal-body" id="modalBody"></div>
+    <div class="modal-body" id="modalBody"></div><div class="modal-conversation"><p class="dialog-reply" aria-live="polite"></p><button class="primary-button" data-talk>Hablar con Milo</button><form class="chat-input" data-chat><label class="sr-only" for="modalText">Tu mensaje</label><input id="modalText" placeholder="O escribe tu elección…" maxlength="1200"><button aria-label="Enviar mensaje">↑</button></form></div>
   </dialog>
 
   <!-- Popup de resumen del pedido -->
@@ -47,13 +47,7 @@
       <h2>Tu pedido</h2>
       <button class="close-button" data-close="summaryModal" aria-label="Cerrar">×</button>
     </div>
-    <div class="modal-body" id="summaryBody"></div>
-  </dialog>
-
-  <!-- Caja (se mantiene igual) -->
-  <dialog id="cashierDialog" class="cashier-dialog">
-    <div class="dialog-heading"><div><span class="eyebrow">MOSTRADOR</span><h2>Pedidos en caja</h2></div><button class="close-button" data-close="cashierDialog" aria-label="Cerrar caja">×</button></div>
-    <div class="drawer-content"><p id="cashierInfo" class="muted"></p><form id="staffForm" hidden><label for="staffToken">Clave de personal</label><div class="staff-entry"><input type="password" id="staffToken" autocomplete="off" required><button class="primary-button">Entrar</button></div></form><div class="cashier-toolbar"><button class="text-button" id="refreshOrders">Actualizar ↻</button><button class="text-button" id="staffLogout" hidden>Cerrar acceso</button></div><div id="queue" aria-live="polite"></div></div>
+    <div class="modal-body" id="summaryBody"></div><div class="modal-conversation"><p class="dialog-reply" aria-live="polite"></p><button class="secondary-button" data-talk>Hablar con Milo</button><form class="chat-input" data-chat><label class="sr-only" for="summaryText">Corregir pedido</label><input id="summaryText" placeholder="¿Quieres cambiar algo?" maxlength="1200"><button aria-label="Enviar cambio">↑</button></form></div>
   </dialog>
 
   <div class="toast" id="toast" role="status"></div>
