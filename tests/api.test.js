@@ -65,3 +65,9 @@ test('la IA recibe la guía de razonamiento y la pregunta pendiente; reintenta u
     assert.equal(calls,2);assert.equal(r.intent,'menu');assert.equal(r.category,'Bebidas');assert.match(system,/Cómo razonar/);assert.match(system,/PREGUNTA PENDIENTE: "¿Algo para tomar/);assert.ok(system.length<9000,'cabe en el límite gratuito de Groq');}
   finally{if(old===undefined)delete process.env.GROQ_API_KEY;else process.env.GROQ_API_KEY=old;}
 });
+test('con el cupo por minuto agotado usa el modelo de respaldo',async()=>{
+  const {interpret}=await import('../api/match.js');const old=process.env.GROQ_API_KEY;process.env.GROQ_API_KEY='test';const models=[];
+  const fetchImpl=async(u,o)=>{const m=JSON.parse(o.body).model;models.push(m);if(m==='openai/gpt-oss-120b')return new Response('{"error":{"message":"Rate limit reached"}}',{status:429,headers:{'retry-after':'1'}});return new Response(JSON.stringify({choices:[{message:{content:JSON.stringify({intent:'edit',reply:'Va un medio pollo.',operations:[{type:'add',id:'medio',qty:1}]})}}]}));};
+  try{const r=await interpret({transcript:'un medio de esos de la casa',cart:[]},{fetchImpl});assert.deepEqual(models,['openai/gpt-oss-120b','openai/gpt-oss-20b']);assert.equal(r.source,'ai');assert.deepEqual(r.operations,[{type:'add',id:'medio',qty:1}]);}
+  finally{if(old===undefined)delete process.env.GROQ_API_KEY;else process.env.GROQ_API_KEY=old;}
+});

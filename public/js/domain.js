@@ -107,7 +107,7 @@ export function describeOps(ops,menu){
   const notesFor=id=>ops.filter(o=>o.type==='note'&&o.id===id).map(o=>o.note);
   const added=ops.filter(o=>o.type==='add').map(o=>[amount(find(o.id),o.qty),...notesFor(o.id)].join(' '));
   const parts=[];
-  const single=added.length===1&&ops.find(o=>o.type==='add').qty===1;
+  const single=added.length===1&&ops.find(o=>o.type==='add').qty===1&&!/^un[ao]s /.test(added[0]);
   if(added.length)parts.push(`${single?'Va':'Van'} ${listWords(added)}.`);
   for(const o of ops){
     const p=find(o.id);
@@ -125,8 +125,17 @@ export function followUp(cart,ops,menu,drinkOffered){
   return more[(cart.length+ops.length)%3];
 }
 // Determinista para órdenes comunes; la IA resuelve las frases no cubiertas.
+// Errores de transcripción frecuentes («esprait», «un cuatro de pollo») corregidos sin gastar IA.
+const soundAlikes=[
+  [/\b(?:e?sprait|e?sprai|esprite|espray|sprai)\b/g,'sprite'],[/\b(?:pecsi|pepsy|pexi|pepsis)\b/g,'pepsi'],
+  [/\b(?:cocacolas|coca colas|cocas)\b/g,'coca cola'],
+  [/\b(un|el|1) cuatro de pollo\b/g,'$1 cuarto de pollo'],[/\bcuatros de pollo\b/g,'cuartos de pollo'],
+  [/\bcombos? persona\b/g,'combo personal'],[/\bcon vo personal\b/g,'combo personal'],[/\bel familia\b/g,'el familiar'],
+  [/\bunas? alita(?: bbq)?\b/g,'unas alitas'],[/\bmedio pollos\b/g,'medios pollos'],[/\buna papa\b/g,'unas papas'],[/\bcombo pa dos\b/g,'combo para dos'],
+];
+export function soundsLike(text){let n=normalize(text);for(const [re,to] of soundAlikes)n=n.replace(re,to);return n;}
 export function interpretLocal(text,cart,menu,lastId=null,context={}){
-  const n=normalize(text);
+  const n=soundsLike(text);
   const category=navigation(text);
   if(category)return answer('menu','',{category});
   if(context.category==='Platos'&&/^(me apoyo|medio apoyo|medio de apoyo)$/.test(n))return answer('clarify','¿Te refieres a un medio pollo? Puedes decir «medio pollo».');
@@ -181,8 +190,9 @@ export function interpretLocal(text,cart,menu,lastId=null,context={}){
   // Frases complejas/negadas se dejan a la IA; nunca adivinar una sustitución.
   if(/\b(no|cambia|cambiar|sustituye|en vez|pero|sin)\b/.test(n)) return null;
   if(!hits.length) return null;
-  if(!/\b(quiero|dame|deme|agrega|agregame|pon|ponme|quita|elimina|borra|mejor|necesito)\b/.test(n)&&!/^\d|^(un|una|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\b/.test(n)) return null;
-  const residue=normalize(remaining).split(' ').filter(w=>w&&!/^(quiero|dame|deme|agrega|agregame|pon|ponme|quita|elimina|borra|mejor|necesito|si|y|tambien|por|favor|el|la|los|las|de|del|un|una|uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|-?\d+)$/.test(w));
+  const verbs='quiero|quisiera|dame|deme|da|das|traeme|trae|regalame|mandame|agrega|agregame|anade|pon|ponme|quita|elimina|borra|mejor|necesito|me|nos';
+  if(!new RegExp(`\\b(${verbs})\\b`).test(n)&&!/^\d|^(un|una|unas|unos|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\b/.test(n)) return null;
+  const residue=normalize(remaining).split(' ').filter(w=>w&&!new RegExp(`^(${verbs}|si|y|tambien|por|favor|porfa|pues|el|la|los|las|de|del|un|una|unas|unos|uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|-?\\d+)$`).test(w));
   if(residue.length) return null;
   const remove=/\b(quita|elimina|borra)\b/.test(n);
   const replace=/\bmejor\b/.test(n);

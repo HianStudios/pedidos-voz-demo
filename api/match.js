@@ -46,8 +46,10 @@ PEDIDO: ${JSON.stringify(cart)}
 CATEGORÍA EN PANTALLA: ${JSON.stringify(categories.includes(data.category)?data.category:null)}
 YA SE OFRECIÓ BEBIDA: ${data.drinkOffered===true}
 PREGUNTA PENDIENTE: ${JSON.stringify(pending)}`;
-  const model=process.env.GROQ_MODEL||'openai/gpt-oss-120b';
-  const ask=async()=>{
+  const primary=process.env.GROQ_MODEL||'openai/gpt-oss-120b';
+  // Con el cupo por minuto del modelo principal agotado, Groq mantiene otro cupo para el de respaldo.
+  const backup=process.env.GROQ_FALLBACK_MODEL||'openai/gpt-oss-20b';
+  const ask=async(model=primary)=>{
     const response=await fetchImpl('https://api.groq.com/openai/v1/chat/completions',{method:'POST',headers:{Authorization:`Bearer ${process.env.GROQ_API_KEY}`,'Content-Type':'application/json'},body:JSON.stringify({model,messages:[{role:'system',content:prompt},...history,{role:'user',content:transcript}],response_format:{type:'json_object'},temperature:0.3,max_completion_tokens:1200,...(model.startsWith('openai/gpt-oss')?{reasoning_effort:effort}:{})}),signal:AbortSignal.timeout(15000)});
     if(!response.ok){
       const detail=(await response.text().catch(()=>'')).slice(0,300);
@@ -63,9 +65,11 @@ PREGUNTA PENDIENTE: ${JSON.stringify(pending)}`;
   try{return await ask();}
   catch(first){
     // Un segundo intento corrige la mayoría de salidas cortadas o con formato inválido.
-    if(first.wait)await new Promise(r=>setTimeout(r,first.wait));
-    try{return await ask();}
-    catch(e){
+    try{return await (first.wait&&backup&&backup!==primary?ask(backup):ask());}
+    catch(second){
+      // Ambos cupos agotados por un momento: se espera lo que pide Groq (máx. 4 s) y un último intento.
+      let e=second;
+      if(second.wait){await new Promise(r=>setTimeout(r,second.wait));try{return await ask();}catch(third){e=third;}}
       // Visible en los logs de Vercel para afinar el prompt con casos reales.
       console.warn('match: respuesta descartada:',first.message,'/',e.message,JSON.stringify(transcript).slice(0,200));
       return {intent:'menu',category:'all',operations:[],suggest_ids:[],reply:fallbacks[turn++%fallbacks.length],source:'fallback',...(debug?{error:`${first.message} / ${e.message}`}:{})};
