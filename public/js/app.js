@@ -1,4 +1,4 @@
-import {money,total,validateCart,applyOperations,isConfirmation,normalize,describeOps,followUp,amount} from './domain.js';
+import {money,total,validateCart,applyOperations,isConfirmation,normalize,describeOps,followUp,amount,parsePeople,suggestForPeople} from './domain.js';
 import {navigation,plausibleName,cartSignature} from './conversation.js';
 import {foodArt} from './art.js';
 import {VoiceController} from './voice.js';
@@ -17,7 +17,8 @@ function readTable(){
 const table=readTable();
 let menu=[],restaurant,mode='demo',cart=[],history=[],busy=false,epoch=0,request=null,lastId=null,
  customerName='',pending=null,sending=false,sessionActive=false,awaitingName=false,reviewed=null,
- category=null,awaitingCancel=false,drinkOffered=false,spotTimers=[],idleTimer=0;
+ category=null,awaitingCancel=false,drinkOffered=false,spotTimers=[],idleTimer=0,
+ asked=null,proposal=null; // pregunta pendiente de Milo y propuesta que espera un «sí»
 function saveDraft(){try{localStorage.setItem(storageKey,JSON.stringify({cart,pending,customer:customerName}));}catch{}}
 let toastTimer;
 function toast(text){$('toast').textContent=text;$('toast').classList.add('visible');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').classList.remove('visible'),4500);}
@@ -32,6 +33,7 @@ function fresh(el,text){el.textContent=text;el.classList.remove('fresh');void el
 async function reply(text,next='listen'){
  fresh($('reply'),text);document.querySelectorAll('.dialog-reply').forEach(el=>fresh(el,text));
  if(/para tomar|bebida/i.test(text))drinkOffered=true;
+ if(/para cu[aá]ntos|cu[aá]ntas personas|cu[aá]ntos son/i.test(text))asked='people';
  history.push({role:'assistant',content:text});history=history.slice(-10);
  if(voice.enabled&&sessionActive)await voice.respond(text,next);else{voice.state(voice.enabled?'waiting':'off');spotlight(text);}
 }
@@ -108,6 +110,19 @@ async function handleInput(raw){
  activity();interrupt();const turn=epoch;voice.state('thinking');$('transcript').textContent=`«${raw}»`;$('voiceHelp').textContent='';history.push({role:'user',content:raw});const n=normalize(raw);
  if(pending){if(isConfirmation(raw))return submit();reply('Hay un envío pendiente de comprobar. Reintenta el mismo pedido desde el resumen.');return;}
  if(awaitingCancel){awaitingCancel=false;if(isConfirmation(raw)){setCart([]);drinkOffered=false;closeModals();reply('Listo, empezamos de cero. ¿Qué se te antoja?');return;}if(/^(no|no gracias)$/.test(n)){reply('Perfecto, lo dejo como está.');return;}}
+ // Respuestas a lo último que Milo preguntó o propuso.
+ const lastAsked=asked,offer=proposal;asked=null;proposal=null;
+ if(offer&&isConfirmation(raw)&&!$('summaryModal').open){
+  try{const before=cart;setCart(applyOperations(cart,offer.operations,menu));lastId=offer.operations.at(-1).id;reply(`${describeOps(offer.operations,menu)} ${followUp(before,offer.operations,menu,drinkOffered)}`);}catch(e){reply(e.message);}
+  return;
+ }
+ if(offer&&/^(no|no gracias|mejor no|nada|todavia no)$/.test(n)){reply('Sin problema. ¿Qué se te antoja entonces?');return;}
+ const people=parsePeople(raw,lastAsked==='people');
+ if(people){
+  const plan=suggestForPeople(people,menu);
+  if(!plan){reply('Para un grupo tan grande, mejor que el personal te ayude a armarlo. ¿Te muestro los combos mientras tanto?');return;}
+  proposal=plan;showProducts(plan.operations.map(o=>menu.find(p=>p.id===o.id)),'Para ti');reply(plan.reply);return;
+ }
  if(/^(cierra|cierra eso|cierra la ventana|cerrar)$/.test(n)){closeModals();reviewed=null;reply('Listo.');return;}
  if(isConfirmation(raw)){
   if(cart.length&&customerName&&reviewed===cartSignature(cart,customerName))return submit();

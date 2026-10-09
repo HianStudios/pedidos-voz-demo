@@ -1,7 +1,8 @@
 import {normalize} from './domain.js';
 // Navigation is a complete intent, not the presence of «quiero» or a product word.
 export function navigation(text){
-  const n=normalize(text).replace(/\b(por favor|a ver)\b/g,'').trim();
+  // Muletillas al inicio («sí, muéstrame el menú», «oye Milo, los combos») no cambian la intención.
+  const n=normalize(text).replace(/\b(por favor|a ver)\b/g,'').trim().replace(/^(?:(?:si|ya|oye|bueno|ok|okey|dale|listo|milo|este|eh|mira|porfa)\s+)+/,'').trim();
   if(/\b(no|sin|quita|agrega|dame|deme|ponme|cuanto|cuesta|precio)\b/.test(n))return null;
   const browse=/\b(ver|mirar|muestrame|ensename|mostrar|que tienes|que hay|que combos|que bebidas|que platos|que extras|opciones)\b/.test(n);
   const categories=[['Combos',/\b(combos?|paquetes?)\b/],['Platos',/\b(solos?|platos?|sueltos?)\b/],['Bebidas',/\b(bebidas?|gaseosas?|tomar|refrescos?)\b/],['Extras',/\b(extras?|acompanamientos?|adicionales?)\b/]];

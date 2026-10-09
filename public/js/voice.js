@@ -1,4 +1,5 @@
 import {speakable,sentences} from './speech-text.js';
+import {isConfirmation} from './domain.js';
 const Recognition=window.SpeechRecognition||window.webkitSpeechRecognition;
 export class VoiceController{
   constructor({onState,onLevel,onText,onInput,onError,onSentence,greeting}){Object.assign(this,{onState,onLevel,onText,onInput,onError,onSentence,greeting});this.rate=1.05;this.neural=false;this.neuralFailures=0;this.listenDelay=300;this.listenWindow=40000;this.startDelay=120;this.listenUntil=0;this.startFailures=0;this.voice=null;window.speechSynthesis?.addEventListener?.('voiceschanged',()=>{this.voice=null;});this.enabled=false;this.generation=0;this.recognition=null;this.recorder=null;this.stream=null;this.speechDone=null;this.meter=0;this.level=0;this.activatePending=false;}
@@ -137,15 +138,15 @@ export class VoiceController{
       if(e.error==='aborted')return;
       if(e.error==='no-speech')return;
       failed=true;
-      if(e.error==='not-allowed'||e.error==='service-not-allowed'){this.disable();this.onError('El reconocimiento de voz no tiene permiso. Usa texto o revisa los permisos.');}
+      if(e.error==='not-allowed'){this.disable();this.onError('El reconocimiento de voz no tiene permiso. Usa texto o revisa los permisos.');}
       // Red, micrófono ocupado u otro fallo del reconocedor: se pasa sola a grabar y transcribir.
       else{this.nativeFailed=true;this.listen(true);}
     };
     rec.onend=()=>{
       clearTimeout(this.timer);if(token!==this.generation||failed||!this.enabled)return;this.recognition=null;
-      // Chrome a veces cierra sin marcar el resultado como final; una frase de 2+ palabras se acepta,
-      // un «sí» suelto provisional no (nunca debe confirmar por accidente).
-      const heard=finalText||(text.split(/\s+/).length>=2?text:'');
+      // Chrome/Edge a veces cierran sin marcar el resultado como final («cinco»). Se acepta lo oído,
+      // salvo una confirmación provisional: un «sí» a medias nunca debe enviar ni aceptar nada.
+      const heard=finalText||(text&&!isConfirmation(text)?text:'');
       if(heard){this.state('thinking');this.onInput(heard.replace(/^milo[\s,]+/i,''));}
       else this.relisten();
     };

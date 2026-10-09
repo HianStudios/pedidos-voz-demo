@@ -28,6 +28,9 @@ const assert=require('node:assert/strict');const fs=require('node:fs');
  const cash2=await ctx.newPage();await cash2.goto('http://localhost:3000/caja.html');await cash2.locator('.status-pill[data-status="aceptado"]').waitFor();
  await cash.locator('[data-status="preparando"][data-order]').click();await cash2.locator('.status-pill[data-status="preparando"]').waitFor();
  await cash.screenshot({path:'test-results/caja-desktop.png',fullPage:true});
+ await say('qué me recomiendas');assert.match(await page.locator('#reply').textContent(),/cuántos/);await say('cinco');assert.match(await page.locator('#reply').textContent(),/Para cinco/);assert.equal(await page.locator('#cartCount').textContent(),'0','proponer no agrega');
+ await say('sí');assert.equal(await page.locator('#cartCount').textContent(),'2','el sí acepta la propuesta');
+ await say('sí, muéstrame el menú');await page.locator('.door').first().waitFor();
  // Sin mesa configurada vuelve el flujo de retiro con nombre.
  await page.goto('http://localhost:3000/?mesa=');await page.locator('#menuOpen:not([disabled])').waitFor();assert.equal(await page.locator('#tableChip').isHidden(),true);
  await say('dos cuartos de pollo');await say('eso es todo');await page.locator('#customerName').waitFor();

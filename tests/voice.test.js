@@ -42,3 +42,7 @@ test('frase provisional de varias palabras se acepta si Chrome no la marca final
 test('un fallo del reconocedor pasa a grabación sin pedir toque',()=>{
   const {voice}=setup();let recorded=0;voice.record=()=>{recorded++;};voice.listen();voice.recognition.onerror({error:'network'});assert.equal(voice.nativeFailed,true);assert.equal(recorded,1);assert.equal(voice.mode,'listening');voice.disable();
 });
+test('una palabra provisional se acepta, salvo un «sí»',()=>{
+ const {voice,inputs}=setup();for(const word of ['cinco','sí']){voice.listen();const result=[{transcript:word}];result.isFinal=false;voice.recognition.onresult({results:[result]});voice.recognition.onend();}
+ assert.deepEqual(inputs,['cinco']);voice.disable();
+});

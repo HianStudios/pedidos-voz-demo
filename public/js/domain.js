@@ -62,7 +62,26 @@ export function repairResult(raw,menu){
   const suggest_ids=(Array.isArray(r.suggest_ids)?r.suggest_ids:[]).filter(id=>menu.some(p=>p.id===id&&p.available)).slice(0,10);
   return {intent,reply,operations,suggest_ids,...(r.category?{category:r.category}:{})};
 }
-const numbers={un:1,una:1,uno:1,dos:2,tres:3,cuatro:4,cinco:5,seis:6,siete:7,ocho:8,nueve:9,diez:10};
+const numbers={un:1,una:1,uno:1,dos:2,tres:3,cuatro:4,cinco:5,seis:6,siete:7,ocho:8,nueve:9,diez:10,once:11,doce:12};
+// Respuesta a «¿Para cuántos es?»: «cinco», «para cinco», «somos 5 personas», «solo yo».
+// Sin pregunta pendiente solo se acepta si es inequívoca («somos cinco», «para cinco personas»).
+export function parsePeople(text,asked=false){
+  const n=normalize(text).replace(/^(?:(?:si|ya|bueno|eh|este|mira)\s+)+/,'');
+  if(/^(?:(?:es |seria )?para mi(?: solo| sola)?|solo yo|yo solo|yo sola|uno solo|una sola)$/.test(n))return 1;
+  const m=n.match(/^(?:(somos|seriamos|vamos a ser|es para|seria para|para)\s+)?(\d{1,2}|un|una|uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|once|doce)(\s+personas?)?$/);
+  if(!m||!(asked||m[1]==='somos'||m[1]==='seriamos'||m[1]==='vamos a ser'||m[3]))return null;
+  const value=count(m[2]);return Number.isInteger(value)&&value>0?value:null;
+}
+// Propuesta por número de personas; no agrega nada hasta que el cliente acepte.
+export function suggestForPeople(people,menu){
+  if(people>20)return null;
+  const qty={'combo-familiar':Math.floor(people/4)},rest=people%4;
+  if(rest===1)qty['combo-personal']=1;if(rest===2)qty['combo-pareja']=1;if(rest===3){qty['combo-pareja']=1;qty['combo-personal']=1;}
+  const operations=Object.entries(qty).filter(([id,q])=>q>0&&menu.some(p=>p.id===id&&p.available)).map(([id,q])=>({type:'add',id,qty:q}));
+  const items=operations.map(o=>amount(menu.find(p=>p.id===o.id),o.qty));
+  const units=operations.reduce((s,o)=>s+o.qty,0);
+  return {operations,reply:`Para ${people===1?'ti':numberWords(people)}, te sugiero ${listWords(items)}. ¿${units>1?'Te los anoto':'Te lo anoto'}?`};
+}
 const count=s=>numbers[s]??Number(s);
 // Aceptación completa («sí», «ya, envíalo», «finaliza el pedido»). Nunca enviada por sí sola:
 // la app solo envía si además hay un resumen vigente; si no, muestra el resumen.
