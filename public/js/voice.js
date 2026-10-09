@@ -2,7 +2,10 @@ import {speakable,sentences} from './speech-text.js';
 import {isConfirmation} from './domain.js';
 const Recognition=window.SpeechRecognition||window.webkitSpeechRecognition;
 export class VoiceController{
-  constructor({onState,onLevel,onText,onInput,onError,onSentence,greeting}){Object.assign(this,{onState,onLevel,onText,onInput,onError,onSentence,greeting});this.rate=1.05;this.neural=false;this.neuralFailures=0;this.listenDelay=300;this.listenWindow=40000;this.startDelay=120;this.listenUntil=0;this.startFailures=0;this.voice=null;window.speechSynthesis?.addEventListener?.('voiceschanged',()=>{this.voice=null;});this.enabled=false;this.generation=0;this.recognition=null;this.recorder=null;this.stream=null;this.speechDone=null;this.meter=0;this.level=0;this.activatePending=false;}
+  constructor({onState,onLevel,onText,onInput,onError,onSentence,greeting}){Object.assign(this,{onState,onLevel,onText,onInput,onError,onSentence,greeting});this.rate=1.05;this.neural=false;
+    // En celulares el reconocedor del sistema pita en cada intento y choca con el micrófono ya abierto:
+    // se graba y se transcribe en el servidor. La app lo activa solo si hay transcripción disponible.
+    this.preferRecorder=false;this.neuralFailures=0;this.listenDelay=300;this.listenWindow=40000;this.startDelay=120;this.listenUntil=0;this.startFailures=0;this.voice=null;window.speechSynthesis?.addEventListener?.('voiceschanged',()=>{this.voice=null;});this.enabled=false;this.generation=0;this.recognition=null;this.recorder=null;this.stream=null;this.speechDone=null;this.meter=0;this.level=0;this.activatePending=false;}
   state(value){this.mode=value;this.onState(value);}
   async enable(direct=false){
     if(this.activatePending)return;
@@ -45,7 +48,7 @@ export class VoiceController{
   listen(restart=false){
     if(!this.enabled)return;this.pause();this.state('listening');
     if(!restart){this.listenUntil=Date.now()+this.listenWindow;this.cue();}
-    const token=this.generation,start=()=>{if(token!==this.generation)return;if(Recognition&&!this.nativeFailed)this.recognize('command');else this.record();};
+    const token=this.generation,start=()=>{if(token!==this.generation)return;if(Recognition&&!this.nativeFailed&&!this.preferRecorder)this.recognize('command');else this.record();};
     // Pequeña espera: Chrome rechaza a veces un start() pegado al anterior o al tono.
     if(this.startDelay)this.restart=setTimeout(start,restart?this.startDelay+30:this.startDelay);else start();
   }
@@ -171,7 +174,16 @@ export class VoiceController{
       catch(e){if(token===this.generation){this.wait();this.onError(e.name==='TimeoutError'?'La transcripción tardó demasiado. Usa texto o intenta de nuevo.':e.message);}}
     };
     recorder.start();
-    this.vad=setInterval(()=>{if(token!==this.generation)return;const now=Date.now();if((this.rms||0)>.018){hadVoice=true;lastVoice=now;}if((hadVoice&&now-lastVoice>900)||(!hadVoice&&now-started>8000&&this.analyser)){if(recorder.state==='recording')recorder.stop();}},100);
+    // Detección de voz adaptada al ruido del lugar: se mide el ambiente unos instantes (después del tono)
+    // y se exige voz por encima de ese nivel durante 2 lecturas seguidas.
+    let noise=0,samples=0,loud=0,threshold=.018;
+    this.vad=setInterval(()=>{
+      if(token!==this.generation)return;const now=Date.now(),rms=this.rms||0,age=now-started;
+      if(age<250)return;
+      if(age<600&&!hadVoice){noise+=rms;samples++;threshold=Math.min(.06,Math.max(.012,(noise/samples)*2.5));return;}
+      if(rms>threshold){if(++loud>=2){hadVoice=true;lastVoice=now;}}else loud=0;
+      if((hadVoice&&now-lastVoice>1000)||(!hadVoice&&age>8000&&this.analyser)){if(recorder.state==='recording')recorder.stop();}
+    },100);
     this.timer=setTimeout(()=>{if(token===this.generation&&recorder.state==='recording')recorder.stop();},25000);
   }
   finish(){if(this.recorder?.state==='recording')this.recorder.stop();else if(this.recognition&&this.mode==='listening')try{this.recognition.stop();}catch{}else this.call();}

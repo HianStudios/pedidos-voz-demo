@@ -196,7 +196,8 @@ addEventListener('pointerdown',activity);addEventListener('keydown',activity);
 document.addEventListener('visibilitychange',()=>{if(document.hidden){interrupt();voice.disable();sessionActive=false;}});
 async function init(){
  if(table){$('tableNumber').textContent=table;$('tableChip').hidden=false;}
- try{const res=await fetch('/api/menu');const data=await res.json();if(!res.ok)throw new Error(data.error);({menu,restaurant,mode}=data);voice.greeting=restaurant.greeting;voice.neural=data.voice==='neural';const saved=readStore(storageKey,{});try{cart=validateCart(saved.cart||[],menu);pending=saved.pending||null;}catch{cart=[];pending=null;}customerName=saved.customer||'';setCart(cart);$('menuOpen').disabled=false;}
+ try{const res=await fetch('/api/menu');const data=await res.json();if(!res.ok)throw new Error(data.error);({menu,restaurant,mode}=data);voice.greeting=restaurant.greeting;voice.neural=data.voice==='neural';
+ voice.preferRecorder=data.aiAvailable&&/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)&&!/[?&]voz=nativa\b/.test(location.search);const saved=readStore(storageKey,{});try{cart=validateCart(saved.cart||[],menu);pending=saved.pending||null;}catch{cart=[];pending=null;}customerName=saved.customer||'';setCart(cart);$('menuOpen').disabled=false;}
  catch{$('reply').textContent='No pude cargar el menú. Recarga la página.';$('mascot').disabled=true;}
 }
 init();
