@@ -9,7 +9,7 @@ const categories=['Platos','Combos','Extras','Bebidas'];
 const fallbacks=['No te capté bien. Te muestro el menú: ¿platos, combos, extras o bebidas?','Se me escapó esa parte. Aquí tienes el menú, ¿por dónde empezamos?'];
 let turn=0;
 // Interpreta una frase con el estado del pedido. Exportada para la evaluación con el modelo real.
-export async function interpret(data,{effort=process.env.GROQ_REASONING||'low',fetchImpl=fetch}={}){
+export async function interpret(data,{effort=process.env.GROQ_REASONING||'low',fetchImpl=fetch,debug=false}={}){
   const {transcript}=data;
   if(typeof transcript!=='string'||!transcript.trim()||transcript.length>1200)throw fail('Escribe un pedido de hasta 1200 caracteres.');
   let cart;try{cart=validateCart(data.cart??[],menu);}catch(e){throw fail(e.message);}
@@ -94,7 +94,7 @@ PREGUNTA PENDIENTE (tu último mensaje): ${JSON.stringify(history.filter(m=>m.ro
   const model=process.env.GROQ_MODEL||'openai/gpt-oss-120b';
   const ask=async()=>{
     const response=await fetchImpl('https://api.groq.com/openai/v1/chat/completions',{method:'POST',headers:{Authorization:`Bearer ${process.env.GROQ_API_KEY}`,'Content-Type':'application/json'},body:JSON.stringify({model,messages:[{role:'system',content:prompt},...history,{role:'user',content:transcript}],response_format:{type:'json_object'},temperature:0.3,max_completion_tokens:3000,...(model.startsWith('openai/gpt-oss')?{reasoning_effort:effort}:{})}),signal:AbortSignal.timeout(15000)});
-    if(!response.ok)throw new Error(`Proveedor ${response.status}`);
+    if(!response.ok)throw new Error(`Proveedor ${response.status}: ${(await response.text().catch(()=>'')).slice(0,300)}`);
     const raw=(await response.json()).choices?.[0]?.message?.content||'';
     const result=validateResult(repairResult(JSON.parse(raw),menu),cart,menu);
     if(!result.reply)result.reply=result.intent==='edit'?'Listo. ¿Algo más, o cerramos el pedido?':'¿Qué te provoca?';
@@ -107,7 +107,7 @@ PREGUNTA PENDIENTE (tu último mensaje): ${JSON.stringify(history.filter(m=>m.ro
     catch(e){
       // Visible en los logs de Vercel para afinar el prompt con casos reales.
       console.warn('match: respuesta descartada:',first.message,'/',e.message,JSON.stringify(transcript).slice(0,200));
-      return {intent:'menu',category:'all',operations:[],suggest_ids:[],reply:fallbacks[turn++%fallbacks.length],source:'fallback'};
+      return {intent:'menu',category:'all',operations:[],suggest_ids:[],reply:fallbacks[turn++%fallbacks.length],source:'fallback',...(debug?{error:`${first.message} / ${e.message}`}:{})};
     }
   }
 }
