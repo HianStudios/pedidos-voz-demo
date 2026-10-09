@@ -35,7 +35,7 @@ test('JSON malformado y audio vacío devuelven errores de cliente',async()=>{
 });
 test('errores y operaciones inseguras de IA se convierten en aclaración',async()=>{
   const originalFetch=globalThis.fetch,old=process.env.GROQ_API_KEY;process.env.GROQ_API_KEY='test';
-  try{globalThis.fetch=async()=>new Response(JSON.stringify({choices:[{message:{content:JSON.stringify({intent:'edit',reply:'pedido',operations:[{id:'cuarto',qty:-1,type:'add'}]})}}]}));const res=response();await match(req({transcript:'sorpréndeme con un platillo',cart:[]}),res);assert.equal(res.code,200);assert.equal(res.data.intent,'clarify');assert.deepEqual(res.data.operations,[]);}
+  try{globalThis.fetch=async()=>new Response(JSON.stringify({choices:[{message:{content:JSON.stringify({intent:'edit',reply:'pedido',operations:[{id:'cuarto',qty:-1,type:'add'}]})}}]}));const res=response();await match(req({transcript:'sorpréndeme con un platillo',cart:[]}),res);assert.equal(res.code,200);assert.equal(res.data.intent,'menu','ofrece el menú en vez de pedir que repita');assert.equal(res.data.source,'fallback');assert.deepEqual(res.data.operations,[]);}
   finally{globalThis.fetch=originalFetch;if(old===undefined)delete process.env.GROQ_API_KEY;else process.env.GROQ_API_KEY=old;}
 });
 test('voz neural sin credenciales no llama al proveedor',async()=>{
@@ -57,4 +57,11 @@ test('transcripción: descarta frases fantasma de Whisper y envía vocabulario d
     assert.equal(await call('Dos cuartos de pollo y una Sprite.'),'Dos cuartos de pollo y una Sprite.');
     assert.match(sent.get('prompt'),/Combo familiar/);
   }finally{globalThis.fetch=originalFetch;if(old===undefined)delete process.env.GROQ_API_KEY;else process.env.GROQ_API_KEY=old;}
+});
+test('la IA recibe la guía de razonamiento y la pregunta pendiente; reintenta una salida inválida',async()=>{
+  const {interpret}=await import('../api/match.js');const old=process.env.GROQ_API_KEY;process.env.GROQ_API_KEY='test';let calls=0,system;
+  const fetchImpl=async(u,o)=>{calls++;system=JSON.parse(o.body).messages[0].content;return new Response(JSON.stringify({choices:[{message:{content:calls===1?'{"intent":':JSON.stringify({intent:'menu',category:'Bebidas',reply:'¿Cuál prefieres?',operations:[]})}}]}));};
+  try{const r=await interpret({transcript:'lo que tengas helado pues',cart:[],history:[{role:'assistant',content:'¿Algo para tomar, o cerramos así?'}]},{fetchImpl});
+    assert.equal(calls,2);assert.equal(r.intent,'menu');assert.equal(r.category,'Bebidas');assert.match(system,/CÓMO RAZONAR/);assert.match(system,/PREGUNTA PENDIENTE \(tu último mensaje\): "¿Algo para tomar/);}
+  finally{if(old===undefined)delete process.env.GROQ_API_KEY;else process.env.GROQ_API_KEY=old;}
 });

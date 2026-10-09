@@ -34,6 +34,7 @@ async function reply(text,next='listen'){
  fresh($('reply'),text);document.querySelectorAll('.dialog-reply').forEach(el=>fresh(el,text));
  if(/para tomar|bebida/i.test(text))drinkOffered=true;
  if(/para cu[aá]ntos|cu[aá]ntas personas|cu[aá]ntos son/i.test(text))asked='people';
+ else if(/(para tomar|bebida)[^?]*\?\s*$/i.test(text))asked='drink';
  history.push({role:'assistant',content:text});history=history.slice(-10);
  if(voice.enabled&&sessionActive)await voice.respond(text,next);else{voice.state(voice.enabled?'waiting':'off');spotlight(text);}
 }
@@ -43,7 +44,10 @@ function setCart(next){
  const count=cart.reduce((n,l)=>n+l.qty,0),badge=$('cartCount');badge.textContent=count;badge.classList.toggle('on',count>0);
  if(count>before){badge.classList.remove('bump');void badge.offsetWidth;badge.classList.add('bump');}
 }
-function talk(){activity();if(busy||sending)return;if(!sessionActive){sessionActive=true;voice.enable(true);}else if(voice.mode==='listening')voice.finish();else voice.listen();}
+// Pantalla siempre encendida mientras la app está abierta (Chrome Android, Safari iOS 16.4+).
+let wakeLock=null;
+async function keepAwake(){try{if(!wakeLock&&navigator.wakeLock&&document.visibilityState==='visible'){wakeLock=await navigator.wakeLock.request('screen');wakeLock.addEventListener('release',()=>{wakeLock=null;});}}catch{}}
+function talk(){keepAwake();activity();if(busy||sending)return;if(!sessionActive){sessionActive=true;voice.enable(true);}else if(voice.mode==='listening')voice.finish();else voice.listen();}
 function closeModals(){clearSpot();for(const id of ['optionsModal','summaryModal'])if($(id).open)$(id).close();}
 
 // ---------- Menú animado ----------
@@ -117,6 +121,9 @@ async function handleInput(raw){
   return;
  }
  if(offer&&/^(no|no gracias|mejor no|nada|todavia no)$/.test(n)){reply('Sin problema. ¿Qué se te antoja entonces?');return;}
+ // «¿Algo para tomar?» → «sí» muestra las bebidas; «no» no vuelve a ofrecerlas.
+ if(lastAsked==='drink'&&/^(si|sí|claro|dale|ya|bueno|ok|okey|si por favor|si porfa|de una|obvio)$/.test(n)){showCategory('Bebidas');reply(categoryPitch('Bebidas'));return;}
+ if(lastAsked==='drink'&&/^(no|no gracias|nada|nada de tomar|sin bebida|asi esta bien|no gracias asi esta bien)$/.test(n)){drinkOffered=true;reply('Sin bebida, entonces. ¿Algo más, o cerramos el pedido?');return;}
  const people=parsePeople(raw,lastAsked==='people');
  if(people){
   const plan=suggestForPeople(people,menu);
@@ -141,10 +148,14 @@ async function handleInput(raw){
    setCart(applyOperations(cart,result.operations,menu));lastId=result.operations.at(-1)?.id;
    if($('summaryModal').open)renderSummary();
    reply(result.reply||'Listo. ¿Algo más, o cerramos el pedido?');
+  }else if(result.intent==='menu'&&result.source==='fallback'&&$('optionsModal').open){reply(result.reply.replace(/Te muestro el menú: |Aquí tienes el menú, /,''));
   }else if(result.intent==='menu'){
    if(result.category&&result.category!=='all'){showCategory(result.category);reply(result.reply||categoryPitch(result.category));}else{showCategories();reply(result.reply||'Este es el menú. ¿Por dónde empezamos?');}
   }else if(result.intent==='recommend'){
-   const items=(result.suggest_ids||[]).map(id=>menu.find(p=>p.id===id&&p.available)).filter(Boolean);if(items.length)showProducts(items,'Para ti');reply(result.reply);
+   const items=(result.suggest_ids||[]).map(id=>menu.find(p=>p.id===id&&p.available)).filter(Boolean);if(items.length)showProducts(items,'Para ti');
+   // Si la recomendación trae propuesta concreta, un «sí» la anota.
+   if(result.proposal?.length)proposal={operations:result.proposal};
+   reply(result.reply);
   }else if(result.intent==='review')review();
   else if(result.intent==='cancel'){awaitingCancel=true;reply('¿Borro todo el pedido y empezamos de cero?');}
   else if(result.intent==='goodbye'&&!cart.length){await reply(result.reply||'¡Gracias! Aquí estaré.','wait');sessionActive=false;voice.disable();}
@@ -193,9 +204,10 @@ $('optionsModal').addEventListener('close',()=>{clearSpot();category=null;});
 $('summaryModal').addEventListener('close',()=>{reviewed=null;awaitingName=false;});
 addEventListener('resize',()=>{if($('optionsModal').open)setTab(category);});
 addEventListener('pointerdown',activity);addEventListener('keydown',activity);
-document.addEventListener('visibilitychange',()=>{if(document.hidden){interrupt();voice.disable();sessionActive=false;}});
+document.addEventListener('visibilitychange',()=>{if(document.hidden){interrupt();voice.disable();sessionActive=false;}else keepAwake();});
+addEventListener('pointerdown',keepAwake,{once:true});
 async function init(){
- if(table){$('tableNumber').textContent=table;$('tableChip').hidden=false;}
+ keepAwake();if(table){$('tableNumber').textContent=table;$('tableChip').hidden=false;}
  try{const res=await fetch('/api/menu');const data=await res.json();if(!res.ok)throw new Error(data.error);({menu,restaurant,mode}=data);voice.greeting=restaurant.greeting;voice.neural=data.voice==='neural';
  voice.preferRecorder=data.aiAvailable&&/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)&&!/[?&]voz=nativa\b/.test(location.search);const saved=readStore(storageKey,{});try{cart=validateCart(saved.cart||[],menu);pending=saved.pending||null;}catch{cart=[];pending=null;}customerName=saved.customer||'';setCart(cart);$('menuOpen').disabled=false;}
  catch{$('reply').textContent='No pude cargar el menú. Recarga la página.';$('mascot').disabled=true;}

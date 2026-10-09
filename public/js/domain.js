@@ -42,7 +42,12 @@ export function validateResult(result,cart,menu){
   const ids=result.suggest_ids??[];
   if(!Array.isArray(ids)||ids.length>10||ids.some(id=>!menu.some(p=>p.id===id&&p.available))) throw new Error('Sugerencias inválidas.');
   const category=['all','Platos','Combos','Extras','Bebidas'].includes(result.category)?result.category:null;
-  return {intent:result.intent,reply:result.reply,operations,suggest_ids:ids,...(category?{category}:{})};
+  // Propuesta de una recomendación: no cambia el pedido; la app la aplica solo si el cliente dice «sí».
+  let proposal=null;
+  if(result.intent==='recommend'&&Array.isArray(result.proposal)&&result.proposal.length){
+    try{if(result.proposal.every(o=>o?.type==='add')){applyOperations(cart,result.proposal,menu);proposal=result.proposal.map(o=>({type:'add',id:o.id,qty:o.qty}));}}catch{}
+  }
+  return {intent:result.intent,reply:result.reply,operations,suggest_ids:ids,...(category?{category}:{}),...(proposal?{proposal}:{})};
 }
 // Corrige diferencias de forma frecuentes en la salida del modelo antes de la validación estricta.
 // Nunca crea ediciones: si la intención no es «edit», se descartan las operaciones.
@@ -60,16 +65,17 @@ export function repairResult(raw,menu){
   });
   if(intent==='edit'&&!operations.length)intent='clarify';
   const suggest_ids=(Array.isArray(r.suggest_ids)?r.suggest_ids:[]).filter(id=>menu.some(p=>p.id===id&&p.available)).slice(0,10);
-  return {intent,reply,operations,suggest_ids,...(r.category?{category:r.category}:{})};
+  const proposal=intent==='recommend'&&Array.isArray(r.proposal)?r.proposal.filter(o=>o&&typeof o==='object').map(o=>({type:'add',id:o.id??o.product_id,qty:Number(o.qty??o.quantity??1)})):null;
+  return {intent,reply,operations,suggest_ids,...(r.category?{category:r.category}:{}),...(proposal?.length?{proposal}:{})};
 }
 const numbers={un:1,una:1,uno:1,dos:2,tres:3,cuatro:4,cinco:5,seis:6,siete:7,ocho:8,nueve:9,diez:10,once:11,doce:12};
 // Respuesta a «¿Para cuántos es?»: «cinco», «para cinco», «somos 5 personas», «solo yo».
 // Sin pregunta pendiente solo se acepta si es inequívoca («somos cinco», «para cinco personas»).
 export function parsePeople(text,asked=false){
   const n=normalize(text).replace(/^(?:(?:si|ya|bueno|eh|este|mira)\s+)+/,'');
-  if(/^(?:(?:es |seria )?para mi(?: solo| sola)?|solo yo|yo solo|yo sola|uno solo|una sola)$/.test(n))return 1;
-  const m=n.match(/^(?:(somos|seriamos|vamos a ser|es para|seria para|para)\s+)?(\d{1,2}|un|una|uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|once|doce)(\s+personas?)?$/);
-  if(!m||!(asked||m[1]==='somos'||m[1]==='seriamos'||m[1]==='vamos a ser'||m[3]))return null;
+  if(/^(?:(?:es |seria |solo |solamente )?para mi(?: solo| sola| solito| solita)?|solo (?:para )?mi|solo yo|yo solo|yo sola|nada mas (?:yo|para mi)|uno solo|una sola|(?:solo |para )?una (?:sola )?persona|(?:es )?para uno)$/.test(n))return 1;
+  const m=n.match(/^(?:(somos|seriamos|vamos a ser|es para|seria para|para|son|como|unas|unos|mas o menos)\s+)?(\d{1,2}|un|una|uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|once|doce)(\s+(?:personas?|adultos?|gente))?(?:\s+(?:nomas|no mas|pues|personas?))?$/);
+  if(!m||!(asked||['somos','seriamos','vamos a ser','son'].includes(m[1])||m[3]))return null;
   const value=count(m[2]);return Number.isInteger(value)&&value>0?value:null;
 }
 // Propuesta por número de personas; no agrega nada hasta que el cliente acepte.
@@ -130,6 +136,12 @@ export function interpretLocal(text,cart,menu,lastId=null,context={}){
   if(/^(cancelar|cancela|borra) (?:todo|el pedido|mi pedido)$/.test(n)) return answer('cancel','¿Borro todo el pedido y empezamos de cero?');
   if(/^(gracias|hasta luego|chao|adios)$/.test(n)) return answer(cart.length?'review':'goodbye',cart.length?'Antes de irte, repasemos tu pedido.':'¡Gracias a ti! Aquí estaré si se te antoja algo más.');
 
+  // «¿Qué me recomiendas para dos personas?»: ya dijo cuántos son, no se vuelve a preguntar.
+  const group=n.match(/\b(?:para|somos|seremos|seriamos)\s+(\d{1,2}|uno|una|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|once|doce)(?:\s+personas?)?\b/);
+  if(group&&/\b(recomienda|recomiendas|recomendacion|sugieres|sugiere|que pido|que pedimos|que nos das|para compartir|que me das)\b/.test(n)){
+    const plan=suggestForPeople(count(group[1]),menu);
+    if(plan)return answer('recommend',plan.reply,{suggest_ids:plan.operations.map(o=>o.id),proposal:plan.operations});
+  }
   if(/\b(recomienda|recomiendas|recomendacion|que hay|que tienes)\b/.test(n)) return answer('recommend','Si es para ti solo, el combo personal va bien. Para compartir, el combo familiar. ¿Para cuántos es?',{suggest_ids:['combo-personal','combo-familiar']});
   const single=menu.find(p=>p.available&&[p.name,...p.aliases].some(a=>normalize(a).replace(/^(un|una) /,'')===n));
   if(single&&context.category===single.category){const operations=[{type:'add',id:single.id,qty:1}];return answer('edit',`${describeOps(operations,menu)} ${followUp(cart,operations,menu,context.drinkOffered)}`,{operations});}
@@ -143,6 +155,9 @@ export function interpretLocal(text,cart,menu,lastId=null,context={}){
   hits.sort((a,b)=>a.index-b.index);
   // «Sin cebolla» es una opción del producto, nunca un plato aparte: «los dos cuartos sin cebolla».
   const note=n.match(/\bsin (cebolla|ensalada|papas|sal|tomate|arroz)\b/)?.[0];
+  // «Dos cuartos, uno sin cebolla»: el pedido aún no separa preparaciones del mismo plato; se pregunta.
+  if(note&&/\b(?:uno|una|el otro|la otra|solo uno|solo una|uno de|una de)\b[^.]*\bsin\b/.test(n)&&/\b(dos|tres|cuatro|cinco|\d+)\b/.test(n))
+    return answer('clarify',`Por ahora anoto la misma preparación para todos los iguales. ¿Los preparo todos ${note}, o todos normales y se lo avisas al personal?`);
   if(note&&(n.match(/\bsin\b/g)||[]).length===1&&!/\b(no|cuanto|precio|cuesta)\b/.test(n)){
     const ids=[...new Set(hits.map(h=>h.id))];
     if(ids.length>1)return null;

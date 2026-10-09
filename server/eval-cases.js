@@ -1,0 +1,58 @@
+// Frases reales y difíciles para medir la comprensión de Milo con el modelo real (/api/eval en vistas previas).
+// Cada caso describe el estado del pedido y qué debería hacer Milo, no la frase exacta que responde.
+const add=(id,qty)=>r=>r.intent==='edit'&&r.operations.some(o=>o.type==='add'&&o.id===id&&(qty==null||o.qty===qty));
+const has=(type,id,extra={})=>r=>r.intent==='edit'&&r.operations.some(o=>o.type===type&&o.id===id&&Object.entries(extra).every(([k,v])=>o[k]===v));
+const menu=cat=>r=>r.intent==='menu'&&(cat==null||r.category===cat);
+const noAdd=r=>!r.operations.some(o=>o.type==='add');
+const helpful=r=>!/no te entend|no te capt|rep[ií]te|me lo dices otra vez|dime el producto/i.test(r.reply);
+const all=(...checks)=>r=>checks.every(c=>c(r));
+const any=(...checks)=>r=>checks.some(c=>c(r));
+const asked=text=>[{role:'assistant',content:text}];
+const line=(id,qty=1,notes=[])=>({id,qty,notes});
+export const cases=[
+  {id:'cuatro-por-cuarto',say:'ponme un cuatro de pollo',expect:add('cuarto',1)},
+  {id:'combo-persona',say:'quiero un combo persona',expect:add('combo-personal',1)},
+  {id:'esprait',say:'una esprait',expect:add('sprite',1)},
+  {id:'pecsi',say:'dame una pecsi bien fría',expect:add('pepsi',1)},
+  {id:'alita-bbq',say:'unas alita bbq',expect:add('alitas',1)},
+  {id:'familia-colas',say:'el familia con dos colas',expect:any(add('combo-familiar'),all(r=>r.intent==='clarify',helpful))},
+  {id:'medio-y-papa',say:'me da un medio pollo y una papa',expect:all(add('medio',1),add('papas',1))},
+  {id:'dos-cuartos-uno-sin',say:'dos cuartos de pollo, uno sin cebolla',expect:any(add('cuarto',2),all(r=>r.intent==='clarify',helpful))},
+  {id:'algo-para-picar',say:'quiero algo para picar',expect:all(noAdd,helpful)},
+  {id:'recomienda-dos',say:'qué me recomiendas para dos personas',expect:all(r=>r.intent==='recommend',noAdd)},
+  {id:'precio-familiar',say:'cuánto está el combo familiar',expect:all(r=>r.intent==='price',noAdd)},
+  {id:'no-hay-ceviche',say:'tienen ceviche',expect:all(noAdd,helpful)},
+  {id:'muletillas-combo-alitas',say:'eh este... dame lo de alitas el combo',expect:add('combo-alitas',1)},
+  {id:'mejor-sin-papas',say:'no, mejor sin papas',cart:[line('combo-personal')],lastId:'combo-personal',expect:has('note','combo-personal',{note:'sin papas'})},
+  {id:'quitale-la-coca',say:'quítale la coca',cart:[line('cuarto'),line('cocacola')],expect:any(has('set','cocacola',{qty:0}),has('remove','cocacola'))},
+  {id:'que-sean-tres',say:'que sean tres',cart:[line('cuarto',2)],lastId:'cuarto',expect:has('set','cuarto',{qty:3})},
+  {id:'otro-igual',say:'otro igual',cart:[line('pechuga')],lastId:'pechuga',expect:has('add','pechuga',{qty:1})},
+  {id:'bebida-helada',say:'una helada',history:asked('¿Algo para tomar, o cerramos así?'),expect:any(menu('Bebidas'),all(r=>r.intent==='clarify',helpful,noAdd))},
+  {id:'pa-cinco',say:'pa cinco',history:asked('¿Para cuántos es?'),expect:all(r=>r.intent==='recommend',noAdd,r=>r.suggest_ids.includes('combo-familiar'))},
+  {id:'somos-pareja',say:'somos una pareja',history:asked('¿Para cuántos es?'),expect:all(r=>r.intent==='recommend',noAdd,r=>r.suggest_ids.includes('combo-pareja'))},
+  {id:'algo-economico',say:'algo económico',expect:all(noAdd,helpful)},
+  {id:'mas-barato-comer',say:'lo más barato que tengas de comer',expect:all(noAdd,helpful,r=>!/agua/i.test(r.reply))},
+  {id:'quiero-pedir',say:'quiero pedir',expect:all(noAdd,helpful)},
+  {id:'eso-seria-todo',say:'eso sería todo',cart:[line('cuarto')],expect:r=>r.intent==='review'},
+  {id:'cancela-todo',say:'cancela todo',cart:[line('cuarto')],expect:r=>r.intent==='cancel'},
+  {id:'nada-de-cebolla',say:'no quiero nada de cebolla en el pollo',cart:[line('cuarto')],lastId:'cuarto',expect:has('note','cuarto',{note:'sin cebolla'})},
+  {id:'agregale-arroz',say:'agrégale arroz',cart:[line('pechuga')],lastId:'pechuga',expect:add('arroz',1)},
+  {id:'cocas-y-sprait',say:'dos cocas y una sprait',expect:all(add('cocacola',2),add('sprite',1))},
+  {id:'tres-familiares',say:'tres familiares',expect:add('combo-familiar',3)},
+  {id:'el-de-pechuga-en-combos',say:'el de pechuga',category:'Combos',expect:add('combo-pechuga',1)},
+  {id:'mmm',say:'mmm',expect:all(noAdd,helpful)},
+  {id:'combo-alitas-sprite',say:'quiero un combo de alitas pero con sprite',expect:add('combo-alitas',1)},
+  {id:'gracias-vacio',say:'gracias',expect:r=>r.intent==='goodbye'},
+  {id:'alergia',say:'soy alérgico al maní',expect:all(noAdd,r=>r.intent==='clarify')},
+  {id:'para-llevar',say:'para llevar',expect:all(noAdd,helpful)},
+  {id:'agua-sin-gas',say:'una agua sin gas',expect:add('agua',1)},
+  {id:'agua-con-gas',say:'agua con gas',expect:r=>!add('agua')(r)||/sin gas/i.test(r.reply)},
+  {id:'medio-sin-ensalada',say:'medio pollo pero sin ensalada',expect:all(add('medio',1),has('note','medio',{note:'sin ensalada'}))},
+  {id:'dos-de-esos',say:'ponme dos de esos',history:asked('El combo personal trae cuarto de pollo, papas y gaseosa. ¿Te lo anoto?'),expect:add('combo-personal',2)},
+  {id:'cambia-coca-por-pepsi',say:'cambia la coca por una pepsi',cart:[line('cocacola')],expect:all(any(has('set','cocacola',{qty:0}),has('remove','cocacola')),add('pepsi',1))},
+  {id:'que-hay-de-beber',say:'quiero ver qué hay de beber',expect:menu('Bebidas')},
+  {id:'postres',say:'tienen postres',expect:all(noAdd,helpful)},
+  {id:'y-de-tomar',say:'y de tomar',expect:menu('Bebidas')},
+  {id:'combo-pa-dos',say:'combo pa dos',expect:add('combo-pareja',1)},
+  {id:'autocorreccion',say:'un cuarto, no, mejor medio',expect:all(add('medio',1),r=>!add('cuarto')(r))},
+];
