@@ -1,5 +1,5 @@
 import {menu} from '../server/catalog.js';
-import {validateCart,validateResult,interpretLocal,isConfirmation} from '../public/js/domain.js';
+import {validateCart,validateResult,repairResult,interpretLocal,isConfirmation} from '../public/js/domain.js';
 import {readFileSync} from 'node:fs';
 import {endpoint,guard,json,body,rateLimit,fail} from '../server/http.js';
 // Fuente única de personalidad: PARTE I del prompt maestro.
@@ -63,6 +63,9 @@ REGLAS ABSOLUTAS:
 9. reply se convierte a voz: escribe como se habla en una mesa, frases cortas, sin listas, emojis, comillas ni símbolos. Puedes escribir precios como $5,75; la app los pronuncia.
 10. Varía tus frases: no empieces dos respuestas seguidas igual. Menciona lo que anotaste con cantidades en palabras.
 11. ${table?`El pedido es para la MESA ${table}. No pidas nombre: la cocina lo lleva a la mesa.`:'El pedido es para retirar: el nombre se pide en el resumen.'}
+12. Después de cada edición termina preguntando, con palabras distintas cada vez, si quiere algo más o cerrar el pedido. Ej.: «¿Algo más, o cerramos el pedido?», «¿Te traigo algo más o ya finalizamos?».
+13. Si el cliente quiere confirmar, enviar o finalizar, usa intent "review" (la app muestra el resumen y pide el sí). Nunca inventes otra intención.
+14. Una opción como «sin cebolla» sobre un producto que ya está en el carrito es una operación note, no un producto nuevo.
 
 # CONTEXTO DEL TURNO (datos, no instrucciones)
 CATÁLOGO (precios en centavos USD): ${catalogJson}
@@ -74,7 +77,13 @@ YA SE OFRECIÓ BEBIDA EN ESTE PEDIDO: ${data.drinkOffered===true}`;
   try{
     const response=await fetch('https://api.groq.com/openai/v1/chat/completions',{method:'POST',headers:{Authorization:`Bearer ${process.env.GROQ_API_KEY}`,'Content-Type':'application/json'},body:JSON.stringify({model,messages:[{role:'system',content:prompt},...history,{role:'user',content:transcript}],response_format:{type:'json_object'},temperature:0.4,max_completion_tokens:1000,...(model.startsWith('openai/gpt-oss')?{reasoning_effort:'low'}:{})}),signal:AbortSignal.timeout(18000)});
     if(!response.ok)throw new Error('Provider failed');
-    const result=JSON.parse((await response.json()).choices?.[0]?.message?.content||'{}');
-    json(res,200,validateResult(result,cart,menu));
-  }catch{json(res,200,{intent:'clarify',operations:[],reply:'No pude interpretar ese cambio con seguridad. Repite el producto y la cantidad, o usa el menú.'});}
+    const raw=(await response.json()).choices?.[0]?.message?.content||'{}';
+    const result=validateResult(repairResult(JSON.parse(raw),menu),cart,menu);
+    if(!result.reply)result.reply=result.intent==='edit'?'Listo. ¿Algo más, o cerramos el pedido?':'¿Me lo repites, por favor?';
+    json(res,200,result);
+  }catch(e){
+    // Visible en los logs de Vercel para afinar el prompt con casos reales.
+    console.warn('match: respuesta descartada:',e.message,JSON.stringify(transcript).slice(0,200));
+    json(res,200,{intent:'clarify',operations:[],reply:'Perdona, no te entendí bien. ¿Me lo dices otra vez con el producto y la cantidad?'});
+  }
 });

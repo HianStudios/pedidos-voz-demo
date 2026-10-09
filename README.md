@@ -27,7 +27,10 @@ Abrir http://localhost:3000. **No abrir index.html directamente:** las rutas `/a
 
 - Milo habla **frase por frase** y pronuncia precios y medidas como un mesero («cuatro dólares con cincuenta», «cuatrocientos mililitros»), sin emojis ni símbolos (`public/js/speech-text.js`).
 - Las respuestas locales dicen lo anotado («Van dos cuartos de pollo y una Coca-Cola. ¿Algo para tomar?») y ofrecen bebida una sola vez por pedido, nunca si ya hay bebida o combo.
-- **Voz neural opcional:** con `ELEVENLABS_API_KEY` y `ELEVENLABS_VOICE_ID` el servidor sintetiza con ElevenLabs (`/api/speak`, modelo `eleven_flash_v2_5` por defecto). Sin ellas, o si falla, se usa la voz del navegador (velocidad 1.05, prioriza voces «Natural/Neural»). **La voz del navegador es la principal razón de que Milo suene robótico**; la neural tiene costo por carácter.
+- **Voz neural opcional.** Con `AZURE_SPEECH_KEY` y `AZURE_SPEECH_REGION`, el servidor usa Azure (voz `es-EC-AndreaNeural` por defecto, acento de Ecuador). Si no, usa ElevenLabs cuando estén `ELEVENLABS_API_KEY` y `ELEVENLABS_VOICE_ID`. Si no hay ninguno, se usa la voz del navegador: velocidad 1.05, una sola voz por sesión, con preferencia por las voces «Natural» de es-EC. **Gratis y con buena calidad:** Microsoft Edge en Windows trae las voces «Natural» de Azure. Dos fallas seguidas de la voz neural vuelven a la del navegador, para no alternar voces.
+- **Pronunciación:** `pronunciations` en `public/js/speech-text.js` convierte marcas y siglas (Sprite → «Spráit», BBQ → «bibikiú»). Agrega ahí las de cada restaurante.
+- Al mostrar una categoría, Milo nombra **todos** los productos y cada tarjeta se ilumina cuando la menciona.
+- Después de cada cambio, Milo pregunta si quieres algo más o cerrar el pedido. «Finalizar», «confírmalo», «ya, envíalo» o «cerramos» muestran el resumen, y un «sí» sobre ese resumen lo envía.
 - Se requiere permiso de micrófono y HTTPS (o localhost). Si no hay SpeechRecognition se graba y transcribe con Groq Whisper; el corte por silencio (900 ms) debe calibrarse con el ruido real del local. No hay interrupción por voz mientras Milo habla; se interrumpe tocándolo.
 
 ## IA

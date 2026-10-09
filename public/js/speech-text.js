@@ -22,8 +22,16 @@ export function moneyWords(cents){
   const main=dollars===1?'un dólar':`${apocope(numberWords(dollars))} dólares`;
   return rest?`${main} con ${numberWords(rest)}`:main;
 }
+// Marcas y siglas que un sintetizador en español lee «como se escribe». Ampliable por restaurante.
+export const pronunciations={'Sprite':'Spráit','BBQ':'bibikiú','Coca-Cola':'Coca Cola','Seven Up':'Seven Ap','7 Up':'Seven Ap'};
+const escapeRe=s=>s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+function pronounce(text){
+  let out=text;
+  for(const [word,say] of Object.entries(pronunciations))out=out.replace(new RegExp(`(?<![\\p{L}\\d])${escapeRe(word)}(?![\\p{L}\\d])`,'giu'),say);
+  return out;
+}
 export function speakable(text){
-  return String(text)
+  return pronounce(String(text))
     // Formato $5.75 (como lo escribe un modelo) antes que el local $5,75 / $1.500,00.
     .replace(/\$\s?(\d+)\.(\d{2})(?!\d)/g,(_,d,c)=>moneyWords(Number(d)*100+Number(c)))
     .replace(/\$\s?(\d{1,3}(?:\.\d{3})*|\d+)(?:,(\d{2}))?(?!\d)/g,(_,d,c)=>moneyWords(Number(d.replace(/\./g,''))*100+Number(c||0)))

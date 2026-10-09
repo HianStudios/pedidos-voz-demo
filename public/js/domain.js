@@ -44,22 +44,49 @@ export function validateResult(result,cart,menu){
   const category=['all','Platos','Combos','Extras','Bebidas'].includes(result.category)?result.category:null;
   return {intent:result.intent,reply:result.reply,operations,suggest_ids:ids,...(category?{category}:{})};
 }
+// Corrige diferencias de forma frecuentes en la salida del modelo antes de la validación estricta.
+// Nunca crea ediciones: si la intención no es «edit», se descartan las operaciones.
+const intentAlias={confirm:'review',confirmar:'review',confirmation:'review',confirmation_answer:'review',send:'review',submit:'review',finalize:'review',finish:'review',checkout:'review',summary:'review',browse:'menu',show:'menu',question:'clarify',answer:'clarify',info:'price',pause:'keep',wait:'keep',cancel_request:'cancel',greeting:'clarify',chat:'clarify',handoff:'clarify'};
+export function repairResult(raw,menu){
+  const r=raw&&typeof raw==='object'?raw:{};
+  let intent=String(r.intent||'').toLowerCase().trim();intent=intentAlias[intent]||intent;
+  if(!['edit','menu','recommend','price','review','clarify','keep','goodbye','cancel'].includes(intent))intent='clarify';
+  const reply=typeof r.reply==='string'?r.reply.trim().slice(0,600):'';
+  let operations=[];
+  if(intent==='edit'&&Array.isArray(r.operations))operations=r.operations.filter(o=>o&&typeof o==='object').map(o=>{
+    const type=String(o.type??o.op??o.action??'').toLowerCase().trim();const id=o.id??o.product_id??o.productId;
+    if(type==='note')return {type,id,note:String(o.note??o.option??'').toLowerCase().trim()};
+    return {type,id,qty:Number(o.qty??o.quantity??(type==='add'?1:NaN))};
+  });
+  if(intent==='edit'&&!operations.length)intent='clarify';
+  const suggest_ids=(Array.isArray(r.suggest_ids)?r.suggest_ids:[]).filter(id=>menu.some(p=>p.id===id&&p.available)).slice(0,10);
+  return {intent,reply,operations,suggest_ids,...(r.category?{category:r.category}:{})};
+}
 const numbers={un:1,una:1,uno:1,dos:2,tres:3,cuatro:4,cinco:5,seis:6,siete:7,ocho:8,nueve:9,diez:10};
 const count=s=>numbers[s]??Number(s);
-export function isConfirmation(text){return /^(si|si por favor|si confirma|si confirmo|confirmo|confirmar|confirma|confirmar pedido|enviar pedido|envia el pedido|mandalo|si envialo|correcto|dale)$/.test(normalize(text));}
+// Aceptación completa («sí», «ya, envíalo», «finaliza el pedido»). Nunca enviada por sí sola:
+// la app solo envía si además hay un resumen vigente; si no, muestra el resumen.
+const yes='(?:si|ya|listo|dale|ok|okey|perfecto|correcto|de una|claro|esta bien|asi esta bien|todo bien|exacto)';
+const act='(?:confirm(?:a|o|ar|alo)|envia(?:lo|r)?|enviamelo|manda(?:lo|r)?|finaliz(?:a|ar|amos|alo)|cierr(?:a|alo)|cerrar|cerramos|procede|hazlo)(?: (?:el |la |mi )?(?:pedido|orden))?';
+const confirmRe=new RegExp(`^(?:${yes}(?: ${yes})*(?: ${act})?|${act})(?: por favor)?$`);
+export function isConfirmation(text){return confirmRe.test(normalize(text).replace(/^si si\b/,'si'));}
 const answer=(intent,reply,extra={})=>({intent,reply,operations:[],...extra});
 const one=p=>p.one||p.name,many=p=>p.many||p.name;
+const more=['¿Algo más, o cerramos el pedido?','¿Te traigo algo más o ya finalizamos?','¿Sumamos algo más o lo envío a cocina?'];
 export const amount=(p,qty)=>qty===1?one(p):`${numberWords(qty)} ${many(p)}`;
 // Lo que diría un mesero al anotar: «Van dos cuartos de pollo y una Coca-Cola».
 export function describeOps(ops,menu){
   const find=id=>menu.find(p=>p.id===id);
-  const added=ops.filter(o=>o.type==='add').map(o=>amount(find(o.id),o.qty));
+  // Una nota sobre algo recién agregado se dice junto: «Van dos cuartos de pollo sin cebolla».
+  const newIds=new Set(ops.filter(o=>o.type==='add').map(o=>o.id));
+  const notesFor=id=>ops.filter(o=>o.type==='note'&&o.id===id).map(o=>o.note);
+  const added=ops.filter(o=>o.type==='add').map(o=>[amount(find(o.id),o.qty),...notesFor(o.id)].join(' '));
   const parts=[];
   const single=added.length===1&&ops.find(o=>o.type==='add').qty===1;
   if(added.length)parts.push(`${single?'Va':'Van'} ${listWords(added)}.`);
   for(const o of ops){
     const p=find(o.id);
-    if(o.type==='note')parts.push(`Anotado: ${p.name.toLowerCase()} ${o.note}.`);
+    if(o.type==='note'&&!newIds.has(o.id))parts.push(`Anotado: ${p.name.toLowerCase()} ${o.note}.`);
     if(o.type==='set')parts.push(o.qty?`Listo, quedan ${amount(p,o.qty)}.`.replace('quedan un','queda un').replace('quedan una','queda una'):`Listo, saqué ${one(p)} del pedido.`);
     if(o.type==='remove')parts.push(`Listo, saqué ${amount(p,o.qty)}.`);
   }
@@ -69,8 +96,8 @@ export function describeOps(ops,menu){
 export function followUp(cart,ops,menu,drinkOffered){
   const ids=[...cart.map(l=>l.id),...ops.filter(o=>o.type==='add').map(o=>o.id)];
   const covered=ids.some(id=>['Bebidas','Combos'].includes(menu.find(p=>p.id===id)?.category));
-  if(!covered&&!drinkOffered&&ops.some(o=>o.type==='add'))return '¿Algo para tomar?';
-  return ['¿Algo más?','¿Qué más te traigo?','¿Algo más para la mesa?'][(cart.length+ops.length)%3];
+  if(!covered&&!drinkOffered&&ops.some(o=>o.type==='add'))return '¿Algo para tomar, o cerramos así?';
+  return more[(cart.length+ops.length)%3];
 }
 // Determinista para órdenes comunes; la IA resuelve las frases no cubiertas.
 export function interpretLocal(text,cart,menu,lastId=null,context={}){
@@ -95,17 +122,25 @@ export function interpretLocal(text,cart,menu,lastId=null,context={}){
     remaining=remaining.replace(re,(full,prefix,word,offset)=>{hits.push({id,index:offset+prefix.length,length:word.length});return ' '.repeat(full.length);});
   }
   hits.sort((a,b)=>a.index-b.index);
+  // «Sin cebolla» es una opción del producto, nunca un plato aparte: «los dos cuartos sin cebolla».
+  const note=n.match(/\bsin (cebolla|ensalada|papas|sal|tomate|arroz)\b/)?.[0];
+  if(note&&(n.match(/\bsin\b/g)||[]).length===1&&!/\b(no|cuanto|precio|cuesta)\b/.test(n)){
+    const ids=[...new Set(hits.map(h=>h.id))];
+    if(ids.length>1)return null;
+    const id=ids[0]||(cart.length===1?cart[0].id:lastId);
+    if(!id||(!ids.length&&!cart.some(l=>l.id===id)))return answer('clarify','¿A qué producto le hago ese cambio?');
+    const product=menu.find(p=>p.id===id);
+    if(!product.options.includes(note))return answer('clarify',`${product.name} no tiene la opción «${note}». Puedes consultarlo con el personal.`);
+    const inCart=cart.some(l=>l.id===id);
+    if(inCart&&!/\b(otro|otra|otros|otras|agrega|agregame|anade|suma|aparte)\b/.test(n))return answer('edit',`Anotado: ${product.name.toLowerCase()} ${note}. ${more[cart.length%3]}`,{operations:[{type:'note',id,note}]});
+    if(inCart)return null;
+    const token=n.slice(0,hits[0].index).trim().split(' ').at(-1);const qty=count(token);
+    const operations=[{type:'add',id,qty:Number.isInteger(qty)&&qty>0?qty:1},{type:'note',id,note}];
+    return answer('edit',`${describeOps(operations,menu)} ${followUp(cart,operations,menu,context.drinkOffered)}`,{operations});
+  }
   if(/\b(cuanto|precio|cuesta|cuestan)\b/.test(n)){
     if(!hits.length) return answer('clarify','¿De qué producto quieres saber el precio?');
     return answer('price',hits.map(h=>{const p=menu.find(p=>p.id===h.id);return `${p.name} cuesta ${money(p.price)}.`;}).join(' '),{suggest_ids:[...new Set(hits.map(h=>h.id))]});
-  }
-  const note=n.match(/\bsin (cebolla|ensalada|papas|sal|tomate)\b/)?.[0];
-  // Edición de acompañamiento: «sin papas» no añade un plato de papas.
-  if(note&&!/\b(quiero|dame|agrega|agregame|ponme)\b/.test(n)){
-    const id=cart.length===1?cart[0].id:lastId;
-    if(!id||!cart.some(l=>l.id===id)) return answer('clarify','¿A qué producto aplico ese cambio?');
-    if(!menu.find(p=>p.id===id).options.includes(note)) return answer('clarify','Esa opción no está definida para ese producto. Puedes consultarla con el personal.');
-    return answer('edit',`Anotado, ${note}. ¿Algo más?`,{operations:[{type:'note',id,note}]});
   }
   const correction=n.match(/^(?:mejor|que sean|dejalo en) (\d+|uno|una|dos|tres|cuatro|cinco)$/);
   if(correction){const id=lastId||(cart.length===1?cart[0].id:null);if(!id)return answer('clarify','¿De qué producto cambio la cantidad?');const operations=[{type:'set',id,qty:count(correction[1])}];return answer('edit',describeOps(operations,menu),{operations});}

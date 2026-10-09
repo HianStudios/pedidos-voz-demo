@@ -51,3 +51,21 @@ test('modelo no puede confirmar ni mezclar recomendaciones con ediciones',()=>{
 test('sí, agrega papas es una edición y conserva el carrito',()=>{
   const result=interpretLocal('sí, agrega papas',cart,menu);assert.equal(result.intent,'edit');assert.equal(applyOperations(cart,result.operations,menu).at(-1).id,'papas');
 });
+test('formas naturales de confirmar o finalizar; negaciones y ediciones no confirman',()=>{
+  for(const t of ['confirma el pedido','Sí, confírmalo','ya, envíalo','Finalizar pedido','listo, envíalo','cerramos','dale, finaliza la orden','sí, está bien'])assert.equal(isConfirmation(t),true,t);
+  for(const t of ['no, todavía no','sí, pero sin cebolla','quiero un cambio','ya no quiero cola','finalizar no'])assert.equal(isConfirmation(t),false,t);
+});
+test('«los dos cuartos sin cebolla» anota la opción en la línea existente',()=>{
+  const r=interpretLocal('Quiero un cambio, que los dos cuartos de pollo me los des sin cebolla',cart,menu,'cocacola');
+  assert.deepEqual(r.operations,[{type:'note',id:'cuarto',note:'sin cebolla'}]);assert.match(r.reply,/cerramos|finalizamos|cocina/);
+  const add=interpretLocal('dos cuartos de pollo sin cebolla',[],menu);assert.deepEqual(applyOperations([],add.operations,menu),[{id:'cuarto',qty:2,notes:['sin cebolla']}]);
+  assert.equal(interpretLocal('una coca cola sin cebolla',[],menu).intent,'clarify');
+});
+test('salidas casi válidas del modelo se reparan sin inventar ediciones',async()=>{
+  const {repairResult}=await import('../public/js/domain.js');
+  assert.equal(validateResult(repairResult({intent:'confirm',reply:'Te muestro el resumen.'},menu),cart,menu).intent,'review');
+  const fixed=validateResult(repairResult({intent:'EDIT',reply:'Anotado.',operations:[{type:'Note',product_id:'cuarto',note:'Sin Cebolla'}]},menu),cart,menu);
+  assert.deepEqual(fixed.operations,[{type:'note',id:'cuarto',note:'sin cebolla'}]);
+  assert.deepEqual(repairResult({intent:'recommend',reply:'x',operations:[{type:'add',id:'cuarto',qty:1}],suggest_ids:['cuarto','inventado']},menu).operations,[]);
+  assert.deepEqual(repairResult({intent:'recommend',reply:'x',suggest_ids:['cuarto','inventado']},menu).suggest_ids,['cuarto']);
+});
