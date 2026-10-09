@@ -1,6 +1,7 @@
+import {speakable,sentences} from './speech-text.js';
 const Recognition=window.SpeechRecognition||window.webkitSpeechRecognition;
 export class VoiceController{
-  constructor({onState,onLevel,onText,onInput,onError,greeting}){Object.assign(this,{onState,onLevel,onText,onInput,onError,greeting});this.rate=1.15;this.enabled=false;this.generation=0;this.recognition=null;this.recorder=null;this.stream=null;this.speechDone=null;this.meter=0;this.level=0;this.activatePending=false;}
+  constructor({onState,onLevel,onText,onInput,onError,onSentence,greeting}){Object.assign(this,{onState,onLevel,onText,onInput,onError,onSentence,greeting});this.rate=1.05;this.neural=false;this.enabled=false;this.generation=0;this.recognition=null;this.recorder=null;this.stream=null;this.speechDone=null;this.meter=0;this.level=0;this.activatePending=false;}
   state(value){this.mode=value;this.onState(value);}
   async enable(direct=false){
     if(this.activatePending)return;
@@ -30,7 +31,7 @@ export class VoiceController{
     const recognition=this.recognition;this.recognition=null;if(recognition){recognition.onend=null;try{recognition.abort();}catch{}}
     const recorder=this.recorder;this.recorder=null;if(recorder?.state==='recording'){recorder.onstop=null;recorder.stop();}
     this.upload?.abort();this.upload=null;
-    this.speechDone?.();this.speechDone=null;window.speechSynthesis?.cancel();this.onLevel(0);
+    this.speechDone?.();this.speechDone=null;window.speechSynthesis?.cancel();try{this.playing?.stop();}catch{}this.playing=null;this.onLevel(0);
   }
   disable(){this.pause();this.enabled=false;this.stream?.getTracks().forEach(t=>t.stop());this.stream=null;cancelAnimationFrame(this.meter);this.source?.disconnect();this.context?.close().catch(()=>{});this.context=null;this.state('off');}
   wait(){if(!this.enabled)return;this.pause();this.state('waiting');}
@@ -39,19 +40,55 @@ export class VoiceController{
     this.pause();const token=this.generation+1;await this.say(this.greeting);if(this.enabled&&token===this.generation)this.listen();
   }
   listen(){if(!this.enabled)return;this.pause();this.state('listening');if(Recognition&&!this.nativeFailed)this.recognize('command');else this.record();}
+  // Frase por frase: pausas naturales entre oraciones y la pantalla sigue lo que Milo dice.
   async say(text){
     this.pause();const token=this.generation;
-    if(!this.enabled||!window.speechSynthesis){this.state(this.enabled?'waiting':'off');return;}
+    if(!this.enabled){this.state('off');return;}
+    const parts=sentences(speakable(text));
+    if(!parts.length||(!window.speechSynthesis&&!this.neural)){this.state('waiting');return;}
     this.state('speaking');
-    await new Promise(resolve=>{
-      const done=()=>{clearTimeout(this.speechTimer);if(this.speechDone===done)this.speechDone=null;resolve();};this.speechDone=done;
-      const utterance=new SpeechSynthesisUtterance(text);utterance.lang='es-EC';utterance.rate=this.rate;
-      const voices=speechSynthesis.getVoices().filter(v=>/^es/i.test(v.lang));
-      const score=v=>(/natural|neural|online|google/i.test(v.name)?20:0)+(/^es-(EC|MX|US|CO)/i.test(v.lang)?10:0);
-      utterance.voice=voices.sort((a,b)=>score(b)-score(a))[0]||null;
-      utterance.onend=done;utterance.onerror=done;this.speechTimer=setTimeout(()=>{speechSynthesis.cancel();done();},Math.max(10000,text.length*120));speechSynthesis.speak(utterance);
+    let next=this.neural?this.fetchAudio(parts[0]):null;
+    for(let i=0;i<parts.length;i++){
+      const audio=next?await next:null;
+      if(token!==this.generation)return;
+      next=this.neural&&i+1<parts.length?this.fetchAudio(parts[i+1]):null;
+      this.onSentence?.(parts[i],i);
+      if(audio)await this.play(audio,token);else await this.utter(parts[i],token);
+      if(token!==this.generation)return;
+    }
+    this.state('waiting');
+  }
+  // Voz neural del servidor (opcional). Si falla una vez, se usa la del navegador el resto de la sesión.
+  async fetchAudio(text){
+    if(!this.context)return null;
+    try{
+      const res=await fetch('/api/speak',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text}),signal:AbortSignal.timeout(8000)});
+      if(!res.ok)throw new Error();
+      return await this.context.decodeAudioData(await res.arrayBuffer());
+    }catch{this.neural=false;return null;}
+  }
+  play(buffer,token){
+    return new Promise(resolve=>{
+      if(token!==this.generation)return resolve();
+      const source=this.context.createBufferSource();source.buffer=buffer;source.connect(this.context.destination);this.playing=source;
+      const done=()=>{if(this.speechDone===done)this.speechDone=null;if(this.playing===source)this.playing=null;resolve();};
+      this.speechDone=done;source.onended=done;source.start();
     });
-    if(token===this.generation)this.state('waiting');
+  }
+  pickVoice(){
+    const voices=window.speechSynthesis.getVoices().filter(v=>/^es/i.test(v.lang));
+    const score=v=>(/natural|neural/i.test(v.name)?30:0)+(/online|premium|enhanced/i.test(v.name)?15:0)+(/google/i.test(v.name)?10:0)+(/^es-(EC|MX|US|CO|419|PE)/i.test(v.lang)?5:0);
+    return voices.sort((a,b)=>score(b)-score(a))[0]||null;
+  }
+  utter(text,token){
+    if(!window.speechSynthesis)return Promise.resolve();
+    return new Promise(resolve=>{
+      if(token!==this.generation)return resolve();
+      const done=()=>{clearTimeout(this.speechTimer);if(this.speechDone===done)this.speechDone=null;resolve();};this.speechDone=done;
+      const utterance=new SpeechSynthesisUtterance(text);utterance.lang='es-EC';utterance.rate=this.rate;utterance.pitch=1;
+      utterance.voice=this.pickVoice();
+      utterance.onend=done;utterance.onerror=done;this.speechTimer=setTimeout(()=>{speechSynthesis.cancel();done();},Math.max(8000,text.length*120));speechSynthesis.speak(utterance);
+    });
   }
   async respond(text,next='listen'){
     const start=this.generation+1;await this.say(text);

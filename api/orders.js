@@ -24,10 +24,12 @@ export default endpoint(async(req,res)=>{
   const data=await body(req);let cart;try{cart=validateCart(data.items,menu);}catch(e){throw fail(e.message);}
   if(!cart.length||data.confirmed!==true)throw fail('Revisa y confirma tu pedido antes de enviarlo.');
   if(typeof data.key!=='string'||!/^[0-9a-f-]{36}$/.test(data.key))throw fail('Identificador de envío inválido.');
-  // Solo retiro en este MVP: una mesa arbitraria no se trata como ubicación verificada.
-  const customer=String(data.customer||'').trim();if(customer.length<2||customer.length>60)throw fail('Escribe un nombre para retirar el pedido (2–60 caracteres).');
-  const payloadHash=createHash('sha256').update(JSON.stringify({cart,customer})).digest('hex');
-  const order={id:randomUUID(),number:randomUUID().slice(0,6).toUpperCase(),items:cart.map(l=>({...l,name:menu.find(p=>p.id===l.id).name,price:menu.find(p=>p.id===l.id).price})),total:total(cart,menu),customer,fulfillment:'retiro',status:'nuevo',createdAt:new Date().toISOString()};
+  // La mesa la fija quien instala el dispositivo (?mesa=N); no es una ubicación verificada criptográficamente.
+  const table=data.table==null?null:Number(data.table);
+  if(table!==null&&!(Number.isInteger(table)&&table>0&&table<1000))throw fail('Número de mesa inválido.');
+  const customer=String(data.customer||(table?`Mesa ${table}`:'')).trim();if(customer.length<2||customer.length>60)throw fail('Escribe un nombre para retirar el pedido (2–60 caracteres).');
+  const payloadHash=createHash('sha256').update(JSON.stringify({cart,customer,table})).digest('hex');
+  const order={id:randomUUID(),number:randomUUID().slice(0,6).toUpperCase(),items:cart.map(l=>({...l,name:menu.find(p=>p.id===l.id).name,price:menu.find(p=>p.id===l.id).price})),total:total(cart,menu),customer,...(table?{table}:{}),fulfillment:table?'mesa':'retiro',status:'nuevo',createdAt:new Date().toISOString()};
   const script="local old=redis.call('GET',KEYS[1]); if old then local memo=cjson.decode(old); if memo.hash~=ARGV[4] then return 'conflict' end; return memo.order end; redis.call('SET',KEYS[2],ARGV[1],'EX',2592000); redis.call('ZADD',KEYS[3],ARGV[2],ARGV[3]); redis.call('ZREMRANGEBYSCORE',KEYS[3],'-inf',tonumber(ARGV[2])-2592000000); redis.call('SET',KEYS[1],cjson.encode({hash=ARGV[4],order=ARGV[1]}),'EX',2592000); return ARGV[1]";
   const saved=await redis(['EVAL',script,3,`${prefix}:idem:${sessionId}:${data.key}`,`${prefix}:order:${order.id}`,`${prefix}:orders`,JSON.stringify(order),Date.now(),order.id,payloadHash]);
   if(saved==='conflict')throw fail('Este envío ya se usó con otro pedido. Revisa el borrador.',409);

@@ -16,24 +16,23 @@ Abrir http://localhost:3000. **No abrir index.html directamente:** las rutas `/a
 
 ## Experiencia actual
 
-- La pantalla principal conserva a Milo como protagonista; menú y productos aparecen bajo demanda en modales.
-- Tocar a Milo inicia una sesión de voz. No requiere decir su nombre. Al responder, vuelve a escuchar; tocarlo mientras habla interrumpe la respuesta. «Apagar micrófono» detiene la sesión.
-- «Solo», «quiero ver los platos solos» y «medio pollo» con Platos abierto funcionan sin IA externa. Una transcripción ambigua como «me apoyo» en Platos pide aclaración.
-- Productos en pasarela horizontal circular a 24 px/s, con pausa, anterior/siguiente, selección por nombre y alternativa «Agregar». Respeta movimiento reducido y pausa al enfocar/interactuar o al escuchar/procesar voz.
-- Resumen con notas y nombre. La confirmación verbal solo envía si corresponde a una revisión vigente. Una consulta o edición invalida la revisión anterior.
-- Texto disponible tanto en la pantalla principal como dentro de los modales.
+- **Pantalla de mesa = solo Milo.** Sin titulares, sin marca, sin enlace a caja. Abajo, un dock discreto: menú, teclado, micrófono y pedido.
+- **Mesa por dispositivo.** Abrir una vez `/?mesa=7` en la tablet de la mesa 7; queda guardado en ese navegador (`/?mesa=` lo quita). Con mesa, Milo no pide nombre y el pedido llega a caja como «Mesa 7». Sin mesa se mantiene el flujo de retiro con nombre. La mesa no está verificada: quien tenga el dispositivo puede cambiar la URL.
+- **Menú animado y minimalista** en hoja de pantalla completa: cuatro «puertas» (Platos, Combos, Extras, Bebidas), pestañas con subrayado animado y una repisa horizontal de tarjetas que entran escalonadas y flotan. **Mientras Milo nombra un producto, su tarjeta se ilumina y se centra.** «Agregar» suma al instante sin cerrar el menú.
+- Tocar a Milo inicia la sesión de voz; tras cada respuesta vuelve a escuchar. Tocarlo mientras habla lo interrumpe.
+- Tras 2 minutos sin uso, la pantalla vuelve a Milo y apaga el micrófono (el pedido en curso se conserva).
+- La confirmación verbal solo envía si corresponde a un resumen vigente. Cualquier edición invalida la revisión anterior.
 
 ## Voz y límites
 
-La síntesis del navegador usa velocidad inicial 1.15, ajustable a pausada/natural/ágil. Prioriza voces españolas identificadas como naturales cuando el dispositivo las ofrece; no incorpora un servicio TTS neuronal externo. La calidad y la latencia dependen del navegador y sus voces. No se probó aquí la acústica en micrófonos físicos.
-
-Se requiere permiso del usuario y HTTPS (o localhost). Al ocultar la pestaña se desactiva el micrófono. Si no funciona SpeechRecognition se ofrece MediaRecorder y transcripción por Groq; la grabación alternativa termina tras 900 ms de silencio detectado, con espera inicial de 8 s y máximo de 25 s. El umbral debe probarse en el ruido real del local. No existe escucha con la página cerrada ni interrupción simultánea por voz con control de eco; se interrumpe tocando el control.
-
-Una respuesta se reproduce por turno. Se eliminaron los temporizadores que abrían bebidas y cortaban otra locución, y las ofertas automáticas tras cada edición.
+- Milo habla **frase por frase** y pronuncia precios y medidas como un mesero («cuatro dólares con cincuenta», «cuatrocientos mililitros»), sin emojis ni símbolos (`public/js/speech-text.js`).
+- Las respuestas locales dicen lo anotado («Van dos cuartos de pollo y una Coca-Cola. ¿Algo para tomar?») y ofrecen bebida una sola vez por pedido, nunca si ya hay bebida o combo.
+- **Voz neural opcional:** con `ELEVENLABS_API_KEY` y `ELEVENLABS_VOICE_ID` el servidor sintetiza con ElevenLabs (`/api/speak`, modelo `eleven_flash_v2_5` por defecto). Sin ellas, o si falla, se usa la voz del navegador (velocidad 1.05, prioriza voces «Natural/Neural»). **La voz del navegador es la principal razón de que Milo suene robótico**; la neural tiene costo por carácter.
+- Se requiere permiso de micrófono y HTTPS (o localhost). Si no hay SpeechRecognition se graba y transcribe con Groq Whisper; el corte por silencio (900 ms) debe calibrarse con el ruido real del local. No hay interrupción por voz mientras Milo habla; se interrumpe tocándolo.
 
 ## IA
 
-Configurar `GROQ_API_KEY` en el servidor. `GROQ_MODEL` permite cambiar el modelo conversacional, por defecto `openai/gpt-oss-120b`. La transcripción usa `whisper-large-v3`.
+Configurar `GROQ_API_KEY` en el servidor. **La personalidad sale de la PARTE I de `prompts/Milo_Prompt_Maestro_Mesero_Voz.md`** (única fuente; `api/match.js` la lee al arrancar y le añade el contrato JSON y el contexto del turno). Con modelos `gpt-oss` se usa `reasoning_effort: low` para responder más rápido. `GROQ_MODEL` permite cambiar el modelo conversacional, por defecto `openai/gpt-oss-120b`. La transcripción usa `whisper-large-v3`.
 
 Los comandos comunes son deterministas y no consumen IA. Para frases libres, `/api/match` usa el catálogo del servidor, el carrito y los últimos turnos. Se valida cada operación devuelta; el modelo nunca tiene una herramienta que envíe pedidos. Si no hay clave o falla el proveedor, se mantienen texto, botones y comandos básicos, con mensajes explicativos.
 
@@ -57,7 +56,7 @@ Con las cuatro variables configuradas, `/api/menu` anuncia modo conectado y emit
 
 El backend valida catálogo/cantidades, calcula centavos y crea pedidos e identificadores de reintento atómicamente con Redis Lua. Un timeout conserva el mismo envío para reintentar sin duplicarlo, bloqueando ediciones hasta resolverlo. Solo se muestra éxito tras la respuesta del servidor. Caja está en `/caja.html`. Recibe un canal SSE autenticado en `/api/order-events`: snapshot al conectar, actualizaciones cuando cambian pedidos y latidos. El servidor consulta Redis cada 1.5 s; por tanto, la actualización no es instantánea ni usa Redis Pub/Sub. Cada conexión dura hasta 20 s y se renueva automáticamente. Tras cortes se reconecta con espera progresiva de hasta 15 s y recupera el snapshot completo. La pestaña oculta pausa la conexión. No requiere servicios adicionales a Redis existente; cada caja activa genera aproximadamente 40 lecturas de snapshot por minuto, además de autenticación/límites y acciones de estado. Revisar el consumo del plan antes de escalar. Los pedidos y claves de idempotencia se retienen 30 días; la lista muestra hasta los 200 pedidos más recientes.
 
-**Alcance:** un restaurante por despliegue, modalidad retiro. No hay mesas verificadas, pagos, inventario con reserva, impresora, panel de edición de catálogo ni cuentas individuales de personal. Para operar varios restaurantes, usar despliegues y credenciales separados o implementar multitenencia autenticada antes de compartir una base. Cambiar el catálogo es un cambio de código.
+**Alcance:** un restaurante por despliegue, mesa (por URL) o retiro. No hay mesas verificadas, pagos, inventario con reserva, impresora, panel de edición de catálogo ni cuentas individuales de personal. Para operar varios restaurantes, usar despliegues y credenciales separados o implementar multitenencia autenticada antes de compartir una base. Cambiar el catálogo es un cambio de código.
 
 El modo conectado significa configuración presente, no que las credenciales hayan sido validadas al iniciar: los fallos del servicio se muestran al operar. No se incluye aprovisionamiento automático de Upstash ni acceso a las variables de Vercel desde este repositorio.
 
@@ -69,48 +68,12 @@ El campo `id` del restaurante separa claves de almacenamiento en Redis; no se ac
 
 ## Estructura
 
-- `index.html`: cliente, pasarela y resumen.
-- `caja.html`, `public/js/cashier.js`: página independiente del personal.
-- `public/js/carousel.js`: movimiento, ciclo y pausa de la pasarela.
-- `public/js/conversation.js`: navegación semántica básica y estado de revisión.
-- `api/order-events.js`, `server/order-feed.js`, `public/js/live-feed.js`: stream autenticado, snapshots y reconexión.
-- `prompts/Mejoras_Milo_Pasarela_Caja.md`: encargo profesional usado en esta iteración.
-- `public/styles.css`, `public/favicon.svg`: identidad y diseño responsive.
-- `public/js/app.js`: interfaz, sesión de pedido y caja.
-- `public/js/voice.js`: micrófono, reconocimiento, grabación, locución y cancelación.
-- `public/js/domain.js`: cantidades, carrito, operaciones, intenciones y confirmación segura.
-- `public/js/art.js`: ilustraciones vectoriales.
-- `server/catalog.js`, `server/http.js`: catálogo, utilidades, sesiones, límites y Redis.
-- `api/menu.js`, `api/match.js`, `api/transcribe.js`, `api/orders.js`: funciones serverless.
-- `scripts/dev.js`, `scripts/build.js`: servidor de desarrollo y empaquetado estático.
-- `tests/`: regresiones y recorrido de navegador.
+- `index.html`, `public/milo.css`, `public/js/app.js`: pantalla de mesa (Milo, menú animado, resumen).
+- `caja.html`, `public/js/cashier.js`, `public/styles.css`: página independiente del personal.
+- `public/js/voice.js`: micrófono, reconocimiento, grabación, locución frase por frase y voz neural opcional.
+- `public/js/speech-text.js`: números, dinero y medidas en palabras.
+- `public/js/domain.js`, `public/js/conversation.js`: carrito, intérprete local y navegación.
+- `api/match.js` (IA), `api/speak.js` (voz neural), `api/transcribe.js`, `api/orders.js`, `api/order-events.js`, `api/menu.js`.
+- `prompts/Milo_Prompt_Maestro_Mesero_Voz.md`: personalidad de Milo (en uso).
 
-## Despliegue en Vercel
-
-Importar el repositorio como proyecto **Other**, usar Node.js 22+ y respetar `vercel.json`: `npm run build`, salida `dist/`, funciones `api/*.js`. Añadir variables en el entorno correcto (Preview o Production) y volver a desplegar. La transcripción limita audio a 3 MB y la solicitud a 3,5 MB, por debajo del límite de carga habitual de funciones; no debe aceptarse una grabación ilimitada.
-
-Hay límites por IP y minuto: menú 90, interpretación 30, transcripción 20, pedidos 60. Con Redis son compartidos entre instancias; sin Redis son de proceso y no equivalen a protección distribuida. Antes de un despliegue público de alto tráfico, habilitar Redis y protección adicional de borde/presupuesto del proveedor. El limitador usa `x-real-ip` del alojamiento confiable; si se aloja fuera de Vercel, configurar el proxy para reemplazar ese header.
-
-No se registra audio ni conversaciones en base de datos. Las grabaciones se envían al proveedor de transcripción cuando se usa el modo alternativo; el servicio del navegador puede procesar el reconocimiento nativo. Los pedidos guardan nombre y contenido durante 30 días en modo conectado. Revisar retención y operación del negocio antes de producción.
-
-## Pruebas
-
-```sh
-npm test
-npm run build
-# Opcional: instalar Playwright y su navegador para la prueba visual:
-npm install --no-save playwright
-npx playwright install chromium
-# Con npm run dev activo en otra terminal:
-node tests/browser.cjs
-```
-
-Las pruebas automatizadas de voz usan dobles de navegador: verifican transiciones/cancelación, no calidad acústica. El acceso real a Groq, Redis y la captura de micrófono en Android/iPhone requieren credenciales/dispositivos y no deben darse por validados solo porque pase npm test. Probar especialmente ruido de restaurante, eco del altavoz, permisos, Safari/iOS, pérdida de conexión y reintento del mismo pedido.
-
-Documentación técnica: [Groq](https://console.groq.com/docs/api-reference), [Upstash REST](https://upstash.com/docs/redis/features/restapi), [getUserMedia](https://developer.mozilla.org/en-US/docs/Web/API/MediaDevices/getUserMedia), [SpeechRecognition](https://developer.mozilla.org/en-US/docs/Web/API/SpeechRecognition).
-
-## Validación de esta iteración
-
-Ejecutar `npm test`, `npm run build` y, con el servidor activo, `node tests/browser.cjs`. El recorrido automatizado comprueba Solo, medio pollo, aclaración de transcripción, resumen con notas, confirmación contextual, caja entre pestañas, cambios de estado y tamaños móvil/escritorio. Las pruebas de SSE comprueban snapshots, cambios, cierre, parsing fragmentado y rechazo sin autorización.
-
-La sincronización entre dispositivos necesita las credenciales de Redis y personal descritas arriba. Las pruebas locales no validan credenciales de producción, servicios Groq reales ni el audio físico del usuario. La documentación de streaming utilizada es [Vercel Functions Streaming](https://vercel.com/docs/functions/streaming-functions). Verificar el canal en el despliegue antes de declarar servicio real en vivo.
+Prueba de navegador: con `npm run dev` en marcha, `CODEX_PRIMARY_RUNTIME_NODE_MODULES=<ruta a node_modules con playwright> node tests/browser.cjs`.

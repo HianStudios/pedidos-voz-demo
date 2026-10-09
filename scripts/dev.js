@@ -3,7 +3,7 @@ import {readFile} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
 import path from 'node:path';
 const root=fileURLToPath(new URL('../',import.meta.url));
-const handlers=Object.fromEntries(await Promise.all(['menu','match','transcribe','orders','order-events'].map(async name=>[name,(await import(`../api/${name}.js`)).default])));
+const handlers=Object.fromEntries(await Promise.all(['menu','match','transcribe','orders','order-events','speak'].map(async name=>[name,(await import(`../api/${name}.js`)).default])));
 const mime={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.svg':'image/svg+xml'};
 http.createServer(async(req,res)=>{
   res.status=code=>{res.statusCode=code;return res;};res.json=data=>res.end(JSON.stringify(data));res.setHeader('X-Content-Type-Options','nosniff');
