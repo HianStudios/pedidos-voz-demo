@@ -31,6 +31,7 @@ Abrir http://localhost:3000. **No abrir index.html directamente:** las rutas `/a
 - **Pronunciación:** `pronunciations` en `public/js/speech-text.js` convierte marcas y siglas (Sprite → «Spráit», BBQ → «bibikiú»). Agrega ahí las de cada restaurante.
 - Al mostrar una categoría, Milo nombra **todos** los productos y cada tarjeta se ilumina cuando la menciona.
 - Después de cada cambio, Milo pregunta si quieres algo más o cerrar el pedido. «Finalizar», «confírmalo», «ya, envíalo» o «cerramos» muestran el resumen, y un «sí» sobre ese resumen lo envía.
+- **Celulares (Android/iPhone):** no se usa el reconocedor del sistema (en Android pita en cada intento y no oye mientras la app tiene el micrófono abierto). Se graba y se transcribe con Whisper en `/api/transcribe` (requiere `GROQ_API_KEY`), con detección de voz que mide el ruido del ambiente y descarta frases fantasma de Whisper. `?voz=nativa` fuerza el reconocedor del sistema. Prueba: `node tests/mobile.cjs` con `npm run dev` en marcha.
 - Se requiere permiso de micrófono y HTTPS (o localhost). Si no hay SpeechRecognition se graba y transcribe con Groq Whisper; el corte por silencio (900 ms) debe calibrarse con el ruido real del local. No hay interrupción por voz mientras Milo habla; se interrumpe tocándolo.
 
 ## IA

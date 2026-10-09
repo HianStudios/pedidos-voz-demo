@@ -47,3 +47,14 @@ test('acepta las variables KV_REST_API_* de la integración de Upstash en Vercel
   try{for(const k of keys)delete process.env[k];assert.equal(hasRedis(),false);Object.assign(process.env,{KV_REST_API_URL:'https://kv.test',KV_REST_API_TOKEN:'t'});assert.equal(hasRedis(),true);}
   finally{for(const k of keys)if(old[k]===undefined)delete process.env[k];else process.env[k]=old[k];}
 });
+test('transcripción: descarta frases fantasma de Whisper y envía vocabulario del menú',async()=>{
+  const originalFetch=globalThis.fetch,old=process.env.GROQ_API_KEY;process.env.GROQ_API_KEY='test';let sent;
+  const boundary='b';const body=Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="a.webm"\r\nContent-Type: audio/webm\r\n\r\n${'x'.repeat(800)}\r\n--${boundary}--\r\n`);
+  const call=async text=>{globalThis.fetch=async(u,o)=>{sent=o.body;return new Response(JSON.stringify({text,segments:[{no_speech_prob:.1}]}));};const r=Readable.from([body]);Object.assign(r,{method:'POST',headers:{host:'localhost','content-type':`multipart/form-data; boundary=${boundary}`,'content-length':body.length},socket:{remoteAddress:'tx'}});const res=response();await transcribe(r,res);return res.data.text;};
+  try{
+    assert.equal(await call('Subtítulos realizados por la comunidad de Amara.org'),'');
+    assert.equal(await call('Gracias por ver el video.'),'');
+    assert.equal(await call('Dos cuartos de pollo y una Sprite.'),'Dos cuartos de pollo y una Sprite.');
+    assert.match(sent.get('prompt'),/Combo familiar/);
+  }finally{globalThis.fetch=originalFetch;if(old===undefined)delete process.env.GROQ_API_KEY;else process.env.GROQ_API_KEY=old;}
+});

@@ -46,3 +46,20 @@ test('una palabra provisional se acepta, salvo un «sí»',()=>{
  const {voice,inputs}=setup();for(const word of ['cinco','sí']){voice.listen();const result=[{transcript:word}];result.isFinal=false;voice.recognition.onresult({results:[result]});voice.recognition.onend();}
  assert.deepEqual(inputs,['cinco']);voice.disable();
 });
+test('en celular graba y transcribe; el ruido del local no cuenta como voz',async(t)=>{
+ t.mock.timers.enable({apis:['setInterval','setTimeout','Date'],now:0});
+ let recorders=[],uploads=0;
+ globalThis.MediaRecorder=class{static isTypeSupported(){return true;}constructor(){this.state='inactive';this.mimeType='audio/webm';recorders.push(this);}start(){this.state='recording';}stop(){this.state='inactive';this.ondataavailable?.({data:{size:4000}});this.onstop?.();}};
+ window.MediaRecorder=globalThis.MediaRecorder;globalThis.Blob=class{constructor(parts){this.size=4000;}};globalThis.FormData=class{append(){}};
+ const realFetch=globalThis.fetch;globalThis.fetch=async()=>{uploads++;return {ok:true,json:async()=>({text:'dos cuartos de pollo'})};};
+ const advance=ms=>{for(let i=0;i<ms;i+=100)t.mock.timers.tick(100);};
+ const {voice,inputs}=setup();voice.preferRecorder=true;voice.stream={getTracks:()=>[]};voice.analyser={};voice.listen();
+ assert.equal(voice.recognition,null,'no usa el reconocedor del sistema');assert.equal(recorders.length,1);
+ voice.rms=.02;advance(700);           // ambiente ruidoso: umbral ≈ 0.05
+ voice.rms=.03;advance(7500);          // ruido de fondo, no voz → se reinicia la escucha
+ assert.equal(uploads,0,'no transcribe ruido');assert.equal(recorders.length,2);assert.equal(voice.mode,'listening');
+ voice.rms=.02;advance(700);voice.rms=.12;advance(600);voice.rms=.02;advance(1200);
+ await new Promise(r=>setImmediate(r));await new Promise(r=>setImmediate(r));
+ assert.equal(uploads,1);assert.deepEqual(inputs,['dos cuartos de pollo']);
+ globalThis.fetch=realFetch;voice.disable();
+});
