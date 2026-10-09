@@ -1,7 +1,7 @@
 import {speakable,sentences} from './speech-text.js';
 const Recognition=window.SpeechRecognition||window.webkitSpeechRecognition;
 export class VoiceController{
-  constructor({onState,onLevel,onText,onInput,onError,onSentence,greeting}){Object.assign(this,{onState,onLevel,onText,onInput,onError,onSentence,greeting});this.rate=1.05;this.neural=false;this.neuralFailures=0;this.listenDelay=300;this.voice=null;window.speechSynthesis?.addEventListener?.('voiceschanged',()=>{this.voice=null;});this.enabled=false;this.generation=0;this.recognition=null;this.recorder=null;this.stream=null;this.speechDone=null;this.meter=0;this.level=0;this.activatePending=false;}
+  constructor({onState,onLevel,onText,onInput,onError,onSentence,greeting}){Object.assign(this,{onState,onLevel,onText,onInput,onError,onSentence,greeting});this.rate=1.05;this.neural=false;this.neuralFailures=0;this.listenDelay=300;this.listenWindow=40000;this.startDelay=120;this.listenUntil=0;this.startFailures=0;this.voice=null;window.speechSynthesis?.addEventListener?.('voiceschanged',()=>{this.voice=null;});this.enabled=false;this.generation=0;this.recognition=null;this.recorder=null;this.stream=null;this.speechDone=null;this.meter=0;this.level=0;this.activatePending=false;}
   state(value){this.mode=value;this.onState(value);}
   async enable(direct=false){
     if(this.activatePending)return;
@@ -39,8 +39,25 @@ export class VoiceController{
     if(!this.enabled)return this.enable(true);
     this.pause();const token=this.generation+1;await this.say(this.greeting);if(this.enabled&&token===this.generation)this.listen();
   }
-  listen(){if(!this.enabled)return;this.pause();this.state('listening');if(Recognition&&!this.nativeFailed)this.recognize('command');else this.record();}
-  // Frase por frase: pausas naturales entre oraciones y la pantalla sigue lo que Milo dice.
+  // Escucha en ventana: si el navegador cierra el micrófono sin captar una frase (silencio, ruido,
+  // corte de Chrome), se vuelve a abrir solo hasta listenWindow ms; no hay que tocar a Milo de nuevo.
+  listen(restart=false){
+    if(!this.enabled)return;this.pause();this.state('listening');
+    if(!restart){this.listenUntil=Date.now()+this.listenWindow;this.cue();}
+    const token=this.generation,start=()=>{if(token!==this.generation)return;if(Recognition&&!this.nativeFailed)this.recognize('command');else this.record();};
+    // Pequeña espera: Chrome rechaza a veces un start() pegado al anterior o al tono.
+    if(this.startDelay)this.restart=setTimeout(start,restart?this.startDelay+30:this.startDelay);else start();
+  }
+  relisten(message){
+    if(!this.enabled)return;
+    if(Date.now()<this.listenUntil){this.listen(true);return;}
+    this.wait();this.onError(message||'Toca a Milo cuando quieras seguir.');
+  }
+  // Tono corto y suave: avisa que el micrófono está abierto.
+  cue(){
+    const ctx=this.context;if(!ctx||!ctx.createOscillator)return;
+    try{const osc=ctx.createOscillator(),gain=ctx.createGain(),t=ctx.currentTime;osc.type='sine';osc.frequency.setValueAtTime(880,t);osc.frequency.linearRampToValueAtTime(1320,t+.08);gain.gain.setValueAtTime(0,t);gain.gain.linearRampToValueAtTime(.05,t+.02);gain.gain.linearRampToValueAtTime(0,t+.12);osc.connect(gain).connect(ctx.destination);osc.start(t);osc.stop(t+.13);}catch{}
+  }
   // Frase por frase: pausas naturales y la pantalla sigue lo que Milo dice.
   // onSentence recibe el texto visible y la duración (real o estimada) para sincronizar el menú.
   async say(text){
@@ -121,15 +138,19 @@ export class VoiceController{
       if(e.error==='no-speech')return;
       failed=true;
       if(e.error==='not-allowed'||e.error==='service-not-allowed'){this.disable();this.onError('El reconocimiento de voz no tiene permiso. Usa texto o revisa los permisos.');}
-      else{this.nativeFailed=true;this.pause();this.state('waiting');this.onError('El reconocimiento del navegador no respondió. Toca a Milo para grabar y transcribir.');}
+      // Red, micrófono ocupado u otro fallo del reconocedor: se pasa sola a grabar y transcribir.
+      else{this.nativeFailed=true;this.listen(true);}
     };
     rec.onend=()=>{
-      clearTimeout(this.timer);if(token!==this.generation||failed||!this.enabled)return;this.recognition=null;text=finalText;
-      if(text){this.state('thinking');this.onInput(text.replace(/^milo[\s,]+/i,''));}
-      else{this.wait();this.onError('No escuché un pedido. Toca a Milo para continuar o escribe.');}
+      clearTimeout(this.timer);if(token!==this.generation||failed||!this.enabled)return;this.recognition=null;
+      // Chrome a veces cierra sin marcar el resultado como final; una frase de 2+ palabras se acepta,
+      // un «sí» suelto provisional no (nunca debe confirmar por accidente).
+      const heard=finalText||(text.split(/\s+/).length>=2?text:'');
+      if(heard){this.state('thinking');this.onInput(heard.replace(/^milo[\s,]+/i,''));}
+      else this.relisten();
     };
-    try{rec.start();if(kind==='command')this.timer=setTimeout(()=>{if(token===this.generation)try{rec.stop();}catch{}},25000);}
-    catch{this.nativeFailed=true;this.state('waiting');this.onError('Toca a Milo para usar la grabación alternativa.');}
+    try{rec.start();this.startFailures=0;if(kind==='command')this.timer=setTimeout(()=>{if(token===this.generation)try{rec.stop();}catch{}},25000);}
+    catch{this.recognition=null;if(++this.startFailures>=2)this.nativeFailed=true;this.listen(true);}
   }
   record(){
     const token=this.generation;
@@ -141,11 +162,11 @@ export class VoiceController{
     recorder.onerror=()=>{if(token===this.generation){this.pause();this.state('waiting');this.onError('Falló la grabación. Vuelve a tocar a Milo o escribe.');}};
     recorder.onstop=async()=>{
       clearInterval(this.vad);clearTimeout(this.timer);if(token!==this.generation)return;this.recorder=null;
-      if(!hadVoice&&this.analyser){this.wait();this.onError('No detecté voz. Puedes intentar otra vez.');return;}
-      const blob=new Blob(chunks,{type:recorder.mimeType});if(blob.size<500){this.wait();return;}
+      if(!hadVoice&&this.analyser){this.relisten();return;}
+      const blob=new Blob(chunks,{type:recorder.mimeType});if(blob.size<500){this.relisten();return;}
       this.state('transcribing');const form=new FormData();form.append('file',blob,recorder.mimeType.includes('mp4')?'pedido.m4a':recorder.mimeType.includes('ogg')?'pedido.ogg':'pedido.webm');
       const controller=new AbortController();this.upload=controller;
-      try{const res=await fetch('/api/transcribe',{method:'POST',body:form,signal:AbortSignal.any([controller.signal,AbortSignal.timeout(25000)])});const data=await res.json();if(token!==this.generation)return;if(!res.ok)throw new Error(data.error||'No pude transcribir.');if(data.text?.trim()){this.onText(data.text);this.state('thinking');this.onInput(data.text);}else{this.wait();this.onError('No entendí el audio. Intenta de nuevo o escribe.');}}
+      try{const res=await fetch('/api/transcribe',{method:'POST',body:form,signal:AbortSignal.any([controller.signal,AbortSignal.timeout(25000)])});const data=await res.json();if(token!==this.generation)return;if(!res.ok)throw new Error(data.error||'No pude transcribir.');if(data.text?.trim()){this.onText(data.text);this.state('thinking');this.onInput(data.text);}else this.relisten('No entendí el audio. Toca a Milo para intentarlo otra vez.');}
       catch(e){if(token===this.generation){this.wait();this.onError(e.name==='TimeoutError'?'La transcripción tardó demasiado. Usa texto o intenta de nuevo.':e.message);}}
     };
     recorder.start();

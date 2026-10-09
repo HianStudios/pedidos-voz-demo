@@ -23,7 +23,7 @@ let toastTimer;
 function toast(text){$('toast').textContent=text;$('toast').classList.add('visible');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').classList.remove('visible'),4500);}
 const states={off:'Listo para ayudarte',waiting:'Toca a Milo para seguir',listening:'Te escucho',transcribing:'Entendiendo',thinking:'Pensando',speaking:'Milo habla',sending:'Enviando a cocina'};
 const voice=new VoiceController({greeting:'¡Hola! Soy Milo. ¿Qué se te antoja hoy?',
- onState:s=>{$('mascotStage').dataset.state=s;document.body.dataset.state=s;$('voiceState').textContent=states[s]||states.off;$('stopVoice').hidden=!voice.enabled;document.querySelectorAll('[data-talk]').forEach(b=>b.setAttribute('aria-label',s==='listening'?'Terminar frase':s==='speaking'?'Interrumpir a Milo':'Hablar con Milo'));},
+ onState:s=>{if(s==='listening')$('voiceHelp').textContent='';$('mascotStage').dataset.state=s;document.body.dataset.state=s;$('voiceState').textContent=states[s]||states.off;$('stopVoice').hidden=!voice.enabled;document.querySelectorAll('[data-talk]').forEach(b=>b.setAttribute('aria-label',s==='listening'?'Terminar frase':s==='speaking'?'Interrumpir a Milo':'Hablar con Milo'));},
  onLevel:v=>document.body.style.setProperty('--level',v.toFixed(3)),
  onText:t=>{$('transcript').textContent=`«${t}»`;},
  onInput:t=>handleInput(t),onError:t=>{$('voiceHelp').textContent=t;},
