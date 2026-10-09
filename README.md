@@ -49,7 +49,7 @@ Sin todas las credenciales de caja, la interfaz indica **Demo interactiva**. El 
 
 Configurar en Vercel (o en .env local):
 
-- `UPSTASH_REDIS_REST_URL` y `UPSTASH_REDIS_REST_TOKEN`: base Redis REST con permisos de lectura, escritura y EVAL.
+- `UPSTASH_REDIS_REST_URL` y `UPSTASH_REDIS_REST_TOKEN` (o `KV_REST_API_URL` y `KV_REST_API_TOKEN`, que crea la integración Vercel → Storage → Upstash): base Redis REST con permisos de lectura, escritura y EVAL.
 - `STAFF_TOKEN`: secreto de personal de al menos 24 caracteres.
 - `SESSION_SECRET`: otro secreto de al menos 32 caracteres para firmar sesiones de clientes.
 

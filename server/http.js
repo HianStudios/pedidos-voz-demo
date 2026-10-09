@@ -17,12 +17,15 @@ export async function rawBody(req,limit){
   if(Buffer.isBuffer(req.body)){if(req.body.length>limit)throw fail('Solicitud demasiado grande.',413);return req.body;}
   const chunks=[];let size=0;for await(const chunk of req){size+=chunk.length;if(size>limit)throw fail('Solicitud demasiado grande.',413);chunks.push(Buffer.isBuffer(chunk)?chunk:Buffer.from(chunk));}return Buffer.concat(chunks);
 }
+// La integración de Upstash en Vercel crea KV_REST_API_*; una cuenta de Upstash directa, UPSTASH_REDIS_REST_*.
+const redisUrl=()=>process.env.UPSTASH_REDIS_REST_URL||process.env.KV_REST_API_URL;
+const redisToken=()=>process.env.UPSTASH_REDIS_REST_TOKEN||process.env.KV_REST_API_TOKEN;
 export async function redis(command){
-  const response=await fetch(process.env.UPSTASH_REDIS_REST_URL,{method:'POST',headers:{Authorization:`Bearer ${process.env.UPSTASH_REDIS_REST_TOKEN}`,'Content-Type':'application/json'},body:JSON.stringify(command),signal:AbortSignal.timeout(8000)});
+  const response=await fetch(redisUrl(),{method:'POST',headers:{Authorization:`Bearer ${redisToken()}`,'Content-Type':'application/json'},body:JSON.stringify(command),signal:AbortSignal.timeout(8000)});
   if(!response.ok)throw fail('No se pudo conectar con caja. Intenta de nuevo.',503);
   const data=await response.json();if(data.error)throw fail('El almacenamiento no está disponible.',503);return data.result;
 }
-export const hasRedis=()=>Boolean(process.env.UPSTASH_REDIS_REST_URL&&process.env.UPSTASH_REDIS_REST_TOKEN);
+export const hasRedis=()=>Boolean(redisUrl()&&redisToken());
 export const liveOrders=()=>hasRedis()&&(process.env.STAFF_TOKEN?.length>=24)&&(process.env.SESSION_SECRET?.length>=32);
 export async function rateLimit(req,bucket,max=30){
   const ip=req.headers['x-real-ip']||req.socket?.remoteAddress||'unknown';
