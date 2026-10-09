@@ -19,7 +19,7 @@ Abrir http://localhost:3000. **No abrir index.html directamente:** las rutas `/a
 - **Pantalla de mesa = solo Milo.** Sin titulares, sin marca, sin enlace a caja. Abajo, un dock discreto: menú, teclado, micrófono y pedido.
 - **Mesa por dispositivo.** Abrir una vez `/?mesa=7` en la tablet de la mesa 7; queda guardado en ese navegador (`/?mesa=` lo quita). Con mesa, Milo no pide nombre y el pedido llega a caja como «Mesa 7». Sin mesa se mantiene el flujo de retiro con nombre. La mesa no está verificada: quien tenga el dispositivo puede cambiar la URL.
 - **Menú animado y minimalista** en hoja de pantalla completa: cuatro «puertas» (Platos, Combos, Extras, Bebidas), pestañas con subrayado animado y una repisa horizontal de tarjetas que entran escalonadas y flotan. **Mientras Milo nombra un producto, su tarjeta se ilumina y se centra.** «Agregar» suma al instante sin cerrar el menú.
-- Tocar a Milo inicia la sesión de voz; tras cada respuesta vuelve a escuchar. Tocarlo mientras habla lo interrumpe.
+- Tocar a Milo inicia la sesión de voz. Tras cada respuesta suena un tono corto y vuelve a escuchar. Si el navegador cierra el micrófono sin captar una frase, lo reabre solo durante 40 s; si el reconocimiento de Chrome falla, pasa solo a grabar y transcribir. Tocarlo mientras habla lo interrumpe.
 - Tras 2 minutos sin uso, la pantalla vuelve a Milo y apaga el micrófono (el pedido en curso se conserva).
 - La confirmación verbal solo envía si corresponde a un resumen vigente. Cualquier edición invalida la revisión anterior.
 
