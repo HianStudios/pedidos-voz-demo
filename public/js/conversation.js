@@ -11,7 +11,7 @@ export function navigation(text){
   if(rest!==n||/^(?:algo (?:de|para) )/.test(n))for(const [category,re] of generic)if(re.test(rest))return category;
   if(/\b(agrega|dame|deme|ponme)\b/.test(n))return null;
   const browse=/\b(ver|mirar|muestrame|ensename|mostrar|que tienes|que hay|que combos|que bebidas|que platos|que extras|opciones)\b/.test(n);
-  const categories=[['Combos',/\b(combos?|paquetes?)\b/],['Platos',/\b(solos?|platos?|sueltos?)\b/],['Bebidas',/\b(bebidas?|gaseosas?|tomar|refrescos?)\b/],['Extras',/\b(extras?|acompanamientos?|adicionales?)\b/]];
+  const categories=[['Combos',/\b(combos?|paquetes?)\b/],['Platos',/\b(solos?|platos?|sueltos?)\b/],['Bebidas',/\b(bebidas?|gaseosas?|tomar|beber|refrescos?)\b/],['Extras',/\b(extras?|acompanamientos?|adicionales?)\b/]];
   for(const [category,re] of categories){
     if(re.test(n)&&(browse||/^(?:los |las |el |la |quiero |prefiero )?(?:solo|solos|platos|platos solos|combo|combos|bebidas|extras)$/.test(n)||/^(y )?(para tomar|las bebidas|los extras)$/.test(n)))return category;
   }

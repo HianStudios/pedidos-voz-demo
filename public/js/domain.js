@@ -138,6 +138,13 @@ export function interpretLocal(text,cart,menu,lastId=null,context={}){
   const n=soundsLike(text);
   const category=navigation(text);
   if(category)return answer('menu','',{category});
+  // Autocorrección: «un cuarto, no, mejor medio» → solo cuenta lo último que pidió.
+  const fix=n.match(/^(.+?)\s+(?:no|perdon|digo|mejor dicho)\s+(?:no\s+)?(?:mejor\s+|mas bien\s+)?(?:que sea\s+|que sean\s+)?(.+)$/);
+  if(fix&&!context.nested&&!/\b(no quiero|sin)\b/.test(n)){
+    const before=interpretLocal(`quiero ${fix[1]}`,cart,menu,lastId,{...context,nested:true});
+    const after=interpretLocal(`quiero ${fix[2]}`,cart,menu,lastId,{...context,nested:true});
+    if(before?.intent==='edit'&&after?.intent==='edit')return after;
+  }
   if(context.category==='Platos'&&/^(me apoyo|medio apoyo|medio de apoyo)$/.test(n))return answer('clarify','¿Te refieres a un medio pollo? Puedes decir «medio pollo».');
   if(/\b(alergia|alergico|celiaco|gluten)\b/.test(n)) return answer('clarify','Con alergias prefiero no adivinar. Pídele al personal que te confirme los ingredientes, por favor.');
   if(/^(no|no gracias|no confirmes(?: todavia)?|no lo envies|todavia no|espera|espera un momento)$/.test(n)) return answer('keep','Sin problema, no envío nada todavía. Tómate tu tiempo.');
@@ -168,7 +175,9 @@ export function interpretLocal(text,cart,menu,lastId=null,context={}){
   if(note&&/\b(?:uno|una|el otro|la otra|solo uno|solo una|uno de|una de)\b[^.]*\bsin\b/.test(n)&&/\b(dos|tres|cuatro|cinco|\d+)\b/.test(n))
     return answer('clarify',`Por ahora anoto la misma preparación para todos los iguales. ¿Los preparo todos ${note}, o todos normales y se lo avisas al personal?`);
   if(note&&(n.match(/\bsin\b/g)||[]).length===1&&!/\b(no|cuanto|precio|cuesta)\b/.test(n)){
-    const ids=[...new Set(hits.map(h=>h.id))];
+    const at=n.indexOf(note);
+    // «sin ensalada»: la palabra del producto dentro de la opción no cuenta como otro producto.
+    const ids=[...new Set(hits.filter(h=>h.index<at||h.index>=at+note.length).map(h=>h.id))];
     if(ids.length>1)return null;
     const id=ids[0]||(cart.length===1?cart[0].id:lastId);
     if(!id||(!ids.length&&!cart.some(l=>l.id===id)))return answer('clarify','¿A qué producto le hago ese cambio?');
@@ -188,7 +197,7 @@ export function interpretLocal(text,cart,menu,lastId=null,context={}){
   const correction=n.match(/^(?:mejor|que sean|dejalo en) (\d+|uno|una|dos|tres|cuatro|cinco)$/);
   if(correction){const id=lastId||(cart.length===1?cart[0].id:null);if(!id)return answer('clarify','¿De qué producto cambio la cantidad?');const operations=[{type:'set',id,qty:count(correction[1])}];return answer('edit',describeOps(operations,menu),{operations});}
   // Frases complejas/negadas se dejan a la IA; nunca adivinar una sustitución.
-  if(/\b(no|cambia|cambiar|sustituye|en vez|pero|sin)\b/.test(n)) return null;
+  if(/\b(no|cambia|cambiar|sustituye|en vez|pero|sin)\b/.test(remaining)) return null;
   if(!hits.length) return null;
   const verbs='quiero|quisiera|dame|deme|da|das|traeme|trae|regalame|mandame|agrega|agregame|anade|pon|ponme|quita|elimina|borra|mejor|necesito|me|nos';
   if(!new RegExp(`\\b(${verbs})\\b`).test(n)&&!/^\d|^(un|una|unas|unos|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\b/.test(n)) return null;

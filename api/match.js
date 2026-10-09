@@ -79,6 +79,7 @@ PREGUNTA PENDIENTE: ${JSON.stringify(pending)}`;
       const statement=result.reply.replace(/[,.]?\s*¿[^?]*\?\s*$/,'').trim();
       result.reply=`${statement.replace(/[.!]?$/,'.')} ${followUp(cart,result.operations,menu,data.drinkOffered===true)}`.trim();
     }
+    result.reply=result.reply.charAt(0).toUpperCase()+result.reply.slice(1);
     return {...result,source:'ai'};
   };
   try{return await ask();}
@@ -88,10 +89,11 @@ PREGUNTA PENDIENTE: ${JSON.stringify(pending)}`;
     catch(second){
       // Ambos cupos agotados por un momento: se espera lo que pide Groq (máx. 4 s) y un último intento.
       let e=second;
-      if(second.wait){await new Promise(r=>setTimeout(r,second.wait));try{return await ask();}catch(third){e=third;}}
+      const errors=[first.message,second.message];
+      if(second.wait){await new Promise(r=>setTimeout(r,second.wait));try{return await ask();}catch(third){e=third;errors.push(third.message);}}
       // Visible en los logs de Vercel para afinar el prompt con casos reales.
       console.warn('match: respuesta descartada:',first.message,'/',e.message,JSON.stringify(transcript).slice(0,200));
-      return {intent:'menu',category:'all',operations:[],suggest_ids:[],reply:fallbacks[turn++%fallbacks.length],source:'fallback',...(debug?{error:`${first.message} / ${e.message}`}:{})};
+      return {intent:'menu',category:'all',operations:[],suggest_ids:[],reply:fallbacks[turn++%fallbacks.length],source:'fallback',...(debug?{error:errors.map(m=>m.slice(0,160)).join(' | ')}:{})};
     }
   }
 }

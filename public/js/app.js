@@ -32,9 +32,10 @@ const voice=new VoiceController({greeting:'¡Hola! Soy Milo. ¿Qué se te antoja
 function fresh(el,text){el.textContent=text;el.classList.remove('fresh');void el.offsetWidth;el.classList.add('fresh');}
 async function reply(text,next='listen'){
  fresh($('reply'),text);document.querySelectorAll('.dialog-reply').forEach(el=>fresh(el,text));
- if(/para tomar|bebida/i.test(text))drinkOffered=true;
- if(/para cu[aá]ntos|cu[aá]ntas personas|cu[aá]ntos son/i.test(text))asked='people';
- else if(/(para tomar|bebida)[^?]*\?\s*$/i.test(text))asked='drink';
+ // Solo cuenta la última pregunta de la frase («Aquí tienes las bebidas… ¿Cuál te provoca?» no es ofrecer bebida).
+ const question=text.match(/¿([^¿?]*)\?\s*$/)?.[1]||'';
+ if(/para cu[aá]ntos|cu[aá]ntas personas|cu[aá]ntos son/i.test(question))asked='people';
+ else if(/para tomar|bebida/i.test(question)){asked='drink';drinkOffered=true;}
  history.push({role:'assistant',content:text});history=history.slice(-10);
  if(voice.enabled&&sessionActive)await voice.respond(text,next);else{voice.state(voice.enabled?'waiting':'off');spotlight(text);}
 }

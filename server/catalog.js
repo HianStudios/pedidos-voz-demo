@@ -28,5 +28,5 @@ export const menu = [
   {id:'cocacola',one:'una Coca-Cola',many:'Coca-Colas',name:'Coca-Cola',category:'Bebidas',price:125,desc:'Botella de 400 ml.',emoji:'🥤',aliases:['coca cola','coca','cocacola','una coca','dame una coca'],options:[]},
   {id:'sprite',one:'una Sprite',many:'Sprites',name:'Sprite',category:'Bebidas',price:125,desc:'Botella de 400 ml.',emoji:'🥤',aliases:['sprite','esprite','una sprite'],options:[]},
   {id:'pepsi',one:'una Pepsi',many:'Pepsis',name:'Pepsi',category:'Bebidas',price:125,desc:'Botella de 400 ml.',emoji:'🥤',aliases:['pepsi','una pepsi'],options:[]},
-  {id:'agua',one:'un agua mineral',many:'aguas minerales',name:'Agua mineral',category:'Bebidas',price:100,desc:'Botella de 500 ml, sin gas.',emoji:'💧',aliases:['agua mineral','aguas','agua','una agua','un agua'],options:[]},
+  {id:'agua',one:'un agua mineral',many:'aguas minerales',name:'Agua mineral',category:'Bebidas',price:100,desc:'Botella de 500 ml, sin gas.',emoji:'💧',aliases:['agua mineral','agua sin gas','aguas','agua','una agua','un agua'],options:[]},
 ].map(item=>({...item,available:true}));
