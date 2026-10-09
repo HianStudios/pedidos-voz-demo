@@ -1,7 +1,7 @@
 import {speakable,sentences} from './speech-text.js';
 const Recognition=window.SpeechRecognition||window.webkitSpeechRecognition;
 export class VoiceController{
-  constructor({onState,onLevel,onText,onInput,onError,onSentence,greeting}){Object.assign(this,{onState,onLevel,onText,onInput,onError,onSentence,greeting});this.rate=1.05;this.neural=false;this.enabled=false;this.generation=0;this.recognition=null;this.recorder=null;this.stream=null;this.speechDone=null;this.meter=0;this.level=0;this.activatePending=false;}
+  constructor({onState,onLevel,onText,onInput,onError,onSentence,greeting}){Object.assign(this,{onState,onLevel,onText,onInput,onError,onSentence,greeting});this.rate=1.05;this.neural=false;this.neuralFailures=0;this.listenDelay=300;this.voice=null;window.speechSynthesis?.addEventListener?.('voiceschanged',()=>{this.voice=null;});this.enabled=false;this.generation=0;this.recognition=null;this.recorder=null;this.stream=null;this.speechDone=null;this.meter=0;this.level=0;this.activatePending=false;}
   state(value){this.mode=value;this.onState(value);}
   async enable(direct=false){
     if(this.activatePending)return;
@@ -31,7 +31,7 @@ export class VoiceController{
     const recognition=this.recognition;this.recognition=null;if(recognition){recognition.onend=null;try{recognition.abort();}catch{}}
     const recorder=this.recorder;this.recorder=null;if(recorder?.state==='recording'){recorder.onstop=null;recorder.stop();}
     this.upload?.abort();this.upload=null;
-    this.speechDone?.();this.speechDone=null;window.speechSynthesis?.cancel();try{this.playing?.stop();}catch{}this.playing=null;this.onLevel(0);
+    clearTimeout(this.startTimer);this.speechDone?.();this.speechDone=null;window.speechSynthesis?.cancel();try{this.playing?.stop();}catch{}this.playing=null;this.onLevel(0);
   }
   disable(){this.pause();this.enabled=false;this.stream?.getTracks().forEach(t=>t.stop());this.stream=null;cancelAnimationFrame(this.meter);this.source?.disconnect();this.context?.close().catch(()=>{});this.context=null;this.state('off');}
   wait(){if(!this.enabled)return;this.pause();this.state('waiting');}
@@ -41,57 +41,74 @@ export class VoiceController{
   }
   listen(){if(!this.enabled)return;this.pause();this.state('listening');if(Recognition&&!this.nativeFailed)this.recognize('command');else this.record();}
   // Frase por frase: pausas naturales entre oraciones y la pantalla sigue lo que Milo dice.
+  // Frase por frase: pausas naturales y la pantalla sigue lo que Milo dice.
+  // onSentence recibe el texto visible y la duración (real o estimada) para sincronizar el menú.
   async say(text){
     this.pause();const token=this.generation;
     if(!this.enabled){this.state('off');return;}
-    const parts=sentences(speakable(text));
+    const parts=sentences(text).map(shown=>({shown,spoken:speakable(shown)})).filter(p=>p.spoken);
     if(!parts.length||(!window.speechSynthesis&&!this.neural)){this.state('waiting');return;}
     this.state('speaking');
-    let next=this.neural?this.fetchAudio(parts[0]):null;
+    let next=this.neural?this.fetchAudio(parts[0].spoken):null;
     for(let i=0;i<parts.length;i++){
       const audio=next?await next:null;
       if(token!==this.generation)return;
-      next=this.neural&&i+1<parts.length?this.fetchAudio(parts[i+1]):null;
-      this.onSentence?.(parts[i],i);
-      if(audio)await this.play(audio,token);else await this.utter(parts[i],token);
+      next=this.neural&&i+1<parts.length?this.fetchAudio(parts[i+1].spoken):null;
+      this.onSentence?.(parts[i].shown,audio?audio.duration*1000:parts[i].spoken.length*68/this.rate);
+      if(audio)await this.play(audio,token);else await this.utter(parts[i].spoken,token);
       if(token!==this.generation)return;
     }
     this.state('waiting');
   }
-  // Voz neural del servidor (opcional). Si falla una vez, se usa la del navegador el resto de la sesión.
+  // Voz neural del servidor (opcional). Una falla aislada usa la voz del navegador para esa frase;
+  // dos seguidas la desactivan para no alternar voces durante la sesión.
   async fetchAudio(text){
     if(!this.context)return null;
     try{
       const res=await fetch('/api/speak',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text}),signal:AbortSignal.timeout(8000)});
       if(!res.ok)throw new Error();
-      return await this.context.decodeAudioData(await res.arrayBuffer());
-    }catch{this.neural=false;return null;}
+      const audio=await this.context.decodeAudioData(await res.arrayBuffer());this.neuralFailures=0;return audio;
+    }catch{if(++this.neuralFailures>=2)this.neural=false;return null;}
   }
   play(buffer,token){
     return new Promise(resolve=>{
       if(token!==this.generation)return resolve();
+      if(this.context.state==='suspended')this.context.resume().catch(()=>{});
       const source=this.context.createBufferSource();source.buffer=buffer;source.connect(this.context.destination);this.playing=source;
       const done=()=>{if(this.speechDone===done)this.speechDone=null;if(this.playing===source)this.playing=null;resolve();};
       this.speechDone=done;source.onended=done;source.start();
     });
   }
+  // Se elige una sola voz y se conserva: cambiar de voz entre frases suena a fallo.
   pickVoice(){
-    const voices=window.speechSynthesis.getVoices().filter(v=>/^es/i.test(v.lang));
-    const score=v=>(/natural|neural/i.test(v.name)?30:0)+(/online|premium|enhanced/i.test(v.name)?15:0)+(/google/i.test(v.name)?10:0)+(/^es-(EC|MX|US|CO|419|PE)/i.test(v.lang)?5:0);
-    return voices.sort((a,b)=>score(b)-score(a))[0]||null;
+    if(this.voice)return this.voice;
+    const voices=window.speechSynthesis.getVoices?.().filter(v=>/^es/i.test(v.lang))||[];
+    const score=v=>(/natural|neural/i.test(v.name)?30:0)+(/online|premium|enhanced/i.test(v.name)?15:0)+(/google/i.test(v.name)?10:0)+(/^es-EC/i.test(v.lang)?12:/^es-(MX|US|CO|419|PE)/i.test(v.lang)?5:0);
+    this.voice=voices.sort((a,b)=>score(b)-score(a))[0]||null;
+    return this.voice;
   }
-  utter(text,token){
-    if(!window.speechSynthesis)return Promise.resolve();
+  async utter(text,token){
+    const synth=window.speechSynthesis;if(!synth)return;
+    // Chrome descarta a veces una locución pedida justo después de cancel() o queda en pausa.
+    if(synth.speaking||synth.pending){synth.cancel();await new Promise(r=>setTimeout(r,60));}
+    if(token!==this.generation)return;
+    synth.resume?.();
     return new Promise(resolve=>{
-      if(token!==this.generation)return resolve();
-      const done=()=>{clearTimeout(this.speechTimer);if(this.speechDone===done)this.speechDone=null;resolve();};this.speechDone=done;
-      const utterance=new SpeechSynthesisUtterance(text);utterance.lang='es-EC';utterance.rate=this.rate;utterance.pitch=1;
+      let started=false;
+      const done=()=>{clearTimeout(this.speechTimer);clearTimeout(this.startTimer);if(this.speechDone===done)this.speechDone=null;resolve();};this.speechDone=done;
+      const utterance=new SpeechSynthesisUtterance(text);utterance.lang=this.pickVoice()?.lang||'es-EC';utterance.rate=this.rate;utterance.pitch=1;
       utterance.voice=this.pickVoice();
-      utterance.onend=done;utterance.onerror=done;this.speechTimer=setTimeout(()=>{speechSynthesis.cancel();done();},Math.max(8000,text.length*120));speechSynthesis.speak(utterance);
+      utterance.onstart=()=>{started=true;};utterance.onend=done;utterance.onerror=done;
+      // Si el motor no arranca, no dejar a Milo «hablando» en silencio.
+      this.startTimer=setTimeout(()=>{if(!started){synth.cancel();done();}},3500);
+      this.speechTimer=setTimeout(()=>{synth.cancel();done();},Math.max(8000,text.length*120));synth.speak(utterance);
     });
   }
   async respond(text,next='listen'){
     const start=this.generation+1;await this.say(text);
+    if(!this.enabled||this.generation!==start)return;
+    // Pausa breve: el micrófono no capta el final de la propia voz de Milo.
+    if(next==='listen'&&this.listenDelay)await new Promise(r=>setTimeout(r,this.listenDelay));
     if(!this.enabled||this.generation!==start)return;
     if(next==='listen')this.listen();else this.wait();
   }

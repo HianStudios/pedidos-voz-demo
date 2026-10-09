@@ -2,7 +2,7 @@ import {money,total,validateCart,applyOperations,isConfirmation,normalize,descri
 import {navigation,plausibleName,cartSignature} from './conversation.js';
 import {foodArt} from './art.js';
 import {VoiceController} from './voice.js';
-import {listWords,numberWords} from './speech-text.js';
+import {listWords} from './speech-text.js';
 import {storageKey,ordersKey,readStore,saveOrders} from './order-store.js';
 const $=id=>document.getElementById(id);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -27,7 +27,7 @@ const voice=new VoiceController({greeting:'¡Hola! Soy Milo. ¿Qué se te antoja
  onLevel:v=>document.body.style.setProperty('--level',v.toFixed(3)),
  onText:t=>{$('transcript').textContent=`«${t}»`;},
  onInput:t=>handleInput(t),onError:t=>{$('voiceHelp').textContent=t;},
- onSentence:s=>spotlight(s)});
+ onSentence:(s,ms)=>spotlight(s,ms)});
 function fresh(el,text){el.textContent=text;el.classList.remove('fresh');void el.offsetWidth;el.classList.add('fresh');}
 async function reply(text,next='listen'){
  fresh($('reply'),text);document.querySelectorAll('.dialog-reply').forEach(el=>fresh(el,text));
@@ -67,24 +67,23 @@ function showProducts(items,title,cat=null){
 }
 function showCategory(cat){showProducts(menu.filter(p=>p.category===cat&&p.available),cat,cat);}
 const spokenName=p=>p.category==='Bebidas'?p.name:p.name.charAt(0).toLowerCase()+p.name.slice(1);
-// Presentación oral: tres opciones y cuántas más hay (no se lee el catálogo entero).
+// Presentación oral de toda la categoría, en el mismo orden que las tarjetas.
 function categoryPitch(cat){
- const items=menu.filter(p=>p.category===cat&&p.available);const names=items.slice(0,3).map(spokenName);const more=items.length-3;
- if(more>0)names.push(more===1?'una opción más':`${numberWords(more)} opciones más`);
- return `Aquí tienes ${categories[cat]}. Tenemos ${listWords(names)}. ¿Cuál te provoca?`;
+ const items=menu.filter(p=>p.category===cat&&p.available);
+ return `Aquí tienes ${categories[cat]}. Tenemos ${listWords(items.map(p=>p.one||spokenName(p)))}. ¿Cuál te provoca?`;
 }
 function clearSpot(){spotTimers.forEach(clearTimeout);spotTimers=[];document.querySelectorAll('.dish.is-spot').forEach(c=>c.classList.remove('is-spot'));}
-// Mientras Milo nombra un producto, su tarjeta se ilumina y se centra.
-function spotlight(sentence){
+// Mientras Milo nombra un producto, su tarjeta se ilumina y se centra, en el momento en que lo dice:
+// el retraso se reparte según la posición del nombre en la frase y la duración de la locución.
+function spotlight(sentence,durationMs){
  if(!$('optionsModal').open)return;
  const n=` ${normalize(sentence)} `;const cards=[...$('modalBody').querySelectorAll('.dish')];
  const hits=cards.map(card=>{const p=menu.find(x=>x.id===card.dataset.product);const at=Math.min(...[p.name,...p.aliases].map(a=>{const i=n.indexOf(` ${normalize(a)} `);return i<0?Infinity:i;}));return {card,at};}).filter(h=>h.at<Infinity).sort((a,b)=>a.at-b.at);
  if(!hits.length)return;
  spotTimers.forEach(clearTimeout);spotTimers=[];
- const smooth=matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth';
- hits.forEach(({card},k)=>spotTimers.push(setTimeout(()=>{cards.forEach(c=>c.classList.toggle('is-spot',c===card));card.scrollIntoView({behavior:smooth,block:'nearest',inline:'center'});},k*850)));
+ const total=durationMs||n.length*68,smooth=matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth';
+ hits.forEach(({card,at})=>spotTimers.push(setTimeout(()=>{cards.forEach(c=>c.classList.toggle('is-spot',c===card));card.scrollIntoView({behavior:smooth,block:'nearest',inline:'center'});},Math.max(0,at/n.length*total-150))));
 }
-
 // ---------- Resumen ----------
 function renderSummary(){
  if(table)customerName=`Mesa ${table}`;
@@ -118,7 +117,7 @@ async function handleInput(raw){
  if(nav){awaitingName=false;reviewed=null;if(nav==='all'){showCategories();reply('Este es el menú: platos, combos, extras y bebidas. ¿Por dónde empezamos?');}else{showCategory(nav);reply(categoryPitch(nav));}return;}
  const explicit=raw.match(/^(?:me llamo|mi nombre es|a nombre de)\s+(.{2,60})$/i);
  if(!table&&((explicit&&plausibleName(explicit[1]))||(awaitingName&&plausibleName(raw)))){customerName=(explicit?explicit[1]:raw).trim();awaitingName=false;saveDraft();review();return;}
- if(/^(no quiero bebida|sin bebida|no deseo bebida|no gracias)$/.test(n)){reviewed=null;awaitingName=false;drinkOffered=true;reply('Sin bebida, entonces. ¿Algo más?');return;}
+ if(/^(no quiero bebida|sin bebida|no deseo bebida|no gracias)$/.test(n)){reviewed=null;awaitingName=false;drinkOffered=true;reply('Sin bebida, entonces. ¿Algo más, o cerramos el pedido?');return;}
  reviewed=null;awaitingName=false;busy=true;$('sendText').disabled=true;request=new AbortController();
  try{
   const res=await fetch('/api/match',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({transcript:raw,cart,lastId,category,table,drinkOffered,history:history.slice(0,-1).slice(-6)}),signal:AbortSignal.any([request.signal,AbortSignal.timeout(22000)])});
@@ -126,7 +125,7 @@ async function handleInput(raw){
   if(result.intent==='edit'){
    setCart(applyOperations(cart,result.operations,menu));lastId=result.operations.at(-1)?.id;
    if($('summaryModal').open)renderSummary();
-   reply(result.reply||'Listo. ¿Algo más?');
+   reply(result.reply||'Listo. ¿Algo más, o cerramos el pedido?');
   }else if(result.intent==='menu'){
    if(result.category&&result.category!=='all'){showCategory(result.category);reply(result.reply||categoryPitch(result.category));}else{showCategories();reply(result.reply||'Este es el menú. ¿Por dónde empezamos?');}
   }else if(result.intent==='recommend'){

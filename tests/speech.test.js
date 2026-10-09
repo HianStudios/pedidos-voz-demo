@@ -25,3 +25,7 @@ test('ofrece bebida una sola vez y nunca si ya hay bebida o combo',()=>{
   assert.doesNotMatch(interpretLocal('quiero un combo familiar',[],menu).reply,/para tomar/);
   assert.doesNotMatch(interpretLocal('dos cuartos de pollo y una coca cola',[],menu).reply,/para tomar/);
 });
+test('marcas en inglés se pronuncian como se dicen',()=>{
+  assert.equal(speakable('Una Sprite y unas alitas BBQ.'),'Una Spráit y unas alitas bibikiú.');
+  assert.equal(speakable('Spritely'),'Spritely');
+});
