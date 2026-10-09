@@ -36,7 +36,14 @@ Abrir http://localhost:3000. **No abrir index.html directamente:** las rutas `/a
 
 ## IA
 
-Configurar `GROQ_API_KEY` en el servidor. **La personalidad sale de la PARTE I de `prompts/Milo_Prompt_Maestro_Mesero_Voz.md`** (única fuente; `api/match.js` la lee al arrancar y le añade el contrato JSON y el contexto del turno). Con modelos `gpt-oss` se usa `reasoning_effort: low` para responder más rápido. `GROQ_MODEL` permite cambiar el modelo conversacional, por defecto `openai/gpt-oss-120b`. La transcripción usa `whisper-large-v3`.
+Configurar `GROQ_API_KEY` en el servidor. Las instrucciones de Milo están en `prompts/milo-sistema.md`, una versión compacta de la PARTE I de `prompts/Milo_Prompt_Maestro_Mesero_Voz.md` con una guía de razonamiento (errores de transcripción por sonido, pregunta pendiente, categorías, cantidades y una pregunta concreta en vez de «no te entendí»).
+
+**Límite del plan gratuito de Groq:** 8.000 tokens por minuto por modelo. Cada turno con IA usa ~2.600, es decir, unas 3 respuestas por minuto en total para todas las mesas. Para mitigarlo:
+- Las frases comunes y los errores de pronunciación frecuentes se resuelven sin IA (`soundsLike` en `public/js/domain.js`).
+- Si el modelo principal agota su cupo, se usa `GROQ_FALLBACK_MODEL` (por defecto `openai/gpt-oss-20b`).
+- Para un restaurante con varias mesas, se recomienda el plan Dev de Groq, de pago por uso.
+
+`/api/eval` (solo en vistas previas de Vercel o con `EVAL_ENABLED=1`) corre 45 frases difíciles de `server/eval-cases.js` contra el modelo real: `?from=0&n=3`.
 
 Los comandos comunes son deterministas y no consumen IA. Para frases libres, `/api/match` usa el catálogo del servidor, el carrito y los últimos turnos. Se valida cada operación devuelta; el modelo nunca tiene una herramienta que envíe pedidos. Si no hay clave o falla el proveedor, se mantienen texto, botones y comandos básicos, con mensajes explicativos.
 
