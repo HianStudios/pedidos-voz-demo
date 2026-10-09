@@ -42,3 +42,8 @@ test('voz neural sin credenciales no llama al proveedor',async()=>{
   const {default:speak}=await import('../api/speak.js');const originalFetch=globalThis.fetch;let called=false;globalThis.fetch=async()=>{called=true;};
   try{const res=response();await speak(req({text:'Hola'}),res);assert.equal(res.code,503);assert.equal(called,false);}finally{globalThis.fetch=originalFetch;}
 });
+test('acepta las variables KV_REST_API_* de la integración de Upstash en Vercel',async()=>{
+  const {hasRedis}=await import('../server/http.js');const keys=['UPSTASH_REDIS_REST_URL','UPSTASH_REDIS_REST_TOKEN','KV_REST_API_URL','KV_REST_API_TOKEN'];const old=Object.fromEntries(keys.map(k=>[k,process.env[k]]));
+  try{for(const k of keys)delete process.env[k];assert.equal(hasRedis(),false);Object.assign(process.env,{KV_REST_API_URL:'https://kv.test',KV_REST_API_TOKEN:'t'});assert.equal(hasRedis(),true);}
+  finally{for(const k of keys)if(old[k]===undefined)delete process.env[k];else process.env[k]=old[k];}
+});
