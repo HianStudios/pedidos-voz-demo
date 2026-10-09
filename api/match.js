@@ -1,5 +1,5 @@
 import {menu} from '../server/catalog.js';
-import {validateCart,validateResult,repairResult,interpretLocal,isConfirmation} from '../public/js/domain.js';
+import {validateCart,validateResult,repairResult,interpretLocal,isConfirmation,followUp,parsePeople,suggestForPeople,applyOperations,describeOps} from '../public/js/domain.js';
 import {readFileSync} from 'node:fs';
 import {endpoint,guard,json,body,rateLimit,fail} from '../server/http.js';
 // Instrucciones compactas (resumen de la PARTE I del prompt maestro): deben caber en el límite de
@@ -22,10 +22,13 @@ export async function interpret(data,{effort=process.env.GROQ_REASONING||'low',f
   const lastId=cart.some(l=>l.id===data.lastId)?data.lastId:null;
   const local=interpretLocal(transcript,cart,menu,lastId,{category:categories.includes(data.category)?data.category:null,drinkOffered:data.drinkOffered===true});
   if(local){try{return {...validateResult(local,cart,menu),source:'local'};}catch(e){return {intent:'clarify',reply:e.message,operations:[],source:'local'};}}
-  if(!process.env.GROQ_API_KEY)return {intent:'clarify',reply:'Puedes decir, por ejemplo: «dos cuartos de pollo», o elegir en el menú. La conversación libre requiere configurar la IA.',operations:[],source:'local'};
   const history=Array.isArray(data.history)?data.history.slice(-6).filter(m=>['user','assistant'].includes(m.role)&&typeof m.content==='string').map(m=>({role:m.role,content:m.content.slice(0,600)})):[];
-  const table=Number.isInteger(data.table)&&data.table>0&&data.table<1000?data.table:null;
   const pending=history.filter(m=>m.role==='assistant').at(-1)?.content||null;
+  // Respuesta a «¿Para cuántos es?»: la propuesta se arma sin IA y con cantidades exactas.
+  const people=parsePeople(transcript,/para cu[aá]ntos|cu[aá]ntas personas|cu[aá]ntos son/i.test(pending||''));
+  if(people){const plan=suggestForPeople(people,menu);if(plan)return {...validateResult({intent:'recommend',reply:plan.reply,operations:[],suggest_ids:plan.operations.map(o=>o.id),proposal:plan.operations},cart,menu),source:'local'};}
+  if(!process.env.GROQ_API_KEY)return {intent:'clarify',reply:'Puedes decir, por ejemplo: «dos cuartos de pollo», o elegir en el menú. La conversación libre requiere configurar la IA.',operations:[],source:'local'};
+  const table=Number.isInteger(data.table)&&data.table>0&&data.table<1000?data.table:null;
   // Parte fija primero (cacheable por el proveedor); el contexto del turno va al final.
   const prompt=`${persona}
 
@@ -58,8 +61,24 @@ PREGUNTA PENDIENTE: ${JSON.stringify(pending)}`;
       throw new Error(`Proveedor ${response.status}: ${detail}`);
     }
     const raw=(await response.json()).choices?.[0]?.message?.content||'';
-    const result=validateResult(repairResult(JSON.parse(raw),menu),cart,menu);
+    const repaired=repairResult(JSON.parse(raw),menu);
+    let result;
+    try{result=validateResult(repaired,cart,menu);}
+    catch(e){
+      // Una edición con algo inválido («combo con Sprite» como opción): se conservan las operaciones
+      // válidas y se dice con claridad lo que no se pudo anotar, en vez de descartar todo.
+      if(repaired.intent!=='edit')throw e;
+      const kept=[];for(const op of repaired.operations){try{applyOperations(cart,[...kept,op],menu);kept.push(op);}catch{}}
+      if(!kept.length||kept.length===repaired.operations.length)throw e;
+      result=validateResult({intent:'edit',operations:kept,reply:`${describeOps(kept,menu)} Ese cambio no lo puedo anotar; si lo necesitas, avísale al personal. ${followUp(cart,kept,menu,data.drinkOffered===true)}`},cart,menu);
+      return {...result,source:'ai'};
+    }
     if(!result.reply)result.reply=result.intent==='edit'?'Listo. ¿Algo más, o cerramos el pedido?':'¿Qué te provoca?';
+    // Tras anotar, la pregunta final siempre ofrece seguir o cerrar (y la bebida una sola vez).
+    if(result.intent==='edit'&&!/cerr|finaliz|cocina|tomar|bebida/i.test(result.reply)){
+      const statement=result.reply.replace(/[,.]?\s*¿[^?]*\?\s*$/,'').trim();
+      result.reply=`${statement.replace(/[.!]?$/,'.')} ${followUp(cart,result.operations,menu,data.drinkOffered===true)}`.trim();
+    }
     return {...result,source:'ai'};
   };
   try{return await ask();}

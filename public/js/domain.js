@@ -74,7 +74,7 @@ const numbers={un:1,una:1,uno:1,dos:2,tres:3,cuatro:4,cinco:5,seis:6,siete:7,och
 export function parsePeople(text,asked=false){
   const n=normalize(text).replace(/^(?:(?:si|ya|bueno|eh|este|mira)\s+)+/,'');
   if(/^(?:(?:es |seria |solo |solamente )?para mi(?: solo| sola| solito| solita)?|solo (?:para )?mi|solo yo|yo solo|yo sola|nada mas (?:yo|para mi)|uno solo|una sola|(?:solo |para )?una (?:sola )?persona|(?:es )?para uno)$/.test(n))return 1;
-  const m=n.match(/^(?:(somos|seriamos|vamos a ser|es para|seria para|para|son|como|unas|unos|mas o menos)\s+)?(\d{1,2}|un|una|uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|once|doce)(\s+(?:personas?|adultos?|gente))?(?:\s+(?:nomas|no mas|pues|personas?))?$/);
+  const m=n.match(/^(?:(somos|seriamos|vamos a ser|es para|seria para|para|pa|son|como|unas|unos|mas o menos)\s+)?(\d{1,2}|un|una|uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|once|doce)(\s+(?:personas?|adultos?|gente))?(?:\s+(?:nomas|no mas|pues|personas?))?$/);
   if(!m||!(asked||['somos','seriamos','vamos a ser','son'].includes(m[1])||m[3]))return null;
   const value=count(m[2]);return Number.isInteger(value)&&value>0?value:null;
 }
@@ -141,7 +141,7 @@ export function interpretLocal(text,cart,menu,lastId=null,context={}){
   if(context.category==='Platos'&&/^(me apoyo|medio apoyo|medio de apoyo)$/.test(n))return answer('clarify','¿Te refieres a un medio pollo? Puedes decir «medio pollo».');
   if(/\b(alergia|alergico|celiaco|gluten)\b/.test(n)) return answer('clarify','Con alergias prefiero no adivinar. Pídele al personal que te confirme los ingredientes, por favor.');
   if(/^(no|no gracias|no confirmes(?: todavia)?|no lo envies|todavia no|espera|espera un momento)$/.test(n)) return answer('keep','Sin problema, no envío nada todavía. Tómate tu tiempo.');
-  if(/^(eso es todo|termine(?: mi pedido)?|he terminado|listo|nada mas|ver (?:mi )?pedido|mi pedido|resumen)$/.test(n)) return answer('review',cart.length?'Repasemos tu pedido.':'Todavía no has pedido nada. ¿Qué se te antoja?');
+  if(/^(?:(?:no |ya |bueno |ok |eh |este )*)(eso es todo|eso seria todo|seria todo|es todo|eso nomas|eso no mas|eso nada mas|ya esta|ya estaria|eso seria|termine(?: mi pedido)?|he terminado|listo|nada mas|ya no|nada mas gracias|ver (?:mi )?pedido|mi pedido|resumen|que llevo|que tengo)$/.test(n)) return answer('review',cart.length?'Repasemos tu pedido.':'Todavía no has pedido nada. ¿Qué se te antoja?');
   if(/^(cancelar|cancela|borra) (?:todo|el pedido|mi pedido)$/.test(n)) return answer('cancel','¿Borro todo el pedido y empezamos de cero?');
   if(/^(gracias|hasta luego|chao|adios)$/.test(n)) return answer(cart.length?'review':'goodbye',cart.length?'Antes de irte, repasemos tu pedido.':'¡Gracias a ti! Aquí estaré si se te antoja algo más.');
 

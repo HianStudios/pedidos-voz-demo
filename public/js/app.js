@@ -155,6 +155,7 @@ async function handleInput(raw){
    const items=(result.suggest_ids||[]).map(id=>menu.find(p=>p.id===id&&p.available)).filter(Boolean);if(items.length)showProducts(items,'Para ti');
    // Si la recomendación trae propuesta concreta, un «sí» la anota.
    if(result.proposal?.length)proposal={operations:result.proposal};
+   else if(result.suggest_ids?.length===1&&/anot/i.test(result.reply))proposal={operations:[{type:'add',id:result.suggest_ids[0],qty:1}]};
    reply(result.reply);
   }else if(result.intent==='review')review();
   else if(result.intent==='cancel'){awaitingCancel=true;reply('¿Borro todo el pedido y empezamos de cero?');}

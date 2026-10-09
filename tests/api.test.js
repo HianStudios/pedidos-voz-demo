@@ -71,3 +71,9 @@ test('con el cupo por minuto agotado usa el modelo de respaldo',async()=>{
   try{const r=await interpret({transcript:'un medio de esos de la casa',cart:[]},{fetchImpl});assert.deepEqual(models,['openai/gpt-oss-120b','openai/gpt-oss-20b']);assert.equal(r.source,'ai');assert.deepEqual(r.operations,[{type:'add',id:'medio',qty:1}]);}
   finally{if(old===undefined)delete process.env.GROQ_API_KEY;else process.env.GROQ_API_KEY=old;}
 });
+test('una edición con una opción inexistente conserva lo válido',async()=>{
+  const {interpret}=await import('../api/match.js');const old=process.env.GROQ_API_KEY;process.env.GROQ_API_KEY='test';
+  const fetchImpl=async()=>new Response(JSON.stringify({choices:[{message:{content:JSON.stringify({intent:'edit',reply:'Va un combo de alitas con Sprite.',operations:[{type:'add',id:'combo-alitas',qty:1},{type:'note',id:'combo-alitas',note:'con sprite'}]})}}]}));
+  try{const r=await interpret({transcript:'quiero un combo de alitas pero con sprite',cart:[]},{fetchImpl});assert.deepEqual(r.operations,[{type:'add',id:'combo-alitas',qty:1}]);assert.match(r.reply,/no lo puedo anotar/);}
+  finally{if(old===undefined)delete process.env.GROQ_API_KEY;else process.env.GROQ_API_KEY=old;}
+});
