@@ -17,15 +17,35 @@ export async function rawBody(req,limit){
   if(Buffer.isBuffer(req.body)){if(req.body.length>limit)throw fail('Solicitud demasiado grande.',413);return req.body;}
   const chunks=[];let size=0;for await(const chunk of req){size+=chunk.length;if(size>limit)throw fail('Solicitud demasiado grande.',413);chunks.push(Buffer.isBuffer(chunk)?chunk:Buffer.from(chunk));}return Buffer.concat(chunks);
 }
-// La integración de Upstash en Vercel crea KV_REST_API_*; una cuenta de Upstash directa, UPSTASH_REDIS_REST_*.
+// Dos formas de llegar a Redis:
+// - HTTP (Upstash): UPSTASH_REDIS_REST_* o KV_REST_API_* (integración Upstash en Vercel).
+// - Conexión directa: REDIS_URL (integración «Redis» de Vercel Storage u otro proveedor).
 const redisUrl=()=>process.env.UPSTASH_REDIS_REST_URL||process.env.KV_REST_API_URL;
 const redisToken=()=>process.env.UPSTASH_REDIS_REST_TOKEN||process.env.KV_REST_API_TOKEN;
+const rest=()=>Boolean(redisUrl()&&redisToken());
+let tcp=null;
+// Una conexión por instancia de la función, reutilizada entre invocaciones.
+function tcpClient(){
+  tcp??=(async()=>{
+    const {createClient}=await import('redis');
+    const client=createClient({url:process.env.REDIS_URL,socket:{connectTimeout:5000,reconnectStrategy:retries=>retries>3?false:Math.min(retries*200,1000)}});
+    client.on('error',()=>{});await client.connect();return client;
+  })().catch(e=>{tcp=null;throw e;});
+  return tcp;
+}
+const within=(promise,ms)=>Promise.race([promise,new Promise((_,reject)=>setTimeout(()=>reject(new Error('timeout')),ms).unref?.())]);
 export async function redis(command){
+  if(!rest()){
+    let client;
+    try{client=await within(tcpClient(),8000);}catch{tcp=null;throw fail('No se pudo conectar con caja. Intenta de nuevo.',503);}
+    try{return await within(client.sendCommand(command.map(String)),8000);}
+    catch{if(!client.isReady)tcp=null;throw fail('El almacenamiento no está disponible.',503);}
+  }
   const response=await fetch(redisUrl(),{method:'POST',headers:{Authorization:`Bearer ${redisToken()}`,'Content-Type':'application/json'},body:JSON.stringify(command),signal:AbortSignal.timeout(8000)});
   if(!response.ok)throw fail('No se pudo conectar con caja. Intenta de nuevo.',503);
   const data=await response.json();if(data.error)throw fail('El almacenamiento no está disponible.',503);return data.result;
 }
-export const hasRedis=()=>Boolean(redisUrl()&&redisToken());
+export const hasRedis=()=>rest()||Boolean(process.env.REDIS_URL);
 export const liveOrders=()=>hasRedis()&&(process.env.STAFF_TOKEN?.length>=24)&&(process.env.SESSION_SECRET?.length>=32);
 export async function rateLimit(req,bucket,max=30){
   const ip=req.headers['x-real-ip']||req.socket?.remoteAddress||'unknown';

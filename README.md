@@ -4,7 +4,7 @@ Interfaz de pedidos para restaurantes con mascota esférica reactiva, conversaci
 
 ## Arranque local
 
-Requiere Node.js 22 o superior. No hay dependencias de producción.
+Requiere Node.js 22 o superior. Única dependencia de producción: `redis` (solo se carga con `REDIS_URL`).
 
 ```sh
 cp .env.example .env
@@ -49,7 +49,7 @@ Sin todas las credenciales de caja, la interfaz indica **Demo interactiva**. El 
 
 Configurar en Vercel (o en .env local):
 
-- `UPSTASH_REDIS_REST_URL` y `UPSTASH_REDIS_REST_TOKEN` (o `KV_REST_API_URL` y `KV_REST_API_TOKEN`, que crea la integración Vercel → Storage → Upstash): base Redis REST con permisos de lectura, escritura y EVAL.
+- Redis, de cualquiera de estas formas: `REDIS_URL` (integración «Redis» de Vercel → Storage, conexión directa), `KV_REST_API_URL` + `KV_REST_API_TOKEN` (integración Upstash) o `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN`. Prueba contra un Redis real: `REDIS_TEST_URL=redis://127.0.0.1:6379 node --test --test-force-exit tests/redis.integration.test.js`. Detalle de la variante HTTP: base Redis REST con permisos de lectura, escritura y EVAL.
 - `STAFF_TOKEN`: secreto de personal de al menos 24 caracteres.
 - `SESSION_SECRET`: otro secreto de al menos 32 caracteres para firmar sesiones de clientes.
 
