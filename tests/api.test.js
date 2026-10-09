@@ -38,3 +38,7 @@ test('errores y operaciones inseguras de IA se convierten en aclaración',async(
   try{globalThis.fetch=async()=>new Response(JSON.stringify({choices:[{message:{content:JSON.stringify({intent:'edit',reply:'pedido',operations:[{id:'cuarto',qty:-1,type:'add'}]})}}]}));const res=response();await match(req({transcript:'sorpréndeme con un platillo',cart:[]}),res);assert.equal(res.code,200);assert.equal(res.data.intent,'clarify');assert.deepEqual(res.data.operations,[]);}
   finally{globalThis.fetch=originalFetch;if(old===undefined)delete process.env.GROQ_API_KEY;else process.env.GROQ_API_KEY=old;}
 });
+test('voz neural sin credenciales no llama al proveedor',async()=>{
+  const {default:speak}=await import('../api/speak.js');const originalFetch=globalThis.fetch;let called=false;globalThis.fetch=async()=>{called=true;};
+  try{const res=response();await speak(req({text:'Hola'}),res);assert.equal(res.code,503);assert.equal(called,false);}finally{globalThis.fetch=originalFetch;}
+});

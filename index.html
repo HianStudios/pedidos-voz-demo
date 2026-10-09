@@ -2,52 +2,62 @@
 <html lang="es">
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#f6f3ec"><meta name="description" content="Conoce a Milo, tu mesero virtual. Pide pollo a la brasa con tu voz.">
-  <title>Brasa · Tu mesa, a tu manera</title>
-  <link rel="icon" href="/public/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="/public/styles.css">
+  <meta name="theme-color" content="#f7f4ee"><meta name="description" content="Milo, el mesero virtual de tu mesa.">
+  <title>Milo · Tu mesero</title>
+  <link rel="icon" href="/public/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="/public/milo.css">
 </head>
-<body class="ordering-page">
-  <header class="site-header">
-    <a class="brand" href="/" aria-label="Brasa, inicio"><span class="brand-icon">b<span>•</span></span><span id="brandName">brasa</span><span class="brand-dot">®</span></a>
-    <div class="header-right"><span class="demo-badge" id="modeBadge">Cargando…</span><a class="text-button" href="/caja.html" target="_blank" rel="noopener">Caja <span aria-hidden="true">↗</span></a></div>
-  </header>
+<body class="milo-page" data-state="off">
+  <div class="table-chip" id="tableChip" hidden>Mesa <b id="tableNumber"></b></div>
 
-  <main class="milo-layout">
-    <section class="milo-panel" aria-labelledby="welcomeTitle">
-      <div class="eyebrow"><span class="live-dot"></span> TU MESERO VIRTUAL</div>
-      <h1 id="welcomeTitle">Buen pollo.<br>Una buena <em>charla.</em></h1>
-      <p class="intro">Soy Milo. Tú dime qué se te antoja,<br>yo me encargo de tomar tu pedido.</p>
-
-      <div class="mascot-stage" id="mascotStage" data-state="off">
-        <div class="orb-aura"></div><div class="rings" aria-hidden="true"><i></i><i></i><i></i></div>
-        <button id="mascot" class="mascot" aria-label="Hablar con Milo"><span class="orb-highlight"></span><span class="face" aria-hidden="true"><span class="eyes"><i></i><i></i></span><span class="cheeks"><i></i><i></i></span><span class="mouth"></span></span></button>
-        <div class="orb-shadow"></div><span class="mascot-tag">MILO <span>✦</span></span>
-      </div>
-
-      <div class="voice-status"><span id="stateDot" class="state-dot"></span><span id="voiceState" role="status">Listo para ayudarte</span></div>
-      <div class="reply" id="reply" aria-live="polite">Toca a Milo y cuéntame qué se te antoja.</div>
-      <p class="transcript" id="transcript"></p>
-      <p class="voice-help" id="voiceHelp">Sin prisa. Estoy aquí para ayudarte.</p>
-      <div class="minimal-actions"><button id="menuOpen" disabled>Explorar menú ↗</button><button id="cartOpen">Mi pedido <span id="cartCount">0</span></button><button id="stopVoice" hidden>Apagar micrófono</button></div><details class="text-alternative"><summary>Prefiero escribir · ajustes de voz</summary><form class="chat-input" data-chat><label for="chatText" class="sr-only">Tu mensaje</label><input id="chatText" autocomplete="off" placeholder="Escribe lo que se te antoja…" maxlength="1200"><button id="sendText" aria-label="Enviar mensaje">↑</button></form><label class="rate-label" for="voiceRate">Ritmo de voz <select id="voiceRate"><option value="1">Pausado</option><option value="1.15" selected>Natural</option><option value="1.3">Ágil</option></select></label></details><div class="privacy-note"><span aria-hidden="true">⌁</span> Tú decides cuándo encender el micrófono.</div>
-    </section>
+  <main class="stage">
+    <div class="mascot-stage" id="mascotStage" data-state="off">
+      <div class="halo" aria-hidden="true"></div><div class="rings" aria-hidden="true"><i></i><i></i><i></i></div>
+      <button id="mascot" class="mascot" aria-label="Hablar con Milo"><span class="shine"></span><span class="face" aria-hidden="true"><span class="eyes"><i></i><i></i></span><span class="cheeks"><i></i><i></i></span><span class="mouth"></span></span></button>
+      <div class="ground" aria-hidden="true"></div>
+    </div>
+    <p class="heard" id="transcript"></p>
+    <p class="caption" id="reply" aria-live="polite">Toca a Milo para hablar</p>
+    <p class="hint" id="voiceState" role="status">Listo para ayudarte</p>
+    <p class="hint error" id="voiceHelp"></p>
   </main>
 
-  <!-- Popup de opciones (menú, bebidas, extras, recomendaciones) -->
-  <dialog id="optionsModal" class="options-modal">
-    <div class="modal-header">
-      <h2 id="modalTitle">Menú</h2>
-      <button class="close-button" data-close="optionsModal" aria-label="Cerrar">×</button>
-    </div>
-    <div class="modal-body" id="modalBody"></div><div class="modal-conversation"><p class="dialog-reply" aria-live="polite"></p><button class="primary-button" data-talk>Hablar con Milo</button><form class="chat-input" data-chat><label class="sr-only" for="modalText">Tu mensaje</label><input id="modalText" placeholder="O escribe tu elección…" maxlength="1200"><button aria-label="Enviar mensaje">↑</button></form></div>
+  <nav class="dock" aria-label="Acciones">
+    <button id="menuOpen" class="dock-btn" aria-label="Ver el menú" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="6.5" height="6.5" rx="2"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="2"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="2"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="2"/></svg></button>
+    <button id="keyboardOpen" class="dock-btn" aria-label="Escribir en lugar de hablar" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="3"/><path d="M7 10h.01M11 10h.01M15 10h.01M8 14h8"/></svg></button>
+    <button id="stopVoice" class="dock-btn" aria-label="Apagar micrófono" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 11.5 5.4M19 11a7 7 0 0 1-.4 2.3M12 18v3M4 4l16 16"/></svg></button>
+    <button id="cartOpen" class="dock-btn" aria-label="Mi pedido"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 8h12l-1 12H7L6 8Z"/><path d="M9 8V7a3 3 0 0 1 6 0v1"/></svg><span id="cartCount" class="badge">0</span></button>
+  </nav>
+
+  <form class="composer" id="composer" data-chat hidden>
+    <label for="chatText" class="sr-only">Tu mensaje</label>
+    <input id="chatText" autocomplete="off" placeholder="Escribe lo que se te antoja…" maxlength="1200">
+    <button id="sendText" aria-label="Enviar mensaje">↑</button>
+  </form>
+
+  <dialog id="optionsModal" class="sheet" aria-labelledby="modalTitle">
+    <header class="sheet-head">
+      <h2 id="modalTitle" class="sheet-title">Menú</h2>
+      <nav class="tabs" id="tabs" aria-label="Categorías">
+        <button data-category="Platos">Platos</button><button data-category="Combos">Combos</button><button data-category="Extras">Extras</button><button data-category="Bebidas">Bebidas</button><span class="tab-ink" aria-hidden="true"></span>
+      </nav>
+      <button class="close" data-close="optionsModal" aria-label="Cerrar">×</button>
+    </header>
+    <div class="sheet-body" id="modalBody"></div>
+    <footer class="sheet-foot">
+      <button class="mini-milo" data-talk aria-label="Hablar con Milo"><span class="eyes"><i></i><i></i></span></button>
+      <p class="dialog-reply" aria-live="polite"></p>
+      <form class="inline-chat" data-chat><label class="sr-only" for="modalText">Tu mensaje</label><input id="modalText" placeholder="O escribe…" maxlength="1200"><button aria-label="Enviar mensaje">↑</button></form>
+    </footer>
   </dialog>
 
-  <!-- Popup de resumen del pedido -->
-  <dialog id="summaryModal" class="options-modal">
-    <div class="modal-header">
-      <h2>Tu pedido</h2>
-      <button class="close-button" data-close="summaryModal" aria-label="Cerrar">×</button>
-    </div>
-    <div class="modal-body" id="summaryBody"></div><div class="modal-conversation"><p class="dialog-reply" aria-live="polite"></p><button class="secondary-button" data-talk>Hablar con Milo</button><form class="chat-input" data-chat><label class="sr-only" for="summaryText">Corregir pedido</label><input id="summaryText" placeholder="¿Quieres cambiar algo?" maxlength="1200"><button aria-label="Enviar cambio">↑</button></form></div>
+  <dialog id="summaryModal" class="sheet sheet-summary" aria-labelledby="summaryTitle">
+    <header class="sheet-head"><h2 id="summaryTitle" class="sheet-title">Tu pedido</h2><button class="close" data-close="summaryModal" aria-label="Cerrar">×</button></header>
+    <div class="sheet-body" id="summaryBody"></div>
+    <footer class="sheet-foot">
+      <button class="mini-milo" data-talk aria-label="Hablar con Milo"><span class="eyes"><i></i><i></i></span></button>
+      <p class="dialog-reply" aria-live="polite"></p>
+      <form class="inline-chat" data-chat><label class="sr-only" for="summaryText">Corregir pedido</label><input id="summaryText" placeholder="¿Cambiamos algo?" maxlength="1200"><button aria-label="Enviar cambio">↑</button></form>
+    </footer>
   </dialog>
 
   <div class="toast" id="toast" role="status"></div>
