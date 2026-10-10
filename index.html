@@ -60,6 +60,18 @@
     </footer>
   </dialog>
 
+  <!-- Ficha del producto: qué trae y qué se le puede quitar (por voz o tocando) -->
+  <dialog id="detailSheet" class="detail-sheet" aria-labelledby="detailName">
+    <button class="close" data-close="detailSheet" aria-label="Cerrar">×</button>
+    <div class="detail-art" id="detailArt"></div>
+    <span class="tag" id="detailTag"></span>
+    <h2 id="detailName"></h2>
+    <p class="detail-desc" id="detailDesc"></p>
+    <h3>Trae</h3>
+    <ul class="detail-ingredients" id="detailIngredients"></ul>
+    <div id="detailRemoveBox"><h3>Quitar</h3><div class="detail-chips" id="detailChips"></div></div>
+    <footer><strong class="price" id="detailPrice"></strong><button class="add" id="detailAdd">Agregar al pedido</button></footer>
+  </dialog>
   <!-- Calificación al terminar el pedido: por voz («cuatro y media») o tocando las estrellas -->
   <dialog id="rateSheet" class="rate-sheet" aria-labelledby="rateTitle">
     <p class="rate-eyebrow">Tu pedido va en camino a cocina</p>

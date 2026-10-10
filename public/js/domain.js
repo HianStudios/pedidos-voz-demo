@@ -27,6 +27,11 @@ export function applyOperations(cart, ops, menu) {
       if(!line || !product.options.includes(op.note)) throw new Error('Ese cambio no está disponible para este producto.');
       line.notes=[...new Set([...line.notes,op.note])]; continue;
     }
+    // Volver a poner un ingrediente («con cebolla, mejor»): se retira la nota.
+    if(op.type==='unnote'){
+      if(!line) throw new Error('Ese producto no está en tu pedido.');
+      line.notes=line.notes.filter(n=>n!==op.note); continue;
+    }
     if(!['add','set','remove'].includes(op.type) || !Number.isInteger(op.qty)||op.qty<0||op.qty>20 || (op.type==='add'&&op.qty===0)) throw new Error('Cantidad inválida.');
     if(!line){if(op.type!=='add') throw new Error('Ese producto no está en tu pedido.');line={id:op.id,qty:0,notes:[]}; next.push(line);}
     line.qty=op.type==='set'?op.qty:op.type==='remove'?Math.max(0,line.qty-op.qty):line.qty+op.qty;
@@ -34,7 +39,7 @@ export function applyOperations(cart, ops, menu) {
   return validateCart(next.filter(l=>l.qty>0),menu);
 }
 export function validateResult(result,cart,menu){
-  const intents=['edit','menu','recommend','price','review','clarify','keep','goodbye','cancel'];
+  const intents=['edit','menu','recommend','price','detail','review','clarify','keep','goodbye','cancel'];
   if(!result||!intents.includes(result.intent)||typeof result.reply!=='string'||result.reply.length>600) throw new Error('Respuesta inválida.');
   const operations=result.operations??[];
   if(result.intent!=='edit'&&operations.length) throw new Error('Acciones inesperadas.');
@@ -49,6 +54,18 @@ export function validateResult(result,cart,menu){
     try{if(result.proposal.every(o=>o?.type==='add')){applyOperations(cart,result.proposal,menu);proposal=result.proposal.map(o=>({type:'add',id:o.id,qty:o.qty}));}}catch{}
   }
   return {intent:result.intent,reply:result.reply,operations,suggest_ids:ids,...(category?{category}:{}),...(proposal?{proposal}:{})};
+}
+// Con la ficha de un producto abierta: qué ingredientes quitar («sin cebolla», «quítale el ají») o volver a
+// poner («ponle cebolla», «con tomate»). Devuelve las opciones exactas del producto.
+export function removalsFor(text,product){
+  const n=normalize(text),pick=word=>product.options.find(o=>normalize(o)===`sin ${word}`);
+  const words=product.options.map(o=>normalize(o).replace(/^sin /,'')).sort((a,b)=>b.length-a.length);
+  if(!words.length)return {remove:[],restore:[]};
+  const alt=words.join('|');
+  const remove=[...n.matchAll(new RegExp(`\\b(?:sin|quitale|quitele|sacale|no le pongas|que no tenga|que no traiga|que no lleve|no quiero|nada de|tampoco)\\s+(?:el |la |los |las )?(${alt})((?:\\s+(?:y|ni)?\\s*(?:el |la |los |las )?(?:${alt}))*)`,'g'))]
+    .flatMap(m=>[m[1],...(m[2].match(new RegExp(alt,'g'))||[])]);
+  const restore=[...n.matchAll(new RegExp(`\\b(?:con|ponle|ponme|si con|que si tenga|dejale|deja)\\s+(?:el |la |los |las )?(${alt})\\b`,'g'))].map(m=>m[1]).filter(w=>!remove.includes(w));
+  return {remove:[...new Set(remove.map(pick).filter(Boolean))],restore:[...new Set(restore.map(pick).filter(Boolean))]};
 }
 // Calificación hablada: «cuatro estrellas», «cuatro y media», «4.5», «excelente», «más o menos».
 export function parseRating(text){
@@ -73,12 +90,12 @@ const intentAlias={confirm:'review',confirmar:'review',confirmation:'review',con
 export function repairResult(raw,menu){
   const r=raw&&typeof raw==='object'?raw:{};
   let intent=String(r.intent||'').toLowerCase().trim();intent=intentAlias[intent]||intent;
-  if(!['edit','menu','recommend','price','review','clarify','keep','goodbye','cancel'].includes(intent))intent='clarify';
+  if(!['edit','menu','recommend','price','detail','review','clarify','keep','goodbye','cancel'].includes(intent))intent='clarify';
   const reply=typeof r.reply==='string'?r.reply.trim().slice(0,600):'';
   let operations=[];
   if(intent==='edit'&&Array.isArray(r.operations))operations=r.operations.filter(o=>o&&typeof o==='object').map(o=>{
     const type=String(o.type??o.op??o.action??'').toLowerCase().trim();const id=o.id??o.product_id??o.productId;
-    if(type==='note')return {type,id,note:String(o.note??o.option??'').toLowerCase().trim()};
+    if(type==='note'||type==='unnote')return {type,id,note:String(o.note??o.option??'').toLowerCase().trim()};
     return {type,id,qty:Number(o.qty??o.quantity??(type==='add'?1:NaN))};
   });
   if(intent==='edit'&&!operations.length)intent='clarify';
@@ -123,7 +140,7 @@ export function describeOps(ops,menu){
   // Una nota sobre algo recién agregado se dice junto: «Van dos cuartos de pollo sin cebolla».
   const newIds=new Set(ops.filter(o=>o.type==='add').map(o=>o.id));
   const notesFor=id=>ops.filter(o=>o.type==='note'&&o.id===id).map(o=>o.note);
-  const added=ops.filter(o=>o.type==='add').map(o=>[amount(find(o.id),o.qty),...notesFor(o.id)].join(' '));
+  const added=ops.filter(o=>o.type==='add').map(o=>[amount(find(o.id),o.qty),listWords(notesFor(o.id))].filter(Boolean).join(' '));
   const parts=[];
   const single=added.length===1&&ops.find(o=>o.type==='add').qty===1&&!/^un[ao]s /.test(added[0]);
   if(added.length)parts.push(`${single?'Va':'Van'} ${listWords(added)}.`);
@@ -153,7 +170,18 @@ const soundAlikes=[
 ];
 export function soundsLike(text,menu){let n=normalize(text);for(const [re,to] of soundAlikes)n=n.replace(re,to);return fixWords(n,menu);}
 export function interpretLocal(text,cart,menu,lastId=null,context={}){
-  const n=soundsLike(text,menu);text=n;
+  let n=soundsLike(text,menu);
+  // Ingredientes que se pueden quitar (todas las opciones «sin X» del catálogo), más largos primero.
+  const removable=[...new Set(menu.flatMap(p=>p.options.map(o=>normalize(o).replace(/^sin /,''))))].sort((a,b)=>b.length-a.length);
+  const alt=removable.map(x=>x.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')).join('|');
+  if(alt){
+    // «Quítale la cebolla», «que no tenga lechuga», «no le pongas ají» → «sin …». «Quítale las papas» con
+    // papas extra en el pedido es quitar ese producto, no un ingrediente.
+    n=n.replace(new RegExp(`\\b(?:quitale|quitele|quitales|sacale|sacales|no le pongas|no le pongan|no le pongas nada de|que no tenga|que no traiga|que no lleve|no quiero nada de|nada de|no quiero)\\s+(?:el |la |los |las |lo de )?(${alt})\\b`,'g'),(m,x)=>x==='papas'&&cart.some(l=>l.id==='papas')?m:`sin ${x}`);
+    // «sin cebolla ni tomate», «sin cebolla y tomate», «sin cebolla, tomate» → cada uno con su «sin».
+    for(let prev='';prev!==n;){prev=n;n=n.replace(new RegExp(`\\bsin (${alt})\\s+(?:(?:y|ni)\\s+)?(?!sin )(${alt})\\b`),'sin $1 sin $2');}
+  }
+  text=n;
   const category=navigation(text);
   if(category)return answer('menu','',{category});
   // Autocorrección: «un cuarto, no, mejor medio» → solo cuenta lo último que pidió.
@@ -196,26 +224,39 @@ export function interpretLocal(text,cart,menu,lastId=null,context={}){
     remaining=remaining.replace(re,(full,prefix,word,offset)=>{hits.push({id,index:offset+prefix.length,length:word.length});return ' '.repeat(full.length);});
   }
   hits.sort((a,b)=>a.index-b.index);
+  // «¿Qué trae el combo personal?» → ficha con ingredientes (no agrega nada).
+  if(/\b(que (?:contiene|trae|tiene|lleva|incluye|viene con)|ingredientes|de que es|con que viene|como viene|que tiene adentro)\b/.test(n)&&!/\b(cuanto|precio|cuesta)\b/.test(n)){
+    const ids=[...new Set(hits.map(h=>h.id))];
+    const id=ids.length===1?ids[0]:!ids.length?lastId:null;
+    if(id)return answer('detail','',{suggest_ids:[id]});
+    return answer('clarify',ids.length?'¿De cuál quieres saber qué trae?':'¿De qué plato quieres saber qué trae?');
+  }
   // «Sin cebolla» es una opción del producto, nunca un plato aparte: «los dos cuartos sin cebolla».
-  const note=n.match(/\bsin (cebolla|ensalada|papas|sal|tomate|arroz)\b/)?.[0];
+  const noteRe=alt?new RegExp(`\\bsin (${alt})\\b`,'g'):null;
+  const found=noteRe?[...n.matchAll(noteRe)]:[];
+  const note=found[0]?.[0];
   // «Dos cuartos, uno sin cebolla»: el pedido aún no separa preparaciones del mismo plato; se pregunta.
   if(note&&/\b(?:uno|una|el otro|la otra|solo uno|solo una|uno de|una de)\b[^.]*\bsin\b/.test(n)&&/\b(dos|tres|cuatro|cinco|\d+)\b/.test(n))
     return answer('clarify',`Por ahora anoto la misma preparación para todos los iguales. ¿Los preparo todos ${note}, o todos normales y se lo avisas al personal?`);
-  if(note&&(n.match(/\bsin\b/g)||[]).length===1&&!/\b(no|cuanto|precio|cuesta)\b/.test(n)){
-    const at=n.indexOf(note);
-    // «sin ensalada»: la palabra del producto dentro de la opción no cuenta como otro producto.
-    const ids=[...new Set(hits.filter(h=>h.index<at||h.index>=at+note.length).map(h=>h.id))];
+  if(found.length&&!/\b(no|cuanto|precio|cuesta)\b/.test(n.replace(noteRe,''))){
+    // La palabra de un producto dentro de la opción («sin ensalada», «sin papas») no cuenta como otro producto.
+    const inNote=h=>found.some(m=>h.index>=m.index&&h.index<m.index+m[0].length);
+    const ids=[...new Set(hits.filter(h=>!inNote(h)).map(h=>h.id))];
     if(ids.length>1)return null;
     const id=ids[0]||(cart.length===1?cart[0].id:lastId);
     if(!id||(!ids.length&&!cart.some(l=>l.id===id)))return answer('clarify','¿A qué producto le hago ese cambio?');
     const product=menu.find(p=>p.id===id);
-    if(!product.options.includes(note))return answer('clarify',`${product.name} no tiene la opción «${note}». Puedes consultarlo con el personal.`);
+    const notes=found.map(m=>product.options.find(o=>normalize(o)===`sin ${m[1]}`));
+    const valid=[...new Set(notes.filter(Boolean))],missing=found.filter((m,i)=>!notes[i]).map(m=>m[1]);
+    if(!valid.length)return answer('clarify',`${product.name} no lleva ${listWords(missing)}. ¿Quieres quitarle otra cosa?`);
+    const extra=missing.length?` ${listWords(missing).replace(/^./,c=>c.toUpperCase())} no viene en ${one(product)}.`:'';
     const inCart=cart.some(l=>l.id===id);
-    if(inCart&&!/\b(otro|otra|otros|otras|agrega|agregame|anade|suma|aparte)\b/.test(n))return answer('edit',`Anotado: ${product.name.toLowerCase()} ${note}. ${more[cart.length%3]}`,{operations:[{type:'note',id,note}]});
+    const notesOps=valid.map(note=>({type:'note',id,note}));
+    if(inCart&&!/\b(otro|otra|otros|otras|agrega|agregame|anade|suma|aparte)\b/.test(n))return answer('edit',`Anotado: ${product.name.toLowerCase()} ${listWords(valid)}.${extra} ${more[cart.length%3]}`,{operations:notesOps});
     if(inCart)return null;
-    const token=n.slice(0,hits[0].index).trim().split(' ').at(-1);const qty=count(token);
-    const operations=[{type:'add',id,qty:Number.isInteger(qty)&&qty>0?qty:1},{type:'note',id,note}];
-    return answer('edit',`${describeOps(operations,menu)} ${followUp(cart,operations,menu,context.drinkOffered)}`,{operations});
+    const token=n.slice(0,hits.find(h=>!inNote(h))?.index??0).trim().split(' ').at(-1);const qty=count(token);
+    const operations=[{type:'add',id,qty:Number.isInteger(qty)&&qty>0?qty:1},...notesOps];
+    return answer('edit',`${describeOps(operations,menu)}${extra} ${followUp(cart,operations,menu,context.drinkOffered)}`,{operations});
   }
   if(/\b(cuanto|precio|cuesta|cuestan)\b/.test(n)){
     if(!hits.length) return answer('clarify','¿De qué producto quieres saber el precio?');
@@ -226,11 +267,11 @@ export function interpretLocal(text,cart,menu,lastId=null,context={}){
   // Frases complejas/negadas se dejan a la IA; nunca adivinar una sustitución.
   if(/\b(no|cambia|cambiar|sustituye|en vez|pero|sin)\b/.test(remaining)) return null;
   if(!hits.length) return null;
-  const verbs='quiero|quisiera|dame|deme|da|das|traeme|trae|regalame|mandame|agrega|agregame|anade|pon|ponme|quita|elimina|borra|mejor|necesito|me|nos';
+  const verbs='quiero|quisiera|dame|deme|da|das|traeme|trae|regalame|mandame|agrega|agregame|anade|pon|ponme|quita|quitale|quitame|saca|sacale|elimina|borra|mejor|necesito|me|nos';
   if(!new RegExp(`\\b(${verbs})\\b`).test(n)&&!/^\d|^(un|una|unas|unos|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\b/.test(n)) return null;
   const residue=normalize(remaining).split(' ').filter(w=>w&&!new RegExp(`^(${verbs}|si|y|tambien|por|favor|porfa|pues|el|la|los|las|de|del|un|una|unas|unos|uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|-?\\d+)$`).test(w));
   if(residue.length) return null;
-  const remove=/\b(quita|elimina|borra)\b/.test(n);
+  const remove=/\b(quita|quitale|quitame|saca|sacale|elimina|borra)\b/.test(n);
   const replace=/\bmejor\b/.test(n);
   const operations=hits.map((h,i)=>{
     const before=n.slice(i?hits[i-1].index+hits[i-1].length:0,h.index).trim();

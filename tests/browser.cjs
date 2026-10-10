@@ -40,6 +40,14 @@ const assert=require('node:assert/strict');const fs=require('node:fs');
  await say('muéstrame los piatos');await page.locator('.dish[data-product="cuarto"]').waitFor();assert.match(await page.locator('#reply').textContent(),/menú de platos/);
  await page.locator('[data-close="optionsModal"]').click();const before=Number(await page.locator('#cartCount').textContent());await say('dame algo ligero');assert.match(await page.locator('#reply').textContent(),/ligero/);assert.equal(Number(await page.locator('#cartCount').textContent()),before,'recomendar no agrega');
  await say('el primero');assert.equal(Number(await page.locator('#cartCount').textContent()),before+1);assert.match(await page.locator('#reply').textContent(),/pechuga/i);
+ // Ficha del producto: «¿qué trae…?», quitar ingredientes por voz y anotarlo.
+ await page.locator('[data-close="optionsModal"]').click().catch(()=>{});const cartBefore=Number(await page.locator('#cartCount').textContent());
+ await page.evaluate(()=>window.__miloInput('qué trae el pollo entero'));await page.locator('#detailSheet[open]').waitFor();
+ assert.match(await page.locator('#detailIngredients').textContent(),/Ají de la casa/);assert.match(await page.locator('#reply').textContent(),/trae pollo entero/);
+ await page.waitForTimeout(300);await page.evaluate(()=>window.__miloInput('sin cebolla ni tomate'));
+ assert.equal(await page.locator('#detailChips [aria-pressed="true"]').count(),2);await page.screenshot({path:'test-results/ficha-desktop.png'});
+ await page.evaluate(()=>window.__miloInput('agrégalo'));await page.locator('#detailSheet[open]').waitFor({state:'hidden'});
+ assert.equal(Number(await page.locator('#cartCount').textContent()),cartBefore+1);assert.match(await page.locator('#reply').textContent(),/sin cebolla y sin tomate/);
  // Panel: el pedido y su calificación aparecen.
  const admin=await ctx.newPage();admin.on('pageerror',e=>errors.push(e.message));await admin.goto('http://localhost:3000/admin.html');await admin.locator('#dashboard:not([hidden])').waitFor();
  assert.equal(await admin.locator('#kpiOrders').textContent(),'1');assert.match(await admin.locator('#kpiRating').textContent(),/4,5/);assert.ok(await admin.locator('[data-chart="food"] .hbar').count()>=2);

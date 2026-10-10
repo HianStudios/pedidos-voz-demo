@@ -25,7 +25,7 @@ test('desactivar libera el micrófono y cancela locución',async()=>{
 });
 
 test('voz más ágil sin locuciones superpuestas',async()=>{
- const {voice}=setup();const first=voice.respond('Primera respuesta');const second=voice.respond('Respuesta vigente');assert.equal(utterances.at(-1).rate,1.05);utterances.at(-1).onend();await Promise.all([first,second]);assert.equal(voice.mode,'listening');voice.disable();
+ const {voice}=setup();const first=voice.respond('Primera respuesta');const second=voice.respond('Respuesta vigente');assert.equal(utterances.at(-1).rate,1.2);utterances.at(-1).onend();await Promise.all([first,second]);assert.equal(voice.mode,'listening');voice.disable();
 });
 test('espera no activa escucha de nombres',()=>{const {voice}=setup();voice.wait();assert.equal(voice.recognition,null);assert.equal(voice.mode,'waiting');voice.disable();});
 

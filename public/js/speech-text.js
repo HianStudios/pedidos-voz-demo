@@ -48,4 +48,11 @@ export function sentences(text){
   for(const part of parts){if(out.length&&out.at(-1).length<14)out[out.length-1]+=` ${part}`;else out.push(part);}
   return out;
 }
+// Bloques de hasta ~220 caracteres: una respuesta corta se dice de corrido (sin pausas entre frases),
+// y una larga se parte solo en límites de oración (Chrome corta locuciones muy largas).
+export function chunks(text,max=220){
+  const out=[];
+  for(const part of sentences(text)){if(out.length&&out.at(-1).length+part.length+1<=max)out[out.length-1]+=` ${part}`;else out.push(part);}
+  return out;
+}
 export function listWords(items){return items.length<2?items.join(''):`${items.slice(0,-1).join(', ')} y ${items.at(-1)}`;}
