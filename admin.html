@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#f6f3ec"><title>Brasa · Panel</title><link rel="icon" href="/public/favicon.svg"><link rel="stylesheet" href="/public/styles.css"></head>
+<body class="cashier-page admin-page">
+<header class="site-header"><a class="brand" href="/admin.html"><span class="brand-icon">b<span>•</span></span>brasa<span class="brand-dot">®</span></a><div class="header-right"><span class="demo-badge" id="modeBadge">Cargando…</span><a class="text-button" href="/caja.html">Caja ↗</a><button class="text-button" id="logout" hidden>Salir</button></div></header>
+<main class="cashier-main">
+  <section class="cashier-heading"><div><div class="eyebrow">PANEL DEL RESTAURANTE</div><h1>Cómo va<br><em>el negocio.</em></h1><p class="muted" id="adminInfo">Cargando datos…</p></div></section>
+  <form id="staffForm" class="staff-login" hidden><h2>Acceso del equipo</h2><p class="muted">Ingresa la clave del personal para ver el panel.</p><label for="staffToken">Clave</label><div class="staff-entry"><input id="staffToken" type="password" autocomplete="current-password" required><button class="primary-button">Entrar</button></div><p id="loginError" role="alert"></p></form>
+  <section id="dashboard" hidden>
+    <nav class="range" aria-label="Periodo"><button data-range="1" aria-pressed="true">Hoy</button><button data-range="7" aria-pressed="false">7 días</button><button data-range="30" aria-pressed="false">30 días</button><button class="text-button" id="refresh">Actualizar ↻</button></nav>
+    <div class="kpis">
+      <article class="kpi hero"><span>Ventas</span><strong id="kpiSales">$0,00</strong><small id="kpiSalesNote"></small></article>
+      <article class="kpi"><span>Pedidos</span><strong id="kpiOrders">0</strong><small id="kpiOrdersNote"></small></article>
+      <article class="kpi"><span>Ticket promedio</span><strong id="kpiTicket">$0,00</strong><small>por pedido</small></article>
+      <article class="kpi"><span>Experiencia</span><strong id="kpiRating">—</strong><small id="kpiRatingNote">sin calificaciones</small></article>
+    </div>
+    <div class="charts">
+      <article class="chart-card" data-chart="food"><header><h2>Lo que más sale</h2><p>Unidades vendidas de platos, combos y extras</p></header><div class="chart"></div></article>
+      <article class="chart-card" data-chart="drinks"><header><h2>Bebidas más vendidas</h2><p>Unidades vendidas por bebida</p></header><div class="chart"></div></article>
+      <article class="chart-card wide" data-chart="hours"><header><h2>Pedidos por hora</h2><p>Cuándo llegan los pedidos</p></header><div class="chart"></div></article>
+      <article class="chart-card" data-chart="ratings"><header><h2>Calificaciones</h2><p>Estrellas que dieron los clientes</p></header><div class="chart"></div></article>
+      <article class="chart-card" data-chart="tables"><header><h2>Pedidos por mesa</h2><p>Mesas con más pedidos</p></header><div class="chart"></div></article>
+      <article class="chart-card wide"><header><h2>Lo que dijeron</h2><p>Últimas calificaciones con sus palabras</p></header><ul class="voices" id="voices"></ul></article>
+    </div>
+  </section>
+</main>
+<div class="chart-tip" id="tip" role="tooltip" hidden></div>
+<script type="module" src="/public/js/admin.js"></script></body></html>

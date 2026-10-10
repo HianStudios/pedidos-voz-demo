@@ -1,5 +1,6 @@
 import {navigation} from './conversation.js';
 import {numberWords,listWords} from './speech-text.js';
+import {fixWords} from './fuzzy.js';
 export const normalize = s => String(s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[¿?¡!.,;:]/g,' ').replace(/\s+/g,' ').trim();
 export const money = cents => new Intl.NumberFormat('es-EC',{style:'currency',currency:'USD'}).format(cents/100);
 export function validateCart(cart, menu) {
@@ -48,6 +49,23 @@ export function validateResult(result,cart,menu){
     try{if(result.proposal.every(o=>o?.type==='add')){applyOperations(cart,result.proposal,menu);proposal=result.proposal.map(o=>({type:'add',id:o.id,qty:o.qty}));}}catch{}
   }
   return {intent:result.intent,reply:result.reply,operations,suggest_ids:ids,...(category?{category}:{}),...(proposal?{proposal}:{})};
+}
+// Calificación hablada: «cuatro estrellas», «cuatro y media», «4.5», «excelente», «más o menos».
+export function parseRating(text){
+  const n=normalize(text);
+  if(/\b(no se|ahora no|despues|luego|no gracias|paso)\b/.test(n))return null;
+  const half=/\by (media|medio)\b|\bpunto cinco\b|\bcon cinco\b/.test(n)?.5:0;
+  const decimal=String(text).match(/\b([1-4])[.,]5\b/);if(decimal)return Number(decimal[1])+.5;
+  const digits=n.match(/\b([1-5])\b/);
+  if(digits)return Math.min(5,Number(digits[1])+half);
+  const word=n.match(/\b(una|uno|un|dos|tres|cuatro|cinco)\b/);
+  if(word&&(/\b(estrellas?|puntos?|de cinco|sobre cinco|te doy|le doy|le pongo|te pongo)\b/.test(n)||half||n.split(' ').length<=2))return Math.min(5,count(word[1])+half);
+  if(/\b(pesimo|horrible|terrible|muy mal|malisimo|fatal)\b/.test(n))return 1;
+  if(/\b(excelente|perfecto|buenisimo|increible|muy bien|muy bueno|lo maximo|espectacular|super|chevere|bacan|me encanto|genial)\b/.test(n))return 5;
+  if(/\b(regular|mas o menos|normal|ahi nomas|masomenos)\b/.test(n))return 3;
+  if(/\b(mal|malo|mala|lento|demorado|no me gusto)\b/.test(n))return 2;
+  if(/\b(bien|bueno|buena|rico|me gusto)\b/.test(n))return 4;
+  return null;
 }
 // Corrige diferencias de forma frecuentes en la salida del modelo antes de la validación estricta.
 // Nunca crea ediciones: si la intención no es «edit», se descartan las operaciones.
@@ -133,9 +151,9 @@ const soundAlikes=[
   [/\bcombos? persona\b/g,'combo personal'],[/\bcon vo personal\b/g,'combo personal'],[/\bel familia\b/g,'el familiar'],
   [/\bunas? alita(?: bbq)?\b/g,'unas alitas'],[/\bmedio pollos\b/g,'medios pollos'],[/\buna papa\b/g,'unas papas'],[/\bcombo pa dos\b/g,'combo para dos'],
 ];
-export function soundsLike(text){let n=normalize(text);for(const [re,to] of soundAlikes)n=n.replace(re,to);return n;}
+export function soundsLike(text,menu){let n=normalize(text);for(const [re,to] of soundAlikes)n=n.replace(re,to);return fixWords(n,menu);}
 export function interpretLocal(text,cart,menu,lastId=null,context={}){
-  const n=soundsLike(text);
+  const n=soundsLike(text,menu);text=n;
   const category=navigation(text);
   if(category)return answer('menu','',{category});
   // Autocorrección: «un cuarto, no, mejor medio» → solo cuenta lo último que pidió.
@@ -157,6 +175,15 @@ export function interpretLocal(text,cart,menu,lastId=null,context={}){
   if(group&&/\b(recomienda|recomiendas|recomendacion|sugieres|sugiere|que pido|que pedimos|que nos das|para compartir|que me das)\b/.test(n)){
     const plan=suggestForPeople(count(group[1]),menu);
     if(plan)return answer('recommend',plan.reply,{suggest_ids:plan.operations.map(o=>o.id),proposal:plan.operations});
+  }
+  // «Algo ligero» / «algo pesado para llenarme»: se razona con el perfil de cada plato del catálogo.
+  const light=/\b(ligero|ligerito|liviano|livianito|suave|light|sano|saludable|dieta|no tan pesado|poquito|algo pequeno|no tengo mucha hambre)\b/.test(n);
+  const heavy=/\b(pesado|llenarme|llenar|llenito|contundente|bastante|harto|hambre|hambriento|muerto de hambre|algo fuerte|que llene|grande)\b/.test(n)&&!/\bno tengo mucha hambre\b/.test(n);
+  if((light||heavy)&&!/\b(no|sin)\b/.test(n.replace(/no tan pesado|no tengo mucha hambre/,''))){
+    const picks=light?['pechuga','cuarto']:['medio','combo-alitas'];
+    const [a,b]=picks.map(id=>menu.find(p=>p.id===id&&p.available)).filter(Boolean);
+    const say=p=>p.pitch||one(p);
+    if(a&&b)return answer('recommend',`${light?'Para algo ligero':'Para llenarte bien'}, ${say(a)}, o ${say(b)}. ¿Cuál te anoto?`,{suggest_ids:[a.id,b.id]});
   }
   if(/\b(recomienda|recomiendas|recomendacion|que hay|que tienes)\b/.test(n)) return answer('recommend','Si es para ti solo, el combo personal va bien. Para compartir, el combo familiar. ¿Para cuántos es?',{suggest_ids:['combo-personal','combo-familiar']});
   const single=menu.find(p=>p.available&&[p.name,...p.aliases].some(a=>normalize(a).replace(/^(un|una) /,'')===n));

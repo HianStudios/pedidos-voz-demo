@@ -8,7 +8,9 @@ export default endpoint(async(req,res)=>{
   if(!liveOrders())throw fail('Caja compartida no configurada. Está activo el modo demo.',503);
   await rateLimit(req,'orders',60);
   if(req.method==='GET'){
-    staff(req);const ids=await redis(['ZREVRANGE',`${prefix}:orders`,0,199]);
+    // ?limit=1000 para el panel de administración (los pedidos se guardan 30 días).
+    staff(req);const limit=Math.min(1000,Math.max(1,Number(new URL(req.url||'/','http://x').searchParams.get('limit'))||200));
+    const ids=await redis(['ZREVRANGE',`${prefix}:orders`,0,limit-1]);
     const values=ids.length?await redis(['MGET',...ids.map(id=>`${prefix}:order:${id}`)]):[];
     return json(res,200,{orders:values.filter(Boolean).map(v=>JSON.parse(v))});
   }

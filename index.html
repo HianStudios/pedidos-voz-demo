@@ -23,12 +23,12 @@
 
   <nav class="dock" aria-label="Acciones">
     <button id="menuOpen" class="dock-btn" aria-label="Ver el menú" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="6.5" height="6.5" rx="2"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="2"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="2"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="2"/></svg></button>
-    <button id="keyboardOpen" class="dock-btn" aria-label="Escribir en lugar de hablar" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="3"/><path d="M7 10h.01M11 10h.01M15 10h.01M8 14h8"/></svg></button>
+    <button id="keyboardOpen" class="dock-btn" hidden aria-label="Escribir en lugar de hablar" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="3"/><path d="M7 10h.01M11 10h.01M15 10h.01M8 14h8"/></svg></button>
     <button id="stopVoice" class="dock-btn" aria-label="Apagar micrófono" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 11.5 5.4M19 11a7 7 0 0 1-.4 2.3M12 18v3M4 4l16 16"/></svg></button>
     <button id="cartOpen" class="dock-btn" aria-label="Mi pedido"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 8h12l-1 12H7L6 8Z"/><path d="M9 8V7a3 3 0 0 1 6 0v1"/></svg><span id="cartCount" class="badge">0</span></button>
   </nav>
 
-  <form class="composer" id="composer" data-chat hidden>
+  <form class="composer" id="composer" data-chat data-typing hidden>
     <label for="chatText" class="sr-only">Tu mensaje</label>
     <input id="chatText" autocomplete="off" placeholder="Escribe lo que se te antoja…" maxlength="1200">
     <button id="sendText" aria-label="Enviar mensaje">↑</button>
@@ -46,7 +46,7 @@
     <footer class="sheet-foot">
       <button class="mini-milo" data-talk aria-label="Hablar con Milo"><span class="eyes"><i></i><i></i></span></button>
       <p class="dialog-reply" aria-live="polite"></p>
-      <form class="inline-chat" data-chat><label class="sr-only" for="modalText">Tu mensaje</label><input id="modalText" placeholder="O escribe…" maxlength="1200"><button aria-label="Enviar mensaje">↑</button></form>
+      <form class="inline-chat" data-chat data-typing hidden><label class="sr-only" for="modalText">Tu mensaje</label><input id="modalText" placeholder="O escribe…" maxlength="1200"><button aria-label="Enviar mensaje">↑</button></form>
     </footer>
   </dialog>
 
@@ -56,10 +56,35 @@
     <footer class="sheet-foot">
       <button class="mini-milo" data-talk aria-label="Hablar con Milo"><span class="eyes"><i></i><i></i></span></button>
       <p class="dialog-reply" aria-live="polite"></p>
-      <form class="inline-chat" data-chat><label class="sr-only" for="summaryText">Corregir pedido</label><input id="summaryText" placeholder="¿Cambiamos algo?" maxlength="1200"><button aria-label="Enviar cambio">↑</button></form>
+      <form class="inline-chat" data-chat data-typing hidden><label class="sr-only" for="summaryText">Corregir pedido</label><input id="summaryText" placeholder="¿Cambiamos algo?" maxlength="1200"><button aria-label="Enviar cambio">↑</button></form>
     </footer>
   </dialog>
 
+  <!-- Calificación al terminar el pedido: por voz («cuatro y media») o tocando las estrellas -->
+  <dialog id="rateSheet" class="rate-sheet" aria-labelledby="rateTitle">
+    <p class="rate-eyebrow">Tu pedido va en camino a cocina</p>
+    <h2 id="rateTitle">¿Qué te pareció mi atención?</h2>
+    <div class="stars" id="stars" role="radiogroup" aria-label="Calificación de 1 a 5 estrellas">
+      <button data-star="1" aria-label="1 estrella"><span></span></button><button data-star="2" aria-label="2 estrellas"><span></span></button><button data-star="3" aria-label="3 estrellas"><span></span></button><button data-star="4" aria-label="4 estrellas"><span></span></button><button data-star="5" aria-label="5 estrellas"><span></span></button>
+    </div>
+    <p class="rate-caption" id="rateCaption" aria-live="polite">Dímelo con tu voz o toca las estrellas</p>
+    <button class="rate-skip" id="rateSkip" autofocus>Ahora no</button>
+  </dialog>
+  <!-- Modo kiosco: esquina del personal (mantener 3 s), cubierta al salir de pantalla completa y clave -->
+  <button id="staffCorner" class="staff-corner" aria-label="Personal: mantener presionado para el modo kiosco"></button>
+  <div id="kioskCover" class="kiosk-cover" hidden><div class="cover-milo" aria-hidden="true"><span class="eyes"><i></i><i></i></span></div><p>Toca para continuar</p></div>
+  <dialog id="pinPad" class="pin-pad" aria-labelledby="pinTitle">
+    <h2 id="pinTitle">Modo kiosco</h2>
+    <p class="pin-dots" id="pinDots" aria-live="polite">—</p>
+    <div class="pin-keys">
+      <button data-key="1">1</button><button data-key="2">2</button><button data-key="3">3</button>
+      <button data-key="4">4</button><button data-key="5">5</button><button data-key="6">6</button>
+      <button data-key="7">7</button><button data-key="8">8</button><button data-key="9">9</button>
+      <button data-key="del" aria-label="Borrar">⌫</button><button data-key="0">0</button><button data-key="ok" class="pin-ok">Entrar</button>
+    </div>
+    <p class="pin-error" id="pinError" role="alert"></p>
+    <button data-key="cancel" class="pin-cancel">Cancelar</button>
+  </dialog>
   <div class="toast" id="toast" role="status"></div>
   <script type="module" src="/public/js/app.js"></script>
 </body>

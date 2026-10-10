@@ -12,7 +12,7 @@ export default endpoint(async(req,res)=>{
   if(!file||typeof file.arrayBuffer!=='function'||file.size<500||file.size>3000000||!/^audio\/(webm|mp4|ogg|wav|mpeg)(;|$)/.test(file.type))throw fail('Formato o tamaño de audio inválido.');
   const outgoing=new FormData();outgoing.append('file',file);outgoing.append('model','whisper-large-v3');outgoing.append('language','es');outgoing.append('response_format','verbose_json');
   // Vocabulario del local: mejora marcas y platos («Sprite», «combo familiar», «sin cebolla»).
-  outgoing.append('prompt',`Pedido en ${restaurant.name}: ${menu.map(p=>p.name).join(', ')}. Sin cebolla, sin papas.`);
+  outgoing.append('prompt',`Pedido en ${restaurant.name}. Menú de platos, combos, extras y bebidas: ${menu.map(p=>p.name).join(', ')}. Sin cebolla, sin papas. ¿Para cuántos? Para dos.`);
   try{
     const response=await fetch('https://api.groq.com/openai/v1/audio/transcriptions',{method:'POST',headers:{Authorization:`Bearer ${process.env.GROQ_API_KEY}`},body:outgoing,signal:AbortSignal.timeout(20000)});
     if(!response.ok)throw new Error('Provider failed');const result=await response.json();

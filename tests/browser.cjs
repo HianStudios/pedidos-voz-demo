@@ -3,7 +3,7 @@ const {chromium}=require(require.resolve('playwright',{paths:[process.env.CODEX_
 const assert=require('node:assert/strict');const fs=require('node:fs');
 (async()=>{
  fs.mkdirSync('test-results',{recursive:true});const browser=await chromium.launch({headless:true,executablePath:process.env.PLAYWRIGHT_EXECUTABLE_PATH||undefined,args:['--no-sandbox']});const ctx=await browser.newContext({viewport:{width:1280,height:800}});const page=await ctx.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));
- await page.goto('http://localhost:3000/?mesa=7');await page.locator('#menuOpen:not([disabled])').waitFor();
+ await page.goto('http://localhost:3000/?mesa=7&teclado=1');await page.locator('#menuOpen:not([disabled])').waitFor();
  assert.equal(await page.locator('#tableNumber').textContent(),'7');assert.equal(await page.locator('a[href="/caja.html"]').count(),0,'la mesa no enlaza a caja');
  await page.screenshot({path:'test-results/home-desktop.png'});
  const cash=await ctx.newPage();cash.on('pageerror',e=>errors.push(e.message));await cash.goto('http://localhost:3000/caja.html');await cash.locator('#workspace:not([hidden])').waitFor();
@@ -30,14 +30,31 @@ const assert=require('node:assert/strict');const fs=require('node:fs');
  const cash2=await ctx.newPage();await cash2.goto('http://localhost:3000/caja.html');await cash2.locator('.status-pill[data-status="aceptado"]').waitFor();
  await cash.locator('[data-status="preparando"][data-order]').click();await cash2.locator('.status-pill[data-status="preparando"]').waitFor();
  await cash.screenshot({path:'test-results/caja-desktop.png',fullPage:true});
+ // Calificación al terminar: «cuatro y media» (por voz en la app real; aquí por el mismo controlador).
+ await page.bringToFront();await page.locator('#rateSheet[open]').waitFor();await page.evaluate(()=>window.__miloInput('cuatro y media'));
+ await page.waitForFunction(()=>JSON.parse(localStorage.getItem('mesero-brasa-v2-orders')||'[]')[0]?.rating?.stars===4.5);await page.locator('#rateSheet[open]').waitFor({state:'hidden',timeout:6000});
  await say('qué me recomiendas');assert.match(await page.locator('#reply').textContent(),/cuántos/);await say('cinco');assert.match(await page.locator('#reply').textContent(),/Para cinco/);assert.equal(await page.locator('#cartCount').textContent(),'0','proponer no agrega');
  await say('sí');assert.equal(await page.locator('#cartCount').textContent(),'2','el sí acepta la propuesta');
  await say('sí, muéstrame el menú');await page.locator('.door').first().waitFor();
+ // Palabras mal escuchadas y pedidos por sensación.
+ await say('muéstrame los piatos');await page.locator('.dish[data-product="cuarto"]').waitFor();assert.match(await page.locator('#reply').textContent(),/menú de platos/);
+ await page.locator('[data-close="optionsModal"]').click();const before=Number(await page.locator('#cartCount').textContent());await say('dame algo ligero');assert.match(await page.locator('#reply').textContent(),/ligero/);assert.equal(Number(await page.locator('#cartCount').textContent()),before,'recomendar no agrega');
+ await say('el primero');assert.equal(Number(await page.locator('#cartCount').textContent()),before+1);assert.match(await page.locator('#reply').textContent(),/pechuga/i);
+ // Panel: el pedido y su calificación aparecen.
+ const admin=await ctx.newPage();admin.on('pageerror',e=>errors.push(e.message));await admin.goto('http://localhost:3000/admin.html');await admin.locator('#dashboard:not([hidden])').waitFor();
+ assert.equal(await admin.locator('#kpiOrders').textContent(),'1');assert.match(await admin.locator('#kpiRating').textContent(),/4,5/);assert.ok(await admin.locator('[data-chart="food"] .hbar').count()>=2);
+ await admin.screenshot({path:'test-results/admin-desktop.png',fullPage:true});
+ // Modo kiosco: esquina del personal 3 s + clave (el servidor de prueba usa KIOSK_PIN=1234); caja recibe el aviso.
+ await page.bringToFront();const corner=await page.locator('#staffCorner').boundingBox();await page.mouse.move(corner.x+20,corner.y+20);await page.mouse.down();await page.waitForTimeout(3200);await page.mouse.up();
+ await page.locator('#pinPad[open]').waitFor();for(const k of '1234')await page.locator(`#pinPad [data-key="${k}"]`).click();await page.locator('#pinPad [data-key="ok"]').click();
+ await page.waitForFunction(()=>document.body.classList.contains('kiosk'));await cash.bringToFront();await cash.locator('.alert-row[data-type="kiosk-on"]').waitFor();
+ await page.bringToFront();await page.mouse.move(corner.x+20,corner.y+20);await page.mouse.down();await page.waitForTimeout(3200);await page.mouse.up();
+ await page.locator('#pinPad[open]').waitFor();for(const k of '1234')await page.locator(`#pinPad [data-key="${k}"]`).click();await page.locator('#pinPad [data-key="ok"]').click();await page.waitForFunction(()=>!document.body.classList.contains('kiosk'));
  // Sin mesa configurada vuelve el flujo de retiro con nombre.
- await page.goto('http://localhost:3000/?mesa=');await page.locator('#menuOpen:not([disabled])').waitFor();assert.equal(await page.locator('#tableChip').isHidden(),true);
+ await page.goto('http://localhost:3000/?mesa=&teclado=1');await page.locator('#menuOpen:not([disabled])').waitFor();assert.equal(await page.locator('#tableChip').isHidden(),true);
  await say('dos cuartos de pollo');await say('eso es todo');await page.locator('#customerName').waitFor();
- await page.bringToFront();await page.setViewportSize({width:390,height:844});await page.goto('http://localhost:3000/?mesa=3');await page.locator('#menuOpen:not([disabled])').waitFor();await page.screenshot({path:'test-results/home-mobile.png'});
+ await page.bringToFront();await page.setViewportSize({width:390,height:844});await page.goto('http://localhost:3000/?mesa=3');await page.locator('#menuOpen:not([disabled])').waitFor();assert.equal(await page.locator('#keyboardOpen').isHidden(),true,'sin teclado para el cliente');assert.equal(await page.locator('.inline-chat').first().isHidden(),true);await page.screenshot({path:'test-results/home-mobile.png'});
  await page.locator('#menuOpen').click();await page.locator('.door[data-category="Combos"]').click();await page.waitForTimeout(1200);assert.ok(await page.locator('.dish').first().evaluate(e=>getComputedStyle(e).opacity==='1'));await page.screenshot({path:'test-results/combos-mobile.png'});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
  await cash.setViewportSize({width:390,height:844});await cash.screenshot({path:'test-results/caja-mobile.png',fullPage:true});assert.equal(await cash.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
- assert.deepEqual(errors,[]);await browser.close();console.log('PASS: mesa, menú animado, foco de voz, agregar directo, revisión segura, caja en vivo con mesa, retiro con nombre y móvil.');
+ assert.deepEqual(errors,[]);await browser.close();console.log('PASS: mesa, menú animado, palabras parecidas, ligero/«el primero», calificación, panel, kiosco con clave y aviso a caja, foco de voz, agregar directo, revisión segura, caja en vivo con mesa, retiro con nombre y móvil.');
 })().catch(e=>{console.error(e);process.exit(1);});

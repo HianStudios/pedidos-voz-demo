@@ -54,5 +54,13 @@ export const cases=[
   {id:'postres',say:'tienen postres',expect:all(noAdd,helpful)},
   {id:'y-de-tomar',say:'y de tomar',expect:menu('Bebidas')},
   {id:'combo-pa-dos',say:'combo pa dos',expect:add('combo-pareja',1)},
+  {id:'piatos',say:'muéstrame los piatos',expect:menu('Platos')},
+  {id:'conbos',say:'quiero ver los conbos',expect:menu('Combos')},
+  {id:'algo-ligero',say:'dame algo ligero',expect:all(r=>r.intent==='recommend',noAdd,r=>r.suggest_ids.includes('pechuga'))},
+  {id:'algo-pesado',say:'algo pesado para llenarme bien',expect:all(r=>r.intent==='recommend',noAdd,r=>r.suggest_ids.some(id=>['medio','combo-alitas','entero','combo-familiar'].includes(id)))},
+  {id:'algo-sano',say:'tienes algo sanito que no engorde',expect:all(noAdd,helpful,r=>r.suggest_ids.some(id=>['pechuga','ensalada','combo-pechuga'].includes(id))||/pechuga|ensalada/i.test(r.reply))},
+  {id:'muero-de-hambre',say:'me muero de hambre, qué me das',expect:all(noAdd,helpful)},
+  {id:'pa-los-guaguas',say:'algo pa los guaguas',expect:all(noAdd,helpful)},
+  {id:'lo-de-siempre',say:'lo mismo que la otra vez',expect:all(noAdd,helpful)},
   {id:'autocorreccion',say:'un cuarto, no, mejor medio',expect:all(add('medio',1),r=>!add('cuarto')(r))},
 ];

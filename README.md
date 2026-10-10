@@ -23,6 +23,30 @@ Abrir http://localhost:3000. **No abrir index.html directamente:** las rutas `/a
 - Tras 2 minutos sin uso, la pantalla vuelve a Milo y apaga el micrófono (el pedido en curso se conserva).
 - La confirmación verbal solo envía si corresponde a un resumen vigente. Cualquier edición invalida la revisión anterior.
 
+## Tres páginas
+
+- **`/` mesa (cliente):** solo Milo y la voz. Sin teclado: `?teclado=1` lo muestra para el personal y las pruebas.
+- **`/caja.html` caja:** pedidos en vivo, estados y **avisos de las mesas** (modo kiosco activado o desactivado, salida de pantalla completa, app oculta, clave incorrecta), con un tono cuando llega un aviso nuevo.
+- **`/admin.html` panel:** ventas, pedidos, ticket promedio y experiencia (estrellas promedio); lo que más sale, bebidas más vendidas, pedidos por hora, calificaciones, pedidos por mesa y lo que dijeron los clientes. Filtros: hoy, 7 días y 30 días. Cada gráfica tiene vista de tabla. Usa la misma clave del personal que la caja y lee los últimos 1.000 pedidos, que se guardan 30 días.
+
+## Modo kiosco
+
+Para activarlo en la tablet, mantén presionada 3 segundos la esquina superior derecha (es invisible para el cliente) y escribe la clave en el teclado numérico. La clave es `KIOSK_PIN`, guardada en Vercel y verificada solo en el servidor. Con el modo activo:
+- La app pasa a pantalla completa y bloquea el gesto de atrás, el menú contextual, la selección de texto y el zoom.
+- Si se sale de pantalla completa, aparece «Toca para continuar» y caja recibe un aviso.
+- Solo se desactiva con la clave, y la desactivación también se avisa a caja.
+
+**Límite:** ninguna página web puede impedir que el sistema operativo salga de pantalla completa. Para un bloqueo total, combinarlo con la **fijación de pantalla** de Android o el **Acceso Guiado** del iPad.
+
+## Calificación
+
+Al enviar el pedido, Milo pregunta «¿Qué te pareció mi atención? Dime de una a cinco estrellas». Entiende «cuatro estrellas», «cuatro y media», «4.5», «excelente» y «más o menos», y también se puede calificar tocando las estrellas, incluso medias. Se guarda una sola calificación por pedido, con la frase que dijo el cliente, y se ve en el panel.
+
+## Entender como habla la gente
+
+- **Palabras parecidas:** «piatos», «conbos», «pechuca», «bevidas» y «conbo persnal» se corrigen por parecido con las palabras del menú (`public/js/fuzzy.js`). No se tocan números ni palabras comunes como «cuatro», «cosa», «plata» o «media».
+- **Por sensación:** «algo ligero» y «algo pesado para llenarme» recomiendan según el perfil de cada plato (`feel` en el catálogo). Luego «el primero», «la segunda» o «el otro» eligen una de las opciones.
+
 ## Voz y límites
 
 - Milo habla **frase por frase** y pronuncia precios y medidas como un mesero («cuatro dólares con cincuenta», «cuatrocientos mililitros»), sin emojis ni símbolos (`public/js/speech-text.js`).

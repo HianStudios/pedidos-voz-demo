@@ -139,6 +139,40 @@ button,input{font:inherit;color:inherit}button{cursor:pointer;-webkit-tap-highli
 .toast{visibility:hidden;position:fixed;left:50%;top:max(16px,env(safe-area-inset-top));transform:translate(-50%,-150%);background:var(--ink);color:#fff;padding:12px 20px;border-radius:99px;font-size:14px;transition:transform .45s var(--ease);z-index:20}
 .toast.visible{visibility:visible;transform:translate(-50%,0)}
 
+/* ---------- Calificación ---------- */
+.rate-sheet{border:0;border-radius:32px;padding:34px 28px 24px;width:min(520px,calc(100% - 32px));background:var(--surface);color:var(--ink);text-align:center;box-shadow:0 30px 80px #0002}
+.rate-sheet[open]{animation:sheetIn .5s var(--ease)}
+.rate-sheet::backdrop{background:#2323}
+.rate-eyebrow{margin:0;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--muted)}
+.rate-sheet h2{margin:10px 0 22px;font-family:Manrope,sans-serif;font-size:clamp(24px,3.4vw,32px);letter-spacing:-.02em}
+.stars{display:flex;justify-content:center;gap:clamp(6px,2vw,14px)}
+.stars button{--fill:0%;width:clamp(48px,11vw,64px);aspect-ratio:1;border:0;padding:0;background:none;position:relative;transition:transform .3s var(--ease)}
+.stars button::before,.stars span{content:'';position:absolute;inset:0;clip-path:polygon(50% 3%,61% 37%,97% 38%,68% 59%,79% 95%,50% 73%,21% 95%,32% 59%,3% 38%,39% 37%)}
+.stars button::before{background:#e9e3d6}
+.stars span{background:linear-gradient(90deg,#f0b43c var(--fill),transparent var(--fill))}
+.stars button.lit{animation:starPop .45s var(--ease) both;animation-delay:calc(var(--i)*90ms)}
+@keyframes starPop{50%{transform:scale(1.25) rotate(-6deg)}}
+.rate-caption{min-height:1.4em;margin:20px 0 6px;font-family:Manrope,sans-serif;font-weight:600;font-size:17px}
+.rate-skip{border:0;background:none;color:var(--muted);padding:10px 18px;font-size:14px}
+
+/* ---------- Modo kiosco ---------- */
+.staff-corner{position:fixed;top:0;right:0;width:72px;height:72px;border:0;background:transparent;z-index:30;opacity:0;-webkit-touch-callout:none;user-select:none}
+body.kiosk{user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;touch-action:manipulation;overscroll-behavior:none}
+.kiosk-cover{position:fixed;inset:0;z-index:25;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;font-family:Manrope,sans-serif;font-size:clamp(20px,3vw,30px);font-weight:600;cursor:pointer}
+.cover-milo{width:140px;height:144px;border-radius:48% 48% 46% 46%;background:radial-gradient(ellipse at 34% 23%,#fffce9,#ffe9b0 38%,#e8bd70 75%,#cea256);position:relative;animation:bob 5s ease-in-out infinite;font-size:10px}
+.cover-milo .eyes{top:44%}
+.pin-pad{border:0;border-radius:28px;padding:28px;width:min(340px,calc(100% - 32px));background:var(--surface);color:var(--ink);box-shadow:0 30px 80px #0003;text-align:center}
+.pin-pad::backdrop{background:#2325}
+.pin-pad h2{margin:0 0 6px;font-family:Manrope,sans-serif;font-size:20px}
+.pin-dots{font-size:26px;letter-spacing:.3em;min-height:36px;margin:10px 0 16px}
+.pin-keys{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.pin-keys button{height:62px;border:1px solid var(--line);border-radius:18px;background:#fff;font-size:24px;font-family:Manrope,sans-serif;font-weight:600}
+.pin-keys .pin-ok{background:var(--ink);color:#fff;font-size:16px}
+.pin-error{min-height:20px;color:var(--accent);font-size:14px;margin:12px 0 4px}
+.pin-cancel{border:0;background:none;color:var(--muted);padding:8px 16px}
+.pin-pad.shake{animation:shake .4s}
+@keyframes shake{20%,60%{transform:translateX(-8px)}40%,80%{transform:translateX(8px)}}
+
 @media (max-width:700px){
   .sheet-head{flex-wrap:wrap;gap:6px 12px}.tabs{order:3;width:100%;margin:0}
   .sheet-foot{flex-wrap:wrap}.inline-chat{width:100%}

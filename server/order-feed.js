@@ -1,5 +1,6 @@
 import {restaurant} from './catalog.js';
 import {redis} from './http.js';
+import {readAlerts} from './alerts.js';
 export async function orderSnapshot(){
  const prefix=`mesero:${restaurant.id}`;
  // One atomic read prevents interleaved status changes producing an inconsistent snapshot.
@@ -7,7 +8,11 @@ export async function orderSnapshot(){
  const values=await redis(['EVAL',script,1,`${prefix}:orders`,`${prefix}:order:`]);
  return values.map(v=>JSON.parse(v));
 }
-export async function streamOrders(res,{snapshot=orderSnapshot,duration=20000,interval=1500}={}){
+// Pedidos y avisos de las mesas en una sola lectura del stream de caja.
+export async function feedSnapshot(){
+ const [orders,alerts]=await Promise.all([orderSnapshot(),readAlerts()]);return {orders,alerts};
+}
+export async function streamOrders(res,{snapshot=feedSnapshot,duration=20000,interval=1500}={}){
  res.setHeader('Content-Type','text/event-stream; charset=utf-8');res.setHeader('Cache-Control','no-store, no-transform');res.setHeader('X-Accel-Buffering','no');res.flushHeaders?.();
  const controller=new AbortController();const abort=()=>controller.abort();res.on('close',abort);
  const deadline=setTimeout(abort,duration);let previous='';
@@ -15,8 +20,9 @@ export async function streamOrders(res,{snapshot=orderSnapshot,duration=20000,in
  try{
   send('connected',{at:Date.now()});
   while(!controller.signal.aborted){
-   const orders=await snapshot();if(controller.signal.aborted)break;
-   const payload=JSON.stringify(orders);if(payload!==previous){send('orders',{orders,at:Date.now()});previous=payload;}else send('heartbeat',{at:Date.now()});
+   const snap=await snapshot();if(controller.signal.aborted)break;
+   const data=Array.isArray(snap)?{orders:snap}:snap;
+   const payload=JSON.stringify(data);if(payload!==previous){send('orders',{...data,at:Date.now()});previous=payload;}else send('heartbeat',{at:Date.now()});
    await new Promise(resolve=>{if(controller.signal.aborted)return resolve();const finish=()=>{clearTimeout(timer);controller.signal.removeEventListener('abort',finish);resolve();};const timer=setTimeout(finish,interval);controller.signal.addEventListener('abort',finish,{once:true});});
   }
  }catch{send('unavailable',{message:'Se perdió la conexión con caja. Reconectando…'});}
