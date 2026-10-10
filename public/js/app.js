@@ -1,4 +1,4 @@
-import {money,total,validateCart,applyOperations,isConfirmation,normalize,describeOps,followUp,amount,parsePeople,suggestForPeople,soundsLike,parseRating} from './domain.js';
+import {money,total,validateCart,applyOperations,isConfirmation,normalize,describeOps,followUp,amount,parsePeople,suggestForPeople,soundsLike,parseRating,removalsFor} from './domain.js';
 import {navigation,plausibleName,cartSignature} from './conversation.js';
 import {foodArt} from './art.js';
 import {VoiceController} from './voice.js';
@@ -21,7 +21,8 @@ let menu=[],restaurant,mode='demo',cart=[],history=[],busy=false,epoch=0,request
  category=null,awaitingCancel=false,drinkOffered=false,spotTimers=[],idleTimer=0,
  asked=null,proposal=null, // pregunta pendiente de Milo y propuesta que espera un «sí»
  choices=null, // opciones que Milo acaba de ofrecer («el primero», «la segunda»)
- rating=null; // pedido recién enviado que espera calificación
+ rating=null, // pedido recién enviado que espera calificación
+ detail=null; // ficha abierta: {id, notes:Set}
 function saveDraft(){try{localStorage.setItem(storageKey,JSON.stringify({cart,pending,customer:customerName}));}catch{}}
 let toastTimer;
 function toast(text){$('toast').textContent=text;$('toast').classList.add('visible');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').classList.remove('visible'),4500);}
@@ -73,7 +74,7 @@ function showCategories(){
 function showProducts(items,title,cat=null){
  category=cat;
  if(!items.length){reply('Ahora mismo no hay productos disponibles aquí.');return;}
- openSheet(title,`<p class="shelf-hint">Dile a Milo cuál quieres, o toca «Agregar».</p><div class="shelf" tabindex="0" aria-label="${esc(title)}">${items.map((p,i)=>`<article class="dish" style="--i:${i}" data-product="${p.id}"><div class="art">${foodArt(p)}</div><span class="tag">${esc(p.tag||'')}</span><h3>${esc(p.name)}</h3><p>${esc(p.desc)}</p><footer><span class="price">${money(p.price)}</span><button class="add" data-add="${p.id}" aria-label="Agregar ${esc(p.name)}">Agregar</button></footer></article>`).join('')}</div>`,cat);
+ openSheet(title,`<p class="shelf-hint">Dile a Milo cuál quieres, o toca «Agregar».</p><div class="shelf" tabindex="0" aria-label="${esc(title)}">${items.map((p,i)=>`<article class="dish" style="--i:${i}" data-product="${p.id}"><div class="art">${foodArt(p)}</div><span class="tag">${esc(p.tag||'')}</span><h3>${esc(p.name)}</h3><p>${esc(p.desc)}</p><footer><span class="price">${money(p.price)}</span>${p.ingredients?.length>1?`<button class="info" data-detail="${p.id}">Qué trae</button>`:''}<button class="add" data-add="${p.id}" aria-label="Agregar ${esc(p.name)}">Agregar</button></footer></article>`).join('')}</div>`,cat);
 }
 function showCategory(cat){showProducts(menu.filter(p=>p.category===cat&&p.available),cat,cat);}
 const spokenName=p=>p.category==='Bebidas'?p.name:p.name.charAt(0).toLowerCase()+p.name.slice(1);
@@ -120,6 +121,15 @@ async function handleInput(raw){
  activity();interrupt();const turn=epoch;voice.state('thinking');$('transcript').textContent=`«${said}»`;$('voiceHelp').textContent='';history.push({role:'user',content:said});const n=raw;
  if(pending){if(isConfirmation(raw))return submit();reply('Hay un envío pendiente de comprobar. Reintenta el mismo pedido desde el resumen.');return;}
  if(awaitingCancel){awaitingCancel=false;if(isConfirmation(raw)){setCart([]);drinkOffered=false;closeModals();reply('Listo, empezamos de cero. ¿Qué se te antoja?');return;}if(/^(no|no gracias)$/.test(n)){reply('Perfecto, lo dejo como está.');return;}}
+ // Ficha abierta: quitar/poner ingredientes por voz, «agrégalo» para anotarlo, cualquier otra cosa la cierra.
+ if(detail&&$('detailSheet').open){
+  const p=menu.find(x=>x.id===detail.id);const {remove,restore}=removalsFor(said,p);
+  if(remove.length||restore.length){remove.forEach(o=>detail.notes.add(o));restore.forEach(o=>detail.notes.delete(o));renderDetail();
+   reply(`${remove.length?`Listo, ${listWords(remove)}`:`Listo, ${listWords(restore.map(o=>o.replace(/^sin /,'con ')))}`}. ¿Te lo anoto así?`);return;}
+  if(isConfirmation(raw)||/\b(agregalo|agregamelo|anotalo|anotamelo|ponlo|ponmelo|dame ese|lo quiero|asi esta bien|asi nomas|dale|guardalo)\b/.test(n)){commitDetail();return;}
+  detail=null;$('detailSheet').close();
+  if(/^(no|no gracias|nada|cierra|cerrar|despues)$/.test(n)){reply('Listo. ¿Qué más te provoca?');return;}
+ }
  // Calificación pendiente: «cuatro y media», «excelente», «ahora no».
  if(rating){
   const stars=parseRating(said);
@@ -177,6 +187,7 @@ async function handleInput(raw){
    else if(items.length>=2&&items.length<=4)choices=items.map(p=>p.id);
    else if(result.suggest_ids?.length===1&&/anot/i.test(result.reply))proposal={operations:[{type:'add',id:result.suggest_ids[0],qty:1}]};
    reply(result.reply);
+  }else if(result.intent==='detail'&&result.suggest_ids?.[0]){openDetail(result.suggest_ids[0]);
   }else if(result.intent==='review')review();
   else if(result.intent==='cancel'){awaitingCancel=true;reply('¿Borro todo el pedido y empezamos de cero?');}
   else if(result.intent==='goodbye'&&!cart.length){await reply(result.reply||'¡Gracias! Aquí estaré.','wait');sessionActive=false;voice.disable();}
@@ -203,6 +214,34 @@ async function submit(){
  finally{sending=false;}
 }
 
+// ---------- Ficha del producto ----------
+const lower=t=>t.charAt(0).toLowerCase()+t.slice(1);
+function renderDetail(){
+ const p=menu.find(x=>x.id===detail.id);const removed=detail.notes;
+ // Se tacha el ingrediente quitado entero («sin ensalada»); si se quita una parte («sin tomate»), se anota debajo.
+ const words=[...removed].map(o=>normalize(o).replace(/^sin /,''));
+ $('detailIngredients').innerHTML=(p.ingredients||[p.desc]).map(i=>{const ni=normalize(i);const off=words.some(w=>ni.startsWith(w));const part=off?[]:words.filter(w=>new RegExp(`\\b${w}\\b`).test(ni));
+  return `<li class="${off?'off':''}">${esc(i)}${part.length?` <small class="detail-minus">sin ${esc(part.join(' ni '))}</small>`:''}</li>`;}).join('');
+ $('detailRemoveBox').hidden=!p.options.length;
+ $('detailChips').innerHTML=p.options.map(o=>`<button data-note="${esc(o)}" aria-pressed="${removed.has(o)}">${esc(o.charAt(0).toUpperCase()+o.slice(1))}</button>`).join('');
+ const inCart=cart.some(l=>l.id===p.id);$('detailAdd').textContent=inCart?'Guardar cambios':'Agregar al pedido';
+}
+function openDetail(id,{speak=true}={}){
+ const p=menu.find(x=>x.id===id&&x.available);if(!p)return;
+ detail={id,notes:new Set(cart.find(l=>l.id===id)?.notes||[])};lastId=id;
+ $('detailArt').innerHTML=foodArt(p);$('detailTag').textContent=p.tag||'';$('detailName').textContent=p.name;$('detailDesc').textContent=p.desc;$('detailPrice').textContent=money(p.price);
+ renderDetail();if(!$('detailSheet').open)$('detailSheet').showModal();
+ if(speak)reply(`${p.name} trae ${listWords((p.ingredients||[p.desc]).map(lower))}.${p.options.length?' ¿Le quitamos algo o te lo anoto así?':' ¿Te lo anoto?'}`);
+}
+function commitDetail(){
+ if(!detail)return;const {id,notes}=detail;detail=null;if($('detailSheet').open)$('detailSheet').close();
+ const line=cart.find(l=>l.id===id);
+ const operations=line?[...[...notes].filter(n=>!line.notes.includes(n)).map(note=>({type:'note',id,note})),...line.notes.filter(n=>!notes.has(n)).map(note=>({type:'unnote',id,note}))]:[{type:'add',id,qty:1},...[...notes].map(note=>({type:'note',id,note}))];
+ if(!operations.length){reply('Lo dejo como está. ¿Algo más?');return;}
+ try{const before=cart;setCart(applyOperations(cart,operations,menu));lastId=id;const p=menu.find(x=>x.id===id);
+  reply(line?`Listo, ${p.name.toLowerCase()}${notes.size?` ${listWords([...notes])}`:' como viene'}. ${followUp(before,[],menu,drinkOffered)}`:`${describeOps(operations,menu)} ${followUp(before,operations,menu,drinkOffered)}`);}
+ catch(e){reply(e.message);}
+}
 // ---------- Calificación ----------
 function paintStars(value){document.querySelectorAll('#stars [data-star]').forEach((b,i)=>{const fill=Math.max(0,Math.min(1,value-i));b.style.setProperty('--fill',`${fill*100}%`);b.style.setProperty('--i',i);b.classList.toggle('lit',fill>0);b.setAttribute('aria-checked',String(Math.ceil(value)===i+1));});}
 function startRating(order){rating={id:order.id,tries:0,timer:setTimeout(()=>finishRating(null),45000)};paintStars(0);$('rateCaption').textContent='Dímelo con tu voz o toca las estrellas';if(!$('rateSheet').open)$('rateSheet').showModal();}
@@ -230,11 +269,14 @@ $('menuOpen').addEventListener('click',()=>handleInput('ver menú'));
 $('cartOpen').addEventListener('click',()=>{interrupt();activity();review();});
 $('keyboardOpen').addEventListener('click',()=>{const c=$('composer');c.hidden=!c.hidden;$('keyboardOpen').setAttribute('aria-expanded',String(!c.hidden));if(!c.hidden)$('chatText').focus();});
 for(const form of document.querySelectorAll('[data-chat]'))form.addEventListener('submit',e=>{e.preventDefault();const input=form.querySelector('input');const text=input.value;input.value='';handleInput(text);});
-$('optionsModal').addEventListener('click',e=>{const cat=e.target.closest('[data-category]');const add=e.target.closest('[data-add]');if(cat)handleInput(`ver ${cat.dataset.category}`);if(add)addDirect(add.dataset.add);});
+$('optionsModal').addEventListener('click',e=>{const info=e.target.closest('[data-detail]');if(info){interrupt();activity();openDetail(info.dataset.detail);return;}const cat=e.target.closest('[data-category]');const add=e.target.closest('[data-add]');if(cat)handleInput(`ver ${cat.dataset.category}`);if(add)addDirect(add.dataset.add);});
 $('summaryBody').addEventListener('click',e=>{if(e.target.id!=='confirmButton')return;if(!table){const value=$('customerName').value.trim();if(value.length<2){$('customerName').focus();toast('Escribe un nombre para retirar.');return;}customerName=value;}reviewed=cartSignature(cart,customerName);saveDraft();submit();});
 $('summaryBody').addEventListener('input',()=>{reviewed=null;});
 $('stars').addEventListener('click',e=>{const b=e.target.closest('[data-star]');if(!b||!rating)return;const r=b.getBoundingClientRect();const half=(e.clientX||r.right)-r.left<r.width/2;finishRating(Math.max(1,Number(b.dataset.star)-(half?.5:0)));});
 $('rateSkip').addEventListener('click',()=>finishRating(null));
+$('detailChips').addEventListener('click',e=>{const b=e.target.closest('[data-note]');if(!b||!detail)return;const o=b.dataset.note;detail.notes.has(o)?detail.notes.delete(o):detail.notes.add(o);renderDetail();});
+$('detailAdd').addEventListener('click',()=>{interrupt();commitDetail();});
+$('detailSheet').addEventListener('close',()=>{detail=null;});
 for(const b of document.querySelectorAll('[data-close]'))b.addEventListener('click',()=>$(b.dataset.close).close());
 $('optionsModal').addEventListener('close',()=>{clearSpot();category=null;});
 $('summaryModal').addEventListener('close',()=>{reviewed=null;awaitingName=false;});

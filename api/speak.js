@@ -9,7 +9,7 @@ function azureRequest(text){
   const voice=process.env.AZURE_SPEECH_VOICE||'es-EC-AndreaNeural';
   const lang=voice.split('-').slice(0,2).join('-');
   return fetch(`https://${encodeURIComponent(process.env.AZURE_SPEECH_REGION)}.tts.speech.microsoft.com/cognitiveservices/v1`,{method:'POST',headers:{'Ocp-Apim-Subscription-Key':process.env.AZURE_SPEECH_KEY,'Content-Type':'application/ssml+xml','X-Microsoft-OutputFormat':'audio-24khz-48kbitrate-mono-mp3','User-Agent':'milo-mesero'},
-    body:`<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="${lang}"><voice name="${xml(voice)}"><prosody rate="${xml(process.env.AZURE_SPEECH_RATE||'+4%')}">${xml(text)}</prosody></voice></speak>`,signal:AbortSignal.timeout(10000)});
+    body:`<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="${lang}"><voice name="${xml(voice)}"><prosody rate="${xml(process.env.AZURE_SPEECH_RATE||'+12%')}">${xml(text)}</prosody></voice></speak>`,signal:AbortSignal.timeout(10000)});
 }
 function elevenRequest(text){
   return fetch(`https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(process.env.ELEVENLABS_VOICE_ID)}?output_format=mp3_44100_64`,{method:'POST',headers:{'xi-api-key':process.env.ELEVENLABS_API_KEY,'Content-Type':'application/json',Accept:'audio/mpeg'},body:JSON.stringify({text,model_id:process.env.ELEVENLABS_MODEL||'eleven_flash_v2_5',language_code:'es',voice_settings:{stability:.45,similarity_boost:.8,style:.15,use_speaker_boost:true}}),signal:AbortSignal.timeout(10000)});

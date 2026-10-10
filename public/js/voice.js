@@ -1,8 +1,8 @@
-import {speakable,sentences} from './speech-text.js';
+import {speakable,chunks} from './speech-text.js';
 import {isConfirmation} from './domain.js';
 const Recognition=window.SpeechRecognition||window.webkitSpeechRecognition;
 export class VoiceController{
-  constructor({onState,onLevel,onText,onInput,onError,onSentence,greeting}){Object.assign(this,{onState,onLevel,onText,onInput,onError,onSentence,greeting});this.rate=1.05;this.neural=false;
+  constructor({onState,onLevel,onText,onInput,onError,onSentence,greeting}){Object.assign(this,{onState,onLevel,onText,onInput,onError,onSentence,greeting});this.rate=1.2;this.neural=false;
     // En celulares el reconocedor del sistema pita en cada intento y choca con el micrófono ya abierto:
     // se graba y se transcribe en el servidor. La app lo activa solo si hay transcripción disponible.
     this.preferRecorder=false;this.neuralFailures=0;this.listenDelay=300;this.listenWindow=40000;this.startDelay=120;this.listenUntil=0;this.startFailures=0;this.voice=null;window.speechSynthesis?.addEventListener?.('voiceschanged',()=>{this.voice=null;});this.enabled=false;this.generation=0;this.recognition=null;this.recorder=null;this.stream=null;this.speechDone=null;this.meter=0;this.level=0;this.activatePending=false;}
@@ -67,7 +67,7 @@ export class VoiceController{
   async say(text){
     this.pause();const token=this.generation;
     if(!this.enabled){this.state('off');return;}
-    const parts=sentences(text).map(shown=>({shown,spoken:speakable(shown)})).filter(p=>p.spoken);
+    const parts=chunks(text).map(shown=>({shown,spoken:speakable(shown)})).filter(p=>p.spoken);
     if(!parts.length||(!window.speechSynthesis&&!this.neural)){this.state('waiting');return;}
     this.state('speaking');
     let next=this.neural?this.fetchAudio(parts[0].spoken):null;
@@ -75,7 +75,7 @@ export class VoiceController{
       const audio=next?await next:null;
       if(token!==this.generation)return;
       next=this.neural&&i+1<parts.length?this.fetchAudio(parts[i+1].spoken):null;
-      this.onSentence?.(parts[i].shown,audio?audio.duration*1000:parts[i].spoken.length*68/this.rate);
+      this.onSentence?.(parts[i].shown,audio?audio.duration*1000:parts[i].spoken.length*62/this.rate);
       if(audio)await this.play(audio,token);else await this.utter(parts[i].spoken,token);
       if(token!==this.generation)return;
     }

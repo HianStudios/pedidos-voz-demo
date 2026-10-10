@@ -38,3 +38,34 @@ test('avisos y calificaciones validan lo que reciben',async()=>{
   res=response();await ratings(req({id:crypto.randomUUID(),stars:4.3}),res);assert.equal(res.code,400,'solo enteros o medias');
   res=response();await ratings(req({id:crypto.randomUUID(),stars:4.5}),res);assert.equal(res.code,200);
 });
+test('ingredientes: quitar varios, frases naturales y nunca confundir lechuga con pechuga',async()=>{
+  const {removalsFor,applyOperations}=await import('../public/js/domain.js');
+  const combo=[{id:'combo-personal',qty:1,notes:[]}];
+  assert.deepEqual(interpretLocal('que no tenga lechuga ni ají',combo,menu,'combo-personal').operations,[{type:'note',id:'combo-personal',note:'sin lechuga'},{type:'note',id:'combo-personal',note:'sin ají'}]);
+  assert.deepEqual(interpretLocal('quiero un combo personal sin cebolla, tomate',[],menu).operations.map(o=>o.note||o.type),['add','sin cebolla','sin tomate']);
+  assert.equal(fixWords('sin lechuga',menu),'sin lechuga');
+  assert.equal(interpretLocal('quítale las papas',[{id:'papas',qty:1,notes:[]}],menu,'papas').operations[0].type,'remove','papas extra es un producto');
+  const p=menu.find(x=>x.id==='combo-personal');
+  assert.deepEqual(removalsFor('quítale el ají y la lechuga',p),{remove:['sin ají','sin lechuga'],restore:[]});
+  assert.deepEqual(removalsFor('ponle la cebolla',p),{remove:[],restore:['sin cebolla']});
+  assert.deepEqual(applyOperations([{id:'cuarto',qty:1,notes:['sin cebolla','sin ají']}],[{type:'unnote',id:'cuarto',note:'sin cebolla'}],menu)[0].notes,['sin ají']);
+});
+test('«¿qué trae…?» abre la ficha sin agregar nada',()=>{
+  const r=interpretLocal('qué trae el combo personal',[],menu);assert.equal(r.intent,'detail');assert.deepEqual(r.suggest_ids,['combo-personal']);assert.deepEqual(r.operations,[]);
+  assert.equal(interpretLocal('qué contiene',[{id:'pechuga',qty:1,notes:[]}],menu,'pechuga').suggest_ids[0],'pechuga');
+  assert.match(interpretLocal('cuánto cuesta el cuarto de pollo',[],menu).reply,/4,50/);
+  for(const p of menu.filter(p=>p.category!=='Bebidas'))assert.ok(p.ingredients?.length,`${p.id} tiene ingredientes`);
+});
+test('una pregunta sin signos («el combo trae ensalada») no agrega nada',()=>{
+  for(const said of ['el combo familiar trae ensalada','la pechuga lleva cebolla','el combo personal tiene gaseosa']){const r=interpretLocal(said,[],menu);assert.equal(r.intent,'detail',said);assert.deepEqual(r.operations,[],said);}
+  assert.equal(interpretLocal('el combo familiar trae ensalada',[],menu).suggest_ids[0],'combo-familiar');
+  assert.equal(interpretLocal('tráeme un combo familiar',[],menu).intent,'edit');
+  assert.deepEqual(interpretLocal('que no pique',[{id:'medio',qty:1,notes:[]}],menu,'medio').operations,[{type:'note',id:'medio',note:'sin ají'}]);
+  assert.deepEqual(interpretLocal('sin nada de verduras',[{id:'cuarto',qty:1,notes:[]}],menu,'cuarto').operations,[{type:'note',id:'cuarto',note:'sin ensalada'}]);
+});
+test('una edición de la IA siempre dice qué cambió',async()=>{
+  const {interpret}=await import('../api/match.js');const old=process.env.GROQ_API_KEY;process.env.GROQ_API_KEY='test';
+  const fetchImpl=async()=>new Response(JSON.stringify({choices:[{message:{content:JSON.stringify({intent:'edit',reply:'¿Algo más o cerramos el pedido?',operations:[{type:'note',id:'combo-personal',note:'sin cebolla'}]})}}]}));
+  try{const r=await interpret({transcript:'con todo menos lo que hace llorar',cart:[{id:'combo-personal',qty:1,notes:[]}]},{fetchImpl});assert.match(r.reply,/^Anotado: combo personal sin cebolla/);}
+  finally{if(old===undefined)delete process.env.GROQ_API_KEY;else process.env.GROQ_API_KEY=old;}
+});

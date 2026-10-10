@@ -42,6 +42,10 @@ Para activarlo en la tablet, mantén presionada 3 segundos la esquina superior d
 
 Al enviar el pedido, Milo pregunta «¿Qué te pareció mi atención? Dime de una a cinco estrellas». Entiende «cuatro estrellas», «cuatro y media», «4.5», «excelente» y «más o menos», y también se puede calificar tocando las estrellas, incluso medias. Se guarda una sola calificación por pedido, con la frase que dijo el cliente, y se ve en el panel.
 
+## Ingredientes
+
+Cada producto tiene `ingredients` y opciones «sin X» en `server/catalog.js` (datos de prueba). Para quitar ingredientes, Milo entiende frases como «quítale la cebolla», «que no tenga lechuga ni ají», «sin cebolla, tomate» o «no le pongas ají»; con «ponle la cebolla» vuelve a ponerla. Al preguntar «¿qué trae…?», o al tocar «Qué trae» en una tarjeta, se abre una ficha con los ingredientes y botones para quitar cada uno; por voz se ajusta y con «agrégalo» se anota. Caja ve cada «sin X» en el pedido.
+
 ## Entender como habla la gente
 
 - **Palabras parecidas:** «piatos», «conbos», «pechuca», «bevidas» y «conbo persnal» se corrigen por parecido con las palabras del menú (`public/js/fuzzy.js`). No se tocan números ni palabras comunes como «cuatro», «cosa», «plata» o «media».
@@ -49,7 +53,7 @@ Al enviar el pedido, Milo pregunta «¿Qué te pareció mi atención? Dime de un
 
 ## Voz y límites
 
-- Milo habla **frase por frase** y pronuncia precios y medidas como un mesero («cuatro dólares con cincuenta», «cuatrocientos mililitros»), sin emojis ni símbolos (`public/js/speech-text.js`).
+- Milo habla a velocidad 1,2 y **dice de corrido** las respuestas de hasta ~220 caracteres (las largas se parten en oraciones) y pronuncia precios y medidas como un mesero («cuatro dólares con cincuenta», «cuatrocientos mililitros»), sin emojis ni símbolos (`public/js/speech-text.js`).
 - Las respuestas locales dicen lo anotado («Van dos cuartos de pollo y una Coca-Cola. ¿Algo para tomar?») y ofrecen bebida una sola vez por pedido, nunca si ya hay bebida o combo.
 - **Voz neural opcional.** Con `AZURE_SPEECH_KEY` y `AZURE_SPEECH_REGION`, el servidor usa Azure (voz `es-EC-AndreaNeural` por defecto, acento de Ecuador). Si no, usa ElevenLabs cuando estén `ELEVENLABS_API_KEY` y `ELEVENLABS_VOICE_ID`. Si no hay ninguno, se usa la voz del navegador: velocidad 1.05, una sola voz por sesión, con preferencia por las voces «Natural» de es-EC. **Gratis y con buena calidad:** Microsoft Edge en Windows trae las voces «Natural» de Azure. Dos fallas seguidas de la voz neural vuelven a la del navegador, para no alternar voces.
 - **Pronunciación:** `pronunciations` en `public/js/speech-text.js` convierte marcas y siglas (Sprite → «Spráit», BBQ → «bibikiú»). Agrega ahí las de cada restaurante.

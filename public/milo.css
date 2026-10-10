@@ -139,6 +139,27 @@ button,input{font:inherit;color:inherit}button{cursor:pointer;-webkit-tap-highli
 .toast{visibility:hidden;position:fixed;left:50%;top:max(16px,env(safe-area-inset-top));transform:translate(-50%,-150%);background:var(--ink);color:#fff;padding:12px 20px;border-radius:99px;font-size:14px;transition:transform .45s var(--ease);z-index:20}
 .toast.visible{visibility:visible;transform:translate(-50%,0)}
 
+/* ---------- Ficha del producto ---------- */
+.detail-sheet{border:0;border-radius:32px;padding:26px 28px 24px;width:min(520px,calc(100% - 32px));max-height:calc(100dvh - 32px);overflow:auto;background:var(--surface);color:var(--ink);box-shadow:0 30px 80px #0002;position:relative}
+.detail-sheet[open]{animation:sheetIn .45s var(--ease)}
+.detail-sheet::backdrop{background:#2323}
+.detail-sheet .close{position:absolute;top:18px;right:18px}
+.detail-art{height:170px;display:grid;place-items:center;margin:0 0 4px}
+.detail-art svg{width:78%;height:100%;animation:float 6s ease-in-out infinite}
+.detail-sheet h2{margin:2px 0 6px;font-family:Manrope,sans-serif;font-size:28px;letter-spacing:-.02em}
+.detail-desc{margin:0 0 16px;color:var(--muted);font-size:15px}
+.detail-sheet h3{margin:14px 0 8px;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.detail-ingredients{margin:0;padding:0;list-style:none;display:grid;gap:8px}
+.detail-ingredients li{display:flex;gap:10px;align-items:baseline;font-size:16px}
+.detail-ingredients li::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--warm);flex:none;transform:translateY(-2px)}
+.detail-minus{color:var(--accent);font-size:13px;margin-left:4px}
+.detail-ingredients li.off{color:var(--muted);text-decoration:line-through}
+.detail-chips{display:flex;flex-wrap:wrap;gap:8px}
+.detail-chips button{border:1px solid var(--line);background:#fff;border-radius:99px;padding:9px 16px;font-size:14px;transition:background .2s,color .2s}
+.detail-chips button[aria-pressed=true]{background:var(--accent);border-color:var(--accent);color:#fff}
+.detail-sheet footer{display:flex;align-items:center;justify-content:space-between;margin-top:22px}
+.dish .info{border:0;background:none;color:var(--muted);font-size:13px;padding:6px 2px;text-decoration:underline;text-underline-offset:3px}
+
 /* ---------- Calificación ---------- */
 .rate-sheet{border:0;border-radius:32px;padding:34px 28px 24px;width:min(520px,calc(100% - 32px));background:var(--surface);color:var(--ink);text-align:center;box-shadow:0 30px 80px #0002}
 .rate-sheet[open]{animation:sheetIn .5s var(--ease)}

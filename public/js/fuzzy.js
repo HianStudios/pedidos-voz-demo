@@ -2,8 +2,9 @@
 // sola palabra del menú, se corrigen antes de interpretar. Nunca se tocan números ni palabras comunes.
 const base=['platos','plato','combos','combo','bebidas','bebida','extras','extra','gaseosa','gaseosas','refresco','refrescos','menu','carta',
   'muestrame','ensename','quiero','dame','ponme','traeme','agrega','agregame','quita','quitale','cambia','recomienda','recomiendas',
+  'agregalo','agregamelo','anotalo','anotamelo','ponlo','ponmelo','guardalo','quitalo','sacale','ponle','dejale',
   'pollo','cuarto','cuartos','medio','entero','enteros','alitas','pechuga','pechugas','plancha','personal','pareja','familiar','familiares',
-  'papas','doradas','arroz','ensalada','sprite','pepsi','coca','cola','agua','mineral','cebolla','tomate'];
+  'papas','doradas','arroz','ensalada','sprite','pepsi','coca','cola','agua','mineral','cebolla','tomate','lechuga','limon','salsa','aji'];
 // Palabras reales y frecuentes que se parecen a las del menú pero significan otra cosa.
 const keep=new Set(['uno','una','dos','tres','cuatro','cinco','seis','siete','ocho','nueve','diez','once','doce','cuanto','cuantos','cuantas','cuesta','cuestan',
   'para','pero','como','todo','toda','nada','algo','solo','sola','mejor','puedo','tengo','tiene','tienen','ahora','luego','bueno','buena','claro','gracias','favor',
@@ -22,7 +23,8 @@ const cache=new Map();
 function vocabulary(menu){
   const key=menu?menu.length:0;if(cache.has(key))return cache.get(key);
   const words=new Set(base);
-  for(const p of menu||[])for(const phrase of [p.name,...(p.aliases||[])])for(const w of phrase.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').split(/[^a-z]+/))if(w.length>=4)words.add(w);
+  // Nombres, alias e ingredientes: «lechuga» debe ser conocida para no «corregirse» a «pechuga».
+  for(const p of menu||[])for(const phrase of [p.name,...(p.aliases||[]),...(p.options||[]),...(p.ingredients||[])])for(const w of phrase.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').split(/[^a-z]+/))if(w.length>=4)words.add(w);
   const list=[...words];cache.set(key,list);return list;
 }
 // Recibe texto ya normalizado (minúsculas, sin tildes ni signos).

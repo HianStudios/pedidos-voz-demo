@@ -62,5 +62,9 @@ export const cases=[
   {id:'muero-de-hambre',say:'me muero de hambre, qué me das',expect:all(noAdd,helpful)},
   {id:'pa-los-guaguas',say:'algo pa los guaguas',expect:all(noAdd,helpful)},
   {id:'lo-de-siempre',say:'lo mismo que la otra vez',expect:all(noAdd,helpful)},
+  {id:'trae-ensalada',say:'el combo familiar trae ensalada',expect:all(noAdd,r=>r.intent==='detail'||/ensalada/i.test(r.reply))},
+  {id:'sin-verduras',say:'sin nada de verduras',cart:[line('cuarto')],lastId:'cuarto',expect:r=>r.intent==='edit'&&r.operations.some(o=>o.type==='note'&&['sin ensalada','sin lechuga','sin tomate','sin cebolla'].includes(o.note))},
+  {id:'con-todo-menos',say:'con todo menos la cebolla',cart:[line('combo-personal')],lastId:'combo-personal',expect:has('note','combo-personal',{note:'sin cebolla'})},
+  {id:'sin-picante',say:'que no pique',cart:[line('medio')],lastId:'medio',expect:any(has('note','medio',{note:'sin ají'}),all(r=>r.intent==='clarify',helpful))},
   {id:'autocorreccion',say:'un cuarto, no, mejor medio',expect:all(add('medio',1),r=>!add('cuarto')(r))},
 ];
