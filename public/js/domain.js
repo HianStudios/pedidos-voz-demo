@@ -177,6 +177,8 @@ export function interpretLocal(text,cart,menu,lastId=null,context={}){
   if(alt){
     // «Quítale la cebolla», «que no tenga lechuga», «no le pongas ají» → «sin …». «Quítale las papas» con
     // papas extra en el pedido es quitar ese producto, no un ingrediente.
+    // Formas de decirlo sin nombrar la opción: «que no pique» = sin ají; «sin verduras» = sin ensalada.
+    n=n.replace(/\b(?:que no pique|que no este picante|sin picante|nada de picante|nada picante|no picante|sin lo picante)\b/g,'sin aji').replace(/\b(?:sin|nada de|sin nada de) (?:verduras?|vegetales|verde|lo verde)\b/g,'sin ensalada');
     n=n.replace(new RegExp(`\\b(?:quitale|quitele|quitales|sacale|sacales|no le pongas|no le pongan|no le pongas nada de|que no tenga|que no traiga|que no lleve|no quiero nada de|nada de|no quiero)\\s+(?:el |la |los |las |lo de )?(${alt})\\b`,'g'),(m,x)=>x==='papas'&&cart.some(l=>l.id==='papas')?m:`sin ${x}`);
     // «sin cebolla ni tomate», «sin cebolla y tomate», «sin cebolla, tomate» → cada uno con su «sin».
     for(let prev='';prev!==n;){prev=n;n=n.replace(new RegExp(`\\bsin (${alt})\\s+(?:(?:y|ni)\\s+)?(?!sin )(${alt})\\b`),'sin $1 sin $2');}
@@ -225,9 +227,12 @@ export function interpretLocal(text,cart,menu,lastId=null,context={}){
   }
   hits.sort((a,b)=>a.index-b.index);
   // «¿Qué trae el combo personal?» → ficha con ingredientes (no agrega nada).
-  if(/\b(que (?:contiene|trae|tiene|lleva|incluye|viene con)|ingredientes|de que es|con que viene|como viene|que tiene adentro)\b/.test(n)&&!/\b(cuanto|precio|cuesta)\b/.test(n)){
+  // También sin signos de pregunta: «el combo familiar trae ensalada», «la pechuga lleva cebolla».
+  const asksContents=/\b(que (?:contiene|trae|tiene|lleva|incluye|viene con)|ingredientes|de que es|con que viene|como viene|que tiene adentro)\b/.test(n)||(hits.length>0&&/^(?:(?:el|la|los|las|y|oye|una pregunta)\s+)*[^,]*\b(trae|lleva|tiene|incluye|viene con)\b/.test(n)&&!/\b(traeme|traenos|dame|quiero|ponme|agrega|sin)\b/.test(n));
+  if(asksContents&&!/\b(cuanto|precio|cuesta)\b/.test(n)){
     const ids=[...new Set(hits.map(h=>h.id))];
-    const id=ids.length===1?ids[0]:!ids.length?lastId:null;
+    // «El combo familiar trae ensalada»: se pregunta por lo primero que se nombra.
+    const id=ids.length?hits[0].id:lastId;
     if(id)return answer('detail','',{suggest_ids:[id]});
     return answer('clarify',ids.length?'¿De cuál quieres saber qué trae?':'¿De qué plato quieres saber qué trae?');
   }
@@ -267,7 +272,8 @@ export function interpretLocal(text,cart,menu,lastId=null,context={}){
   // Frases complejas/negadas se dejan a la IA; nunca adivinar una sustitución.
   if(/\b(no|cambia|cambiar|sustituye|en vez|pero|sin)\b/.test(remaining)) return null;
   if(!hits.length) return null;
-  const verbs='quiero|quisiera|dame|deme|da|das|traeme|trae|regalame|mandame|agrega|agregame|anade|pon|ponme|quita|quitale|quitame|saca|sacale|elimina|borra|mejor|necesito|me|nos';
+  // «trae» solo no es pedir: «el combo trae ensalada» pregunta qué incluye. Se pide con «tráeme».
+  const verbs='quiero|quisiera|dame|deme|da|das|traeme|traenos|regalame|mandame|agrega|agregame|anade|pon|ponme|quita|quitale|quitame|saca|sacale|elimina|borra|mejor|necesito|me|nos';
   if(!new RegExp(`\\b(${verbs})\\b`).test(n)&&!/^\d|^(un|una|unas|unos|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\b/.test(n)) return null;
   const residue=normalize(remaining).split(' ').filter(w=>w&&!new RegExp(`^(${verbs}|si|y|tambien|por|favor|porfa|pues|el|la|los|las|de|del|un|una|unas|unos|uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|-?\\d+)$`).test(w));
   if(residue.length) return null;

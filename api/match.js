@@ -81,9 +81,15 @@ PREGUNTA PENDIENTE: ${JSON.stringify(pending)}${heard!==normalize(transcript)?`\
     }
     if(!result.reply)result.reply=result.intent==='edit'?'Listo. ¿Algo más, o cerramos el pedido?':'¿Qué te provoca?';
     // Tras anotar, la pregunta final siempre ofrece seguir o cerrar (y la bebida una sola vez).
+    // Una edición siempre dice qué cambió: si el modelo solo pregunta («¿Algo más?»), se antepone lo anotado.
+    if(result.intent==='edit'){
+      const said=normalize(result.reply);
+      const mentions=result.operations.some(o=>{const p=menu.find(x=>x.id===o.id);return said.includes(normalize(p.name).split(' ')[0])||(o.note&&said.includes(normalize(o.note).replace(/^sin /,'')));});
+      if(!mentions)result.reply=`${describeOps(result.operations,menu)} ${result.reply.replace(/^[\s.,]+/,'')}`.trim();
+    }
     if(result.intent==='edit'&&!/cerr|finaliz|cocina|tomar|bebida/i.test(result.reply)){
       const statement=result.reply.replace(/[,.]?\s*¿[^?]*\?\s*$/,'').trim();
-      result.reply=`${statement.replace(/[.!]?$/,'.')} ${followUp(cart,result.operations,menu,data.drinkOffered===true)}`.trim();
+      result.reply=`${statement?statement.replace(/[.!]?$/,'.'):describeOps(result.operations,menu)} ${followUp(cart,result.operations,menu,data.drinkOffered===true)}`.trim();
     }
     result.reply=result.reply.charAt(0).toUpperCase()+result.reply.slice(1);
     return {...result,source:'ai'};

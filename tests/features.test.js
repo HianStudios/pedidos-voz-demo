@@ -56,3 +56,16 @@ test('«¿qué trae…?» abre la ficha sin agregar nada',()=>{
   assert.match(interpretLocal('cuánto cuesta el cuarto de pollo',[],menu).reply,/4,50/);
   for(const p of menu.filter(p=>p.category!=='Bebidas'))assert.ok(p.ingredients?.length,`${p.id} tiene ingredientes`);
 });
+test('una pregunta sin signos («el combo trae ensalada») no agrega nada',()=>{
+  for(const said of ['el combo familiar trae ensalada','la pechuga lleva cebolla','el combo personal tiene gaseosa']){const r=interpretLocal(said,[],menu);assert.equal(r.intent,'detail',said);assert.deepEqual(r.operations,[],said);}
+  assert.equal(interpretLocal('el combo familiar trae ensalada',[],menu).suggest_ids[0],'combo-familiar');
+  assert.equal(interpretLocal('tráeme un combo familiar',[],menu).intent,'edit');
+  assert.deepEqual(interpretLocal('que no pique',[{id:'medio',qty:1,notes:[]}],menu,'medio').operations,[{type:'note',id:'medio',note:'sin ají'}]);
+  assert.deepEqual(interpretLocal('sin nada de verduras',[{id:'cuarto',qty:1,notes:[]}],menu,'cuarto').operations,[{type:'note',id:'cuarto',note:'sin ensalada'}]);
+});
+test('una edición de la IA siempre dice qué cambió',async()=>{
+  const {interpret}=await import('../api/match.js');const old=process.env.GROQ_API_KEY;process.env.GROQ_API_KEY='test';
+  const fetchImpl=async()=>new Response(JSON.stringify({choices:[{message:{content:JSON.stringify({intent:'edit',reply:'¿Algo más o cerramos el pedido?',operations:[{type:'note',id:'combo-personal',note:'sin cebolla'}]})}}]}));
+  try{const r=await interpret({transcript:'con todo menos lo que hace llorar',cart:[{id:'combo-personal',qty:1,notes:[]}]},{fetchImpl});assert.match(r.reply,/^Anotado: combo personal sin cebolla/);}
+  finally{if(old===undefined)delete process.env.GROQ_API_KEY;else process.env.GROQ_API_KEY=old;}
+});
