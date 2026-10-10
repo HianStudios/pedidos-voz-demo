@@ -19,6 +19,14 @@ test('pedidos de mesa con REDIS_URL: crear, idempotencia, caja y estados',{skip:
     const patch=response();await orders(req({id:a.data.order.id,status:'aceptado'},'PATCH',auth),patch);assert.equal(patch.data.order.status,'aceptado');
     const bad=response();await orders(req({id:a.data.order.id,status:'entregado'},'PATCH',auth),bad);assert.equal(bad.code,409);
     assert.equal((await orderSnapshot()).find(o=>o.id===a.data.order.id).status,'aceptado');
+    // Avisos del kiosco llegan al stream de caja; calificación única por pedido.
+    const {default:alerts}=await import('../api/alerts.js');const {default:ratings}=await import('../api/ratings.js');const {feedSnapshot}=await import('../server/order-feed.js');
+    const al=response();await alerts(req({table:7,type:'fullscreen-exit'},'POST',{cookie}),al);assert.equal(al.code,200,JSON.stringify(al.data));
+    const feed=await feedSnapshot();assert.equal(feed.alerts[0].type,'fullscreen-exit');assert.equal(feed.alerts[0].table,7);
+    const r1=response();await ratings(req({id:a.data.order.id,stars:4.5,comment:'cuatro y media'},'POST',{cookie}),r1);assert.equal(r1.code,200,JSON.stringify(r1.data));
+    const r2=response();await ratings(req({id:a.data.order.id,stars:1},'POST',{cookie}),r2);assert.equal(r2.code,409,'no se califica dos veces');
+    const rl=response();await ratings(req(undefined,'GET',auth),rl);assert.equal(rl.data.ratings[a.data.order.id].stars,4.5);
+    const many=response();await orders({...req(undefined,'GET',auth),url:'/api/orders?limit=1000'},many);assert.ok(many.data.orders.length>=1);
   }finally{
     const {redis}=await import('../server/http.js');try{await redis(['FLUSHDB']);}catch{}
     for(const k of keys)if(old[k]===undefined)delete process.env[k];else process.env[k]=old[k];

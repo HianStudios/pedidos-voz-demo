@@ -1,8 +1,9 @@
-import {money,total,validateCart,applyOperations,isConfirmation,normalize,describeOps,followUp,amount,parsePeople,suggestForPeople} from './domain.js';
+import {money,total,validateCart,applyOperations,isConfirmation,normalize,describeOps,followUp,amount,parsePeople,suggestForPeople,soundsLike,parseRating} from './domain.js';
 import {navigation,plausibleName,cartSignature} from './conversation.js';
 import {foodArt} from './art.js';
 import {VoiceController} from './voice.js';
-import {listWords} from './speech-text.js';
+import {initKiosk} from './kiosk.js';
+import {listWords,numberWords} from './speech-text.js';
 import {storageKey,ordersKey,readStore,saveOrders} from './order-store.js';
 const $=id=>document.getElementById(id);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -18,7 +19,9 @@ const table=readTable();
 let menu=[],restaurant,mode='demo',cart=[],history=[],busy=false,epoch=0,request=null,lastId=null,
  customerName='',pending=null,sending=false,sessionActive=false,awaitingName=false,reviewed=null,
  category=null,awaitingCancel=false,drinkOffered=false,spotTimers=[],idleTimer=0,
- asked=null,proposal=null; // pregunta pendiente de Milo y propuesta que espera un «sí»
+ asked=null,proposal=null, // pregunta pendiente de Milo y propuesta que espera un «sí»
+ choices=null, // opciones que Milo acaba de ofrecer («el primero», «la segunda»)
+ rating=null; // pedido recién enviado que espera calificación
 function saveDraft(){try{localStorage.setItem(storageKey,JSON.stringify({cart,pending,customer:customerName}));}catch{}}
 let toastTimer;
 function toast(text){$('toast').textContent=text;$('toast').classList.add('visible');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').classList.remove('visible'),4500);}
@@ -77,7 +80,7 @@ const spokenName=p=>p.category==='Bebidas'?p.name:p.name.charAt(0).toLowerCase()
 // Presentación oral de toda la categoría, en el mismo orden que las tarjetas.
 function categoryPitch(cat){
  const items=menu.filter(p=>p.category===cat&&p.available);
- return `Aquí tienes ${categories[cat]}. Tenemos ${listWords(items.map(p=>p.one||spokenName(p)))}. ¿Cuál te provoca?`;
+ return `Aquí tienes el menú de ${cat.toLowerCase()}. Tenemos ${listWords(items.map(p=>p.one||spokenName(p)))}. ¿Cuál te provoca?`;
 }
 function clearSpot(){spotTimers.forEach(clearTimeout);spotTimers=[];document.querySelectorAll('.dish.is-spot').forEach(c=>c.classList.remove('is-spot'));}
 // Mientras Milo nombra un producto, su tarjeta se ilumina y se centra, en el momento en que lo dice:
@@ -112,11 +115,25 @@ function addDirect(id){
 
 async function handleInput(raw){
  raw=raw?.trim();if(!raw||!menu.length||busy||sending)return;
- activity();interrupt();const turn=epoch;voice.state('thinking');$('transcript').textContent=`«${raw}»`;$('voiceHelp').textContent='';history.push({role:'user',content:raw});const n=normalize(raw);
+ // «said» es lo que se oyó (se muestra y va a la IA); «raw» queda corregido para entenderlo («piatos» → platos).
+ const said=raw;raw=soundsLike(said,menu);
+ activity();interrupt();const turn=epoch;voice.state('thinking');$('transcript').textContent=`«${said}»`;$('voiceHelp').textContent='';history.push({role:'user',content:said});const n=raw;
  if(pending){if(isConfirmation(raw))return submit();reply('Hay un envío pendiente de comprobar. Reintenta el mismo pedido desde el resumen.');return;}
  if(awaitingCancel){awaitingCancel=false;if(isConfirmation(raw)){setCart([]);drinkOffered=false;closeModals();reply('Listo, empezamos de cero. ¿Qué se te antoja?');return;}if(/^(no|no gracias)$/.test(n)){reply('Perfecto, lo dejo como está.');return;}}
+ // Calificación pendiente: «cuatro y media», «excelente», «ahora no».
+ if(rating){
+  const stars=parseRating(said);
+  if(stars){finishRating(stars,said);return;}
+  if(/\b(no|ahora no|despues|luego|no gracias|nada)\b/.test(n)||rating.tries++>=1){finishRating(null);reply('Sin problema. ¡Buen provecho!','wait');return;}
+  reply('¿De una a cinco, cuántas estrellas me das?');return;
+ }
  // Respuestas a lo último que Milo preguntó o propuso.
- const lastAsked=asked,offer=proposal;asked=null;proposal=null;
+ const lastAsked=asked,offer=proposal,options=choices;asked=null;proposal=null;choices=null;
+ if(options){
+  const pick=/\b(primer[oa]?|el uno|la uno|la de arriba|el de arriba)\b/.test(n)?0:/\b(segund[oa]|el dos|la dos|el otro|la otra|ultim[oa]|el de abajo|la de abajo)\b/.test(n)?1:/\b(tercer[oa]?)\b/.test(n)?2:-1;
+  if(pick>=0&&options[pick]){addDirect(options[pick]);return;}
+  if(isConfirmation(raw)&&!offer){choices=options;reply(`¿Cuál te anoto: ${listWords(options.map(id=>menu.find(p=>p.id===id)).filter(Boolean).map(p=>p.one||p.name)).replace(/ y ([^,]*)$/,' o $1')}?`);return;}
+ }
  if(offer&&isConfirmation(raw)&&!$('summaryModal').open){
   try{const before=cart;setCart(applyOperations(cart,offer.operations,menu));lastId=offer.operations.at(-1).id;reply(`${describeOps(offer.operations,menu)} ${followUp(before,offer.operations,menu,drinkOffered)}`);}catch(e){reply(e.message);}
   return;
@@ -138,12 +155,12 @@ async function handleInput(raw){
  }
  const nav=navigation(raw);
  if(nav){awaitingName=false;reviewed=null;if(nav==='all'){showCategories();reply('Este es el menú: platos, combos, extras y bebidas. ¿Por dónde empezamos?');}else{showCategory(nav);reply(categoryPitch(nav));}return;}
- const explicit=raw.match(/^(?:me llamo|mi nombre es|a nombre de)\s+(.{2,60})$/i);
- if(!table&&((explicit&&plausibleName(explicit[1]))||(awaitingName&&plausibleName(raw)))){customerName=(explicit?explicit[1]:raw).trim();awaitingName=false;saveDraft();review();return;}
+ const explicit=said.match(/^(?:me llamo|mi nombre es|a nombre de)\s+(.{2,60})$/i);
+ if(!table&&((explicit&&plausibleName(explicit[1]))||(awaitingName&&plausibleName(said)))){customerName=(explicit?explicit[1]:said).trim();awaitingName=false;saveDraft();review();return;}
  if(/^(no quiero bebida|sin bebida|no deseo bebida|no gracias)$/.test(n)){reviewed=null;awaitingName=false;drinkOffered=true;reply('Sin bebida, entonces. ¿Algo más, o cerramos el pedido?');return;}
  reviewed=null;awaitingName=false;busy=true;$('sendText').disabled=true;request=new AbortController();
  try{
-  const res=await fetch('/api/match',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({transcript:raw,cart,lastId,category,table,drinkOffered,history:history.slice(0,-1).slice(-6)}),signal:AbortSignal.any([request.signal,AbortSignal.timeout(22000)])});
+  const res=await fetch('/api/match',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({transcript:said,cart,lastId,category,table,drinkOffered,history:history.slice(0,-1).slice(-6)}),signal:AbortSignal.any([request.signal,AbortSignal.timeout(22000)])});
   const result=await res.json();if(turn!==epoch)return;if(!res.ok)throw new Error(result.error||'No pude entender.');
   if(result.intent==='edit'){
    setCart(applyOperations(cart,result.operations,menu));lastId=result.operations.at(-1)?.id;
@@ -151,11 +168,13 @@ async function handleInput(raw){
    reply(result.reply||'Listo. ¿Algo más, o cerramos el pedido?');
   }else if(result.intent==='menu'&&result.source==='fallback'&&$('optionsModal').open){reply(result.reply.replace(/Te muestro el menú: |Aquí tienes el menú, /,''));
   }else if(result.intent==='menu'){
-   if(result.category&&result.category!=='all'){showCategory(result.category);reply(result.reply||categoryPitch(result.category));}else{showCategories();reply(result.reply||'Este es el menú. ¿Por dónde empezamos?');}
+   // Categoría concreta: siempre la presentación completa (nombra todo y sincroniza el foco de las tarjetas).
+   if(result.category&&result.category!=='all'){showCategory(result.category);reply(categoryPitch(result.category));}else{showCategories();reply(result.reply||'Este es el menú. ¿Por dónde empezamos?');}
   }else if(result.intent==='recommend'){
    const items=(result.suggest_ids||[]).map(id=>menu.find(p=>p.id===id&&p.available)).filter(Boolean);if(items.length)showProducts(items,'Para ti');
    // Si la recomendación trae propuesta concreta, un «sí» la anota.
    if(result.proposal?.length)proposal={operations:result.proposal};
+   else if(items.length>=2&&items.length<=4)choices=items.map(p=>p.id);
    else if(result.suggest_ids?.length===1&&/anot/i.test(result.reply))proposal={operations:[{type:'add',id:result.suggest_ids[0],qty:1}]};
    reply(result.reply);
   }else if(result.intent==='review')review();
@@ -179,11 +198,24 @@ async function submit(){
   pending=null;customerName='';setCart([]);lastId=null;awaitingName=false;drinkOffered=false;history=[];
   toast(`Pedido ${mode==='demo'?'de prueba ':''}#${order.number} registrado`);
   const done=mode==='demo'?'Listo, tu pedido de prueba quedó registrado.':order.table?'¡Listo! Tu pedido ya está en cocina. ¡Buen provecho!':`¡Listo, ${order.customer}! Tu pedido es el número ${order.number}.`;
-  await reply(done,'wait');
+  startRating(order);await reply(`${done} ¿Qué te pareció mi atención? Dime de una a cinco estrellas.`,'listen');
  }catch(e){reply(`No pude confirmar el envío. Guardé el mismo pedido para reintentar. ${e.message}`);}
  finally{sending=false;}
 }
 
+// ---------- Calificación ----------
+function paintStars(value){document.querySelectorAll('#stars [data-star]').forEach((b,i)=>{const fill=Math.max(0,Math.min(1,value-i));b.style.setProperty('--fill',`${fill*100}%`);b.style.setProperty('--i',i);b.classList.toggle('lit',fill>0);b.setAttribute('aria-checked',String(Math.ceil(value)===i+1));});}
+function startRating(order){rating={id:order.id,tries:0,timer:setTimeout(()=>finishRating(null),45000)};paintStars(0);$('rateCaption').textContent='Dímelo con tu voz o toca las estrellas';if(!$('rateSheet').open)$('rateSheet').showModal();}
+async function finishRating(stars,comment=''){
+ if(!rating)return;const {id,timer}=rating;rating=null;clearTimeout(timer);
+ if(stars==null){if($('rateSheet').open)$('rateSheet').close();voice.wait();return;}
+ paintStars(stars);const label=Number.isInteger(stars)?numberWords(stars):`${numberWords(Math.floor(stars))} y media`;
+ $('rateCaption').textContent=`¡Gracias por tus ${String(stars).replace('.',',')} estrellas!`;
+ try{if(mode==='demo'){const orders=readStore(ordersKey,[]);const o=orders.find(o=>o.id===id);if(o&&!o.rating){o.rating={stars,comment,at:new Date().toISOString()};saveOrders(orders);}}
+  else await fetch('/api/ratings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id,stars,comment})});}catch{}
+ await reply(stars>=4?`¡Gracias por las ${label} estrellas! Buen provecho.`:`Gracias por decírmelo, me sirve para mejorar. ¡Buen provecho!`,'wait');
+ setTimeout(()=>{if($('rateSheet').open)$('rateSheet').close();},1800);
+}
 // Kiosco: tras un rato sin uso, Milo vuelve a su pantalla inicial y apaga el micrófono.
 function activity(){clearTimeout(idleTimer);idleTimer=setTimeout(idle,120000);}
 function idle(){
@@ -201,6 +233,8 @@ for(const form of document.querySelectorAll('[data-chat]'))form.addEventListener
 $('optionsModal').addEventListener('click',e=>{const cat=e.target.closest('[data-category]');const add=e.target.closest('[data-add]');if(cat)handleInput(`ver ${cat.dataset.category}`);if(add)addDirect(add.dataset.add);});
 $('summaryBody').addEventListener('click',e=>{if(e.target.id!=='confirmButton')return;if(!table){const value=$('customerName').value.trim();if(value.length<2){$('customerName').focus();toast('Escribe un nombre para retirar.');return;}customerName=value;}reviewed=cartSignature(cart,customerName);saveDraft();submit();});
 $('summaryBody').addEventListener('input',()=>{reviewed=null;});
+$('stars').addEventListener('click',e=>{const b=e.target.closest('[data-star]');if(!b||!rating)return;const r=b.getBoundingClientRect();const half=(e.clientX||r.right)-r.left<r.width/2;finishRating(Math.max(1,Number(b.dataset.star)-(half?.5:0)));});
+$('rateSkip').addEventListener('click',()=>finishRating(null));
 for(const b of document.querySelectorAll('[data-close]'))b.addEventListener('click',()=>$(b.dataset.close).close());
 $('optionsModal').addEventListener('close',()=>{clearSpot();category=null;});
 $('summaryModal').addEventListener('close',()=>{reviewed=null;awaitingName=false;});
@@ -210,6 +244,9 @@ document.addEventListener('visibilitychange',()=>{if(document.hidden){interrupt(
 addEventListener('pointerdown',keepAwake,{once:true});
 async function init(){
  keepAwake();if(table){$('tableNumber').textContent=table;$('tableChip').hidden=false;}
+ initKiosk({table,mode:()=>mode,toast});
+ // Sin teclado para el cliente: solo voz. «?teclado=1» lo habilita para el personal y las pruebas.
+ if(/[?&]teclado=1\b/.test(location.search)){window.__miloInput=handleInput;$('keyboardOpen').hidden=false;document.querySelectorAll('.inline-chat[data-typing]').forEach(f=>f.hidden=false);}
  try{const res=await fetch('/api/menu');const data=await res.json();if(!res.ok)throw new Error(data.error);({menu,restaurant,mode}=data);voice.greeting=restaurant.greeting;voice.neural=data.voice==='neural';
  voice.preferRecorder=data.aiAvailable&&/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)&&!/[?&]voz=nativa\b/.test(location.search);const saved=readStore(storageKey,{});try{cart=validateCart(saved.cart||[],menu);pending=saved.pending||null;}catch{cart=[];pending=null;}customerName=saved.customer||'';setCart(cart);$('menuOpen').disabled=false;}
  catch{$('reply').textContent='No pude cargar el menú. Recarga la página.';$('mascot').disabled=true;}

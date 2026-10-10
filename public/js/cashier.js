@@ -1,5 +1,5 @@
 import {money} from './domain.js';
-import {ordersKey,readStore,saveOrders,observeOrders} from './order-store.js';
+import {ordersKey,alertsKey,readStore,saveOrders,observeOrders} from './order-store.js';
 import {consumeEvents} from './live-feed.js';
 const $=id=>document.getElementById(id);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -15,7 +15,18 @@ function render(){
  const shown=orders.filter(o=>filter==='all'||(filter==='done'?['entregado','cancelado'].includes(o.status):!['entregado','cancelado'].includes(o.status)));
  $('queue').innerHTML=shown.length?shown.map(o=>`<article class="queue-card" data-id="${esc(o.id)}"><header><span class="order-number">#${esc(o.number)}</span><span class="status-pill" data-status="${esc(o.status)}">${esc(o.status)}</span></header><h3>${esc(o.customer)}</h3><small class="muted">${o.table?`Mesa ${esc(o.table)}`:'Retiro'} · ${new Date(o.createdAt).toLocaleTimeString('es-EC',{hour:'2-digit',minute:'2-digit'})}</small><div class="ticket-items">${o.items.map(l=>`<p><b>${l.qty} ×</b> ${esc(l.name)}${l.notes?.length?`<small>${l.notes.map(esc).join(', ')}</small>`:''}</p>`).join('')}</div><div class="ticket-total"><span>Total</span><strong>${money(o.total)}</strong></div><div class="queue-actions">${next[o.status]?`<button class="primary-button" data-order="${esc(o.id)}" data-status="${next[o.status]}" ${changing.has(o.id)?'disabled':''}>${labels[next[o.status]]}</button>`:''}${['nuevo','aceptado','preparando'].includes(o.status)?`<button class="text-button danger" data-order="${esc(o.id)}" data-status="cancelado" ${changing.has(o.id)?'disabled':''}>Cancelar</button>`:''}</div></article>`).join(''):'<div class="empty-queue"><span>✦</span><h2>Todo al día.</h2><p>Los pedidos aparecerán aquí automáticamente.</p></div>';
 }
-function update(nextOrders){orders=nextOrders;render();$('lastUpdate').textContent=`Actualizado ${new Date().toLocaleTimeString('es-EC')}`;}
+// Avisos de las mesas (modo kiosco). Descartar es local a esta caja; un aviso nuevo suena una vez.
+const alertText={'kiosk-on':'activó el modo kiosco','kiosk-off':'desactivó el modo kiosco con la clave','fullscreen-exit':'salió de pantalla completa','app-hidden':'salió de la app','pin-failed':'intentó una clave incorrecta'};
+const dismissedKey='caja-avisos-descartados';let seenAlerts=null;
+function chime(){try{const ctx=new (window.AudioContext||window.webkitAudioContext)();const o=ctx.createOscillator(),g=ctx.createGain();o.frequency.value=660;g.gain.setValueAtTime(.08,ctx.currentTime);g.gain.exponentialRampToValueAtTime(.001,ctx.currentTime+.5);o.connect(g).connect(ctx.destination);o.start();o.stop(ctx.currentTime+.5);}catch{}}
+let lastAlerts=[];
+function renderAlerts(alerts=[]){lastAlerts=alerts;
+ const dismissed=new Set(readStore(dismissedKey,[]));const shown=alerts.filter(a=>!dismissed.has(a.id)&&Date.now()-Date.parse(a.at)<12*3600000);
+ if(seenAlerts&&shown.some(a=>!seenAlerts.has(a.id)&&a.type!=='kiosk-on'))chime();seenAlerts=new Set(alerts.map(a=>a.id));
+ $('alerts').hidden=!shown.length;
+ $('alerts').innerHTML=shown.map(a=>`<div class="alert-row" data-type="${esc(a.type)}"><span class="alert-dot"></span><b>Mesa ${esc(a.table)}</b> ${esc(alertText[a.type]||a.type)}<small>${new Date(a.at).toLocaleTimeString('es-EC',{hour:'2-digit',minute:'2-digit'})}</small><button class="text-button" data-dismiss="${esc(a.id)}">Listo</button></div>`).join('');
+}
+function update(nextOrders,alerts){orders=nextOrders;render();if(alerts)renderAlerts(alerts);$('lastUpdate').textContent=`Actualizado ${new Date().toLocaleTimeString('es-EC')}`;}
 function stop(){generation++;clearTimeout(retry);retry=null;controller?.abort();controller=null;}
 function logout(message='Accede con tu clave'){
  stop();token='';orders=[];signature='';$('queue').replaceChildren();$('workspace').hidden=true;$('staffForm').hidden=false;$('logout').hidden=true;$('loginError').textContent=message;connection('offline','Acceso del personal');
@@ -23,7 +34,7 @@ function logout(message='Accede con tu clave'){
 async function connect(){
  stop();const own=generation;
  if(document.hidden)return;
- if(mode==='demo'){update(readStore(ordersKey,[]));connection('live','En vivo · este navegador');return;}
+ if(mode==='demo'){update(readStore(ordersKey,[]),readStore(alertsKey,[]));connection('live','En vivo · este navegador');return;}
  if(!token)return;
  controller=new AbortController();const signal=AbortSignal.any([controller.signal,AbortSignal.timeout(32000)]);connection('connecting','Conectando…');
  try{
@@ -31,7 +42,7 @@ async function connect(){
   if(own!==generation)return;if(res.status===401){logout('Clave incorrecta o acceso vencido.');return;}if(!res.ok)throw new Error('No se pudo conectar');
   await consumeEvents(res,(event,data)=>{
    if(own!==generation)return;
-   if(event==='orders'){update(data.orders);delay=1000;connection('live','En vivo');}
+   if(event==='orders'){update(data.orders,data.alerts);delay=1000;connection('live','En vivo');}
    if(event==='heartbeat')connection('live','En vivo');
    if(event==='unavailable')throw new Error(data.message);
   });
@@ -53,7 +64,8 @@ $('queue').addEventListener('click',async e=>{
  }catch(e){$('queueNotice').textContent=e.message;}
  finally{changing.delete(id);render();}
 });
-observeOrders(()=>{if(mode==='demo')update(readStore(ordersKey,[]));});
+observeOrders(()=>{if(mode==='demo')update(readStore(ordersKey,[]),readStore(alertsKey,[]));});
+$('alerts').addEventListener('click',e=>{const id=e.target.closest('[data-dismiss]')?.dataset.dismiss;if(!id)return;try{localStorage.setItem(dismissedKey,JSON.stringify([id,...readStore(dismissedKey,[])].slice(0,100)));}catch{}renderAlerts(lastAlerts);});
 window.addEventListener('offline',()=>{stop();connection('offline','Sin conexión');});window.addEventListener('online',connect);
 document.addEventListener('visibilitychange',()=>{if(document.hidden){stop();connection('connecting','En pausa');}else connect();});
 window.addEventListener('pagehide',stop);

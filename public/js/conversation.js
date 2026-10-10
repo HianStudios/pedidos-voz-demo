@@ -1,8 +1,9 @@
 import {normalize} from './domain.js';
+import {fixWords} from './fuzzy.js';
 // Navigation is a complete intent, not the presence of «quiero» or a product word.
 export function navigation(text){
   // Muletillas al inicio («sí, muéstrame el menú», «oye Milo, los combos») no cambian la intención.
-  const n=normalize(text).replace(/\b(por favor|a ver)\b/g,'').trim().replace(/^(?:(?:si|ya|oye|bueno|ok|okey|dale|listo|milo|este|eh|mira|porfa)\s+)+/,'').trim();
+  const n=fixWords(normalize(text)).replace(/\b(por favor|a ver)\b/g,'').trim().replace(/^(?:(?:si|ya|oye|bueno|ok|okey|dale|listo|milo|este|eh|mira|porfa)\s+)+/,'').trim();
   if(/\b(no|sin|quita|cuanto|cuesta|precio)\b/.test(n))return null;
   // Pedir una categoría sin producto concreto («dame unas bebidas», «quiero un combo», «algo de tomar»)
   // es pedir ver las opciones: se muestran y Milo pregunta cuál. «Dame un combo familiar» no entra aquí.
