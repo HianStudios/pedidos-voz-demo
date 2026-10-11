@@ -29,7 +29,10 @@ export function keepsFacts(base,styled){
   if(/\?\s*$/.test(base.trim())!==/\?\s*$/.test(styled.trim()))return false;
   return true;
 }
+// Motivo de la última vez que no se usó la voz (solo para /api/eval).
+export let styleSkip='';
 export async function styleReply({said,reply,cart=[],history=[],fetchImpl}){
+  styleSkip='';
   // En las pruebas (fetch simulado) y sin clave, la frase queda como está.
   if(!process.env.GROQ_API_KEY||process.env.GROQ_STYLE==='off'||(fetchImpl&&fetchImpl!==globalThis.fetch))return null;
   const order=cart.map(l=>{const p=menu.find(x=>x.id===l.id);return p?`${l.qty} ${p.name}${l.notes?.length?` (${l.notes.join(', ')})`:''}`:'';}).filter(Boolean).join('; ')||'vacío';
@@ -38,8 +41,9 @@ export async function styleReply({said,reply,cart=[],history=[],fetchImpl}){
     const response=await fetch('https://api.groq.com/openai/v1/chat/completions',{method:'POST',headers:{Authorization:`Bearer ${process.env.GROQ_API_KEY}`,'Content-Type':'application/json'},
       body:JSON.stringify({model:process.env.GROQ_STYLE_MODEL||'llama-3.1-8b-instant',temperature:.8,max_tokens:120,messages:[{role:'system',content:persona},{role:'user',content:`${recent?`Conversación reciente:\n${recent}\n`:''}Pedido actual: ${order}\nEl cliente dijo: "${String(said).slice(0,300)}"\nRESPUESTA BASE: "${reply}"`}]}),
       signal:AbortSignal.timeout(Number(process.env.GROQ_STYLE_TIMEOUT)||1500)});
-    if(!response.ok)return null;
+    if(!response.ok){styleSkip=`proveedor ${response.status}: ${(await response.text().catch(()=>'')).slice(0,160)}`;return null;}
     const text=String((await response.json()).choices?.[0]?.message?.content||'').trim().replace(/^["“]|["”]$/g,'').replace(/\s+/g,' ');
-    return keepsFacts(reply,text)?text:null;
-  }catch{return null;}
+    if(keepsFacts(reply,text))return text;
+    styleSkip=`descartada: ${text.slice(0,200)}`;return null;
+  }catch(e){styleSkip=`error: ${e.name}`;return null;}
 }

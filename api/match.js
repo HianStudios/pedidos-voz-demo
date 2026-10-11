@@ -1,6 +1,6 @@
 import {menu} from '../server/catalog.js';
 import {validateCart,validateResult,repairResult,interpretLocal,isConfirmation,followUp,parsePeople,suggestForPeople,applyOperations,describeOps,soundsLike,normalize,serveFor,unavailableRemovals} from '../public/js/domain.js';
-import {styleReply} from '../server/style.js';
+import * as style from '../server/style.js';
 import {readFileSync} from 'node:fs';
 import {endpoint,guard,json,body,rateLimit,fail} from '../server/http.js';
 // Instrucciones compactas (resumen de la PARTE I del prompt maestro): deben caber en el límite de
@@ -23,8 +23,9 @@ export async function interpret(data,options={}){
   const result=await understand(data,options);
   try{enrich(result,data);}catch{}
   if(result.source==='local'&&['edit','recommend','clarify','price','keep'].includes(result.intent)&&result.reply){
-    const styled=await styleReply({said:data.transcript,reply:result.reply,cart:Array.isArray(data.cart)?data.cart:[],history:data.history,fetchImpl:options.fetchImpl});
+    const styled=await style.styleReply({said:data.transcript,reply:result.reply,cart:Array.isArray(data.cart)?data.cart:[],history:data.history,fetchImpl:options.fetchImpl});
     if(styled){result.base=result.reply;result.reply=styled;result.styled=true;}
+    else if(options.debug&&style.styleSkip)result.styleSkip=style.styleSkip;
   }
   return result;
 }
