@@ -48,6 +48,16 @@ const assert=require('node:assert/strict');const fs=require('node:fs');
  assert.equal(await page.locator('#detailChips [aria-pressed="true"]').count(),2);await page.screenshot({path:'test-results/ficha-desktop.png'});
  await page.evaluate(()=>window.__miloInput('agrégalo'));await page.locator('#detailSheet[open]').waitFor({state:'hidden'});
  assert.equal(Number(await page.locator('#cartCount').textContent()),cartBefore+1);assert.match(await page.locator('#reply').textContent(),/sin cebolla y sin tomate/);
+ // Lo que está en pantalla: «¿y qué trae?» sin nombrarlo, «cierra» no agrega, y con varias tarjetas pregunta cuál.
+ const screenBefore=Number(await page.locator('#cartCount').textContent());
+ await page.evaluate(()=>window.__miloInput('qué es lo que más sale'));await page.locator('.dish[data-product="combo-personal"]').waitFor();
+ await page.evaluate(()=>window.__miloInput('y qué trae'));await page.locator('#detailSheet[open]').waitFor();assert.match(await page.locator('#detailName').textContent(),/Combo personal/);
+ await page.evaluate(()=>window.__miloInput('cierra'));await page.locator('#detailSheet[open]').waitFor({state:'hidden'});assert.equal(Number(await page.locator('#cartCount').textContent()),screenBefore,'cerrar la ficha no agrega');
+ await page.evaluate(()=>window.__miloInput('oe ñaño, muéstrame los combos'));await page.locator('.dish[data-product="combo-familiar"]').waitFor();
+ await page.evaluate(()=>window.__miloInput('qué trae'));assert.match(await page.locator('#reply').textContent(),/De cuál/);
+ await page.evaluate(()=>window.__miloInput('el familiar'));await page.locator('#detailSheet[open]').waitFor();assert.match(await page.locator('#detailName').textContent(),/Combo familiar/);
+ await page.evaluate(()=>window.__miloInput('cierra'));await page.locator('#detailSheet[open]').waitFor({state:'hidden'});assert.equal(Number(await page.locator('#cartCount').textContent()),screenBefore);
+ await page.locator('[data-close="optionsModal"]').click().catch(()=>{});
  // Panel: el pedido y su calificación aparecen.
  const admin=await ctx.newPage();admin.on('pageerror',e=>errors.push(e.message));await admin.goto('http://localhost:3000/admin.html');await admin.locator('#dashboard:not([hidden])').waitFor();
  assert.equal(await admin.locator('#kpiOrders').textContent(),'1');assert.match(await admin.locator('#kpiRating').textContent(),/4,5/);assert.ok(await admin.locator('[data-chart="food"] .hbar').count()>=2);

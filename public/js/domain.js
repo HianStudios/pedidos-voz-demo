@@ -103,7 +103,7 @@ export function removalsFor(text,product){
 }
 // Calificación hablada: «cuatro estrellas», «cuatro y media», «4.5», «excelente», «más o menos».
 export function parseRating(text){
-  const n=normalize(text);
+  const n=normalize(text).replace(/\bun(?:a)? (?=(?:dos|tres|cuatro|cinco|[1-5])\b)/,'').replace(/\bestrellitas?\b/,'estrellas');
   if(/\b(no se|ahora no|despues|luego|no gracias|paso)\b/.test(n))return null;
   const half=/\by (media|medio)\b|\bpunto cinco\b|\bcon cinco\b/.test(n)?.5:0;
   const decimal=String(text).match(/\b([1-4])[.,]5\b/);if(decimal)return Number(decimal[1])+.5;
@@ -161,14 +161,14 @@ export function suggestForPeople(people,menu){
 const count=s=>numbers[s]??Number(s);
 // Aceptación completa («sí», «ya, envíalo», «finaliza el pedido»). Nunca enviada por sí sola:
 // la app solo envía si además hay un resumen vigente; si no, muestra el resumen.
-const yes='(?:si|ya|listo|dale|ok|okey|perfecto|correcto|de una|claro|esta bien|asi esta bien|todo bien|exacto)';
+const yes='(?:si|ya|listo|dale|ok|okey|perfecto|correcto|de una|claro|claro que si|esta bien|asi esta bien|todo bien|exacto|obvio|sale|va|vale|fresco|chevere|bacan|hagale|por supuesto|de ley)';
 const act='(?:confirm(?:a|o|ar|alo)|envia(?:lo|r)?|enviamelo|manda(?:lo|r)?|finaliz(?:a|ar|amos|alo)|cierr(?:a|alo)|cerrar|cerramos|procede|hazlo)(?: (?:el |la |mi )?(?:pedido|orden))?';
 const confirmRe=new RegExp(`^(?:${yes}(?: ${yes})*(?: ${act})?|${act})(?: por favor)?$`);
 export function isConfirmation(text){return confirmRe.test(normalize(text).replace(/^si si\b/,'si'));}
 // Frases con las que la gente cierra un pedido sin decir «envíalo»: «gracias», «eso es todo»,
 // «así está bien», «mándalo a la cocina», «ya pueden prepararlo»… Con el resumen a la vista
 // envían; sin él, abren el resumen. «No, gracias» queda fuera: ahí el cliente está frenando.
-const lead='(?:(?:si|ya|bueno|ok|okey|eh|este|entonces|listo|ahora|perfecto|dale|vale|claro|no|gracias|muchas gracias|eso) )*';
+const lead='(?:(?:si|ya|bueno|ok|okey|eh|este|entonces|listo|ahora|perfecto|dale|vale|claro|no|gracias|muchas gracias|eso|mismo|pues|bacan|chevere|simon|sale|va|fresco) )*';
 const tail='(?: (?:gracias|muchas gracias|mil gracias|por favor|porfa|nomas|no mas|amigo|amiga|milo|mijo|pana|ve|pues|ya|a (?:la )?cocina|de una|por fa))*';
 const done=[
   'gracias','muchas gracias','mil gracias','muy amable','gracias muy amable',
@@ -180,12 +180,12 @@ const done=[
   '(?:ya )?termine(?: (?:de pedir|mi pedido))?','he terminado','ya pedi','ya pedimos','eso pedimos','eso pido','eso quiero','eso queremos',
   'listo','ya','perfecto','de una','vale','hagale','chevere','bacan','excelente','genial','super',
   '(?:ya )?(?:lo |la )?(?:puedes|pueden|puede|podes|podrias) (?:ya )?(?:enviar|mandar|pasar|pedir|llevar|confirmar)(?:lo|la)?(?: (?:a (?:la )?cocina|el pedido|la orden))?',
-  '(?:si )?(?:por favor )?(?:envia|manda|pasa)(?:lo|la)?(?: ya)?','lo puedes mandar','envialo nomas','mandalo nomas','si mandalo','si envialo','ya mandalo','ya envialo','asi mandalo',
+  '(?:si )?(?:por favor )?(?:envia|manda|pasa|mande|envie)(?:lo|la|le|selo)?(?: ya)?(?: (?:a|para) (?:la )?cocina)?','lo puedes mandar','envialo nomas','mandalo nomas','si mandalo','si envialo','ya mandalo','ya envialo','asi mandalo',
   '(?:manda|mandalo|mandala|mandame|envia|envialo|enviala|pasa|pasalo|pasala|lleva|llevalo|llevala|pidelo|pide|ordena|ordenalo|despacha|despachalo|mete|metelo|sube|subelo)(?: (?:el pedido|la orden|eso|todo))?(?: (?:a|para) (?:la )?cocina)?',
   '(?:a|para) (?:la )?cocina','(?:que|ya) (?:lo |la |los )?(?:preparen|hagan|cocinen|traigan|saquen)','(?:que|ya) (?:empiecen|arranquen)','pueden (?:prepararlo|empezar|traerlo)',
   'adelante','proceda','procede','vamos','dale nomas','listo para cocina','ya cierra','cierra nomas','finaliza(?:r)?(?: (?:el pedido|la orden))?','(?:ya )?(?:sale|salio)',
 ];
-const finishRe=new RegExp(`^${lead}(?:${done.join('|')})${tail}$`);
+const finishRe=new RegExp(`^${lead}(?:${done.join('|')})(?: (?:${done.join('|')}))?${tail}$`);
 export function isFinish(text){
   const n=normalize(text);
   if(!n||/^no(?: gracias)?$/.test(n)||/^no (?:gracias )?(?:todavia|aun|espera|un momento)/.test(n))return false;
@@ -236,7 +236,22 @@ const soundAlikes=[
   [/\bcombos? persona\b/g,'combo personal'],[/\bcon vo personal\b/g,'combo personal'],[/\bel familia\b/g,'el familiar'],
   [/\bunas? alita(?: bbq)?\b/g,'unas alitas'],[/\bmedio pollos\b/g,'medios pollos'],[/\buna papa\b/g,'unas papas'],[/\bcombo pa dos\b/g,'combo para dos'],
 ];
-export function soundsLike(text,menu){let n=normalize(text);for(const [re,to] of soundAlikes)n=n.replace(re,to);return fixWords(n,menu);}
+// Habla de la calle: saludos y vocativos («oe ñaño», «qué fue mijo», «veci») no cambian el pedido;
+// diminutivos («un cuartito», «una colita», «unas papitas») son el mismo producto; «simón» es sí, «nel» es no.
+const streetTalk=[
+  // Muletillas al empezar: «eh… este… dame», «a ver, un medio», «ya pues ponme».
+  [/^(?:(?:eh+|em+|mm+|a ver|haber|bueno|o sea|mira|pues|ya pues|este)\s+)+(?=(?:dame|deme|quiero|quisiera|ponme|pongame|un|una|unos|unas|dos|tres|cuatro|me|nos|traeme|traiga|regalame|regaleme|mandame|el|la|los|las|y|que|cuanto|tienes|tienen|hay|muestrame|ensename|si|no|ya)\b)/,''],
+  [/^(?:(?:hola|holi|alo|buenas|buenas tardes|buenas noches|buenos dias|que fue|que mas|que tal|saludos|disculpa|disculpe|perdon|una pregunta)\b\s*)+/,''],
+  [/\b(?:oe|oiga|oye|ve|nano|nana|nanito|mijo|mija|mijin|mi pana|pana|panita|bro|brother|veci|vecino|vecina|jefe|jefecito|jefa|jefita|caserito|caserita|casero|casera|amigo|amiga|amiguito|maestro|loco|loca|hermano|hermanito|mi rey|mi reina|mi amor|joven|senorita|milo|mi llave|llave|causa)\b/g,''],
+  [/\b(dame|deme|traeme|ponme|regalame|mandame|anda|vete) (?:haciendo|preparando|sirviendo|mandando|trayendo)\b/g,'$1'],
+  [/\bsimona?\b|\bde ley\b/g,'si'],[/\bnel\b|\bnelson\b|\bni de fun\b|\bnada que ver\b/g,'no'],
+  [/\bcuartitos?\b/g,m=>m.endsWith('s')?'cuartos':'cuarto'],[/\bpoll(?:it|ic)os?\b/g,m=>m.endsWith('s')?'pollos':'pollo'],[/\bpapitas?\b/g,'papas'],
+  [/\bcocacolitas?\b|\bcoquitas?\b/g,'coca cola'],[/\bcolitas?\b/g,m=>m.endsWith('s')?'colas':'cola'],[/\baguitas?\b/g,'agua'],[/\barrocito\b/g,'arroz'],
+  [/\bensaladitas?\b/g,'ensalada'],[/\bpechuguitas?\b/g,'pechuga'],[/\bcombitos?\b/g,'combo'],[/\bgaseositas?\b/g,'gaseosa'],[/\bspritecitas?\b/g,'sprite'],
+  [/\bpepsicitas?\b/g,'pepsi'],[/\bheladit(?:a|o)s?\b/g,'helada'],[/\bporcioncitas?\b/g,'porcion'],[/\bmediecito\b/g,'medio'],
+  [/(?:\s+(?:nomas|no mas|porfis|plis|please|porfa|por favor|rapidito|ahi|pues))+\s*$/g,''],
+];
+export function soundsLike(text,menu){let n=normalize(text);for(const [re,to] of [...streetTalk,...soundAlikes])n=n.replace(re,to);n=n.replace(/\s+/g,' ').trim();return fixWords(n,menu);}
 export function interpretLocal(text,cart,menu,lastId=null,context={}){
   // Cómo se sirve la bebida («una pepsi sin hielo») lo anota la app aparte; aquí no es un ingrediente.
   let n=soundsLike(text,menu).replace(/\s*\b(?:(?:en )?vaso )?(?:con|sin) hielos?\b|\s*\b(?:solo (?:la )?botella|sin vaso|al clima)\b/g,'').trim();
@@ -250,7 +265,7 @@ export function interpretLocal(text,cart,menu,lastId=null,context={}){
     // papas extra en el pedido es quitar ese producto, no un ingrediente.
     // Formas de decirlo sin nombrar la opción: «que no pique» = sin ají; «sin verduras» = sin ensalada.
     n=n.replace(/\b(?:que no pique|que no este picante|sin picante|nada de picante|nada picante|no picante|sin lo picante)\b/g,'sin aji').replace(/\b(?:sin|nada de|sin nada de) (?:verduras?|vegetales|verde|lo verde)\b/g,'sin ensalada');
-    n=n.replace(new RegExp(`\\b(?:quitale|quitele|quitales|sacale|sacales|no le pongas|no le pongan|no le pongas nada de|que no tenga|que no traiga|que no lleve|no quiero nada de|nada de|no quiero)\\s+(?:el |la |los |las |lo de )?(${alt})\\b`,'g'),(m,x)=>x==='papas'&&cart.some(l=>l.id==='papas')?m:`sin ${x}`);
+    n=n.replace(new RegExp(`\\b(?:quitale|quitele|quitales|sacale|sacales|no le pongas|no le pongan|no le pongas nada de|que no tenga|que no traiga|que no lleve|no quiero nada de|nada de|no quiero|cero)\\s+(?:nada de |nada de la |nada del )?(?:el |la |los |las |lo de )?(${alt})\\b`,'g'),(m,x)=>x==='papas'&&cart.some(l=>l.id==='papas')?m:`sin ${x}`);
     // «sin cebolla ni tomate», «sin cebolla y tomate», «sin cebolla, tomate» → cada uno con su «sin».
     for(let prev='';prev!==n;){prev=n;n=n.replace(new RegExp(`\\bsin (${alt})\\s+(?:(?:y|ni)\\s+)?(?!sin )(${alt})\\b`),'sin $1 sin $2');}
   }
@@ -286,6 +301,11 @@ export function interpretLocal(text,cart,menu,lastId=null,context={}){
     const say=p=>p.pitch||one(p);
     if(a&&b)return answer('recommend',`${light?'Para algo ligero':'Para llenarte bien'}, ${say(a)}, o ${say(b)}. ¿Cuál te anoto?`,{suggest_ids:[a.id,b.id]});
   }
+  // «Lo más pedido», «lo que más sale», «la especialidad»: el producto marcado en el catálogo.
+  if(/\b(lo mas pedido|lo que mas (?:sale|piden|venden|se vende|se pide)|lo mas vendido|la especialidad|especialidad de la casa|lo mejor que (?:tienes|tienen|hay)|lo mas rico|que esta bueno|que es lo bueno|que es lo mejor)\b/.test(n)){
+    const star=menu.find(p=>p.available&&/pedido|vendido/i.test(p.tag||''))||menu.find(p=>p.available&&p.tag);
+    if(star)return answer('recommend',`Lo que más sale es el ${star.name.toLowerCase()}. ¿Te lo anoto?`,{suggest_ids:[star.id],proposal:[{type:'add',id:star.id,qty:1}]});
+  }
   if(/\b(recomienda|recomiendas|recomendacion|que hay|que tienes)\b/.test(n)) return answer('recommend','Si es para ti solo, el combo personal va bien. Para compartir, el combo familiar. ¿Para cuántos es?',{suggest_ids:['combo-personal','combo-familiar']});
   const single=menu.find(p=>p.available&&[p.name,...p.aliases].some(a=>normalize(a).replace(/^(un|una) /,'')===n));
   if(single&&context.category===single.category){const operations=[{type:'add',id:single.id,qty:1}];return answer('edit',`${describeOps(operations,menu)} ${followUp(cart,operations,menu,context.drinkOffered)}`,{operations});}
@@ -302,10 +322,14 @@ export function interpretLocal(text,cart,menu,lastId=null,context={}){
   const asksContents=/\b(que (?:contiene|trae|tiene|lleva|incluye|viene con)|ingredientes|de que es|con que viene|como viene|que tiene adentro)\b/.test(n)||(hits.length>0&&/^(?:(?:el|la|los|las|y|oye|una pregunta)\s+)*[^,]*\b(trae|lleva|tiene|incluye|viene con)\b/.test(n)&&!/\b(traeme|traenos|dame|quiero|ponme|agrega|sin)\b/.test(n));
   if(asksContents&&!/\b(cuanto|precio|cuesta)\b/.test(n)){
     const ids=[...new Set(hits.map(h=>h.id))];
-    // «El combo familiar trae ensalada»: se pregunta por lo primero que se nombra.
-    const id=ids.length?hits[0].id:lastId;
+    // «El combo familiar trae ensalada»: se pregunta por lo primero que se nombra. «¿Y qué trae?» sin nombrar
+    // nada es lo que está en pantalla o de lo que Milo acaba de hablar.
+    // Con varias tarjetas en pantalla y nada señalado, se pregunta cuál en vez de suponer.
+    const shown=(context.shown||[]).map(x=>menu.find(p=>p.id===x)).filter(Boolean);
+    const id=ids.length?hits[0].id:context.focus||(shown.length>=2?null:lastId);
     if(id)return answer('detail','',{suggest_ids:[id]});
-    return answer('clarify',ids.length?'¿De cuál quieres saber qué trae?':'¿De qué plato quieres saber qué trae?');
+    if(shown.length>=2&&shown.length<=6)return answer('clarify',`¿De cuál quieres saber qué trae: ${listWords(shown.map(one)).replace(/ y ([^,]*)$/,' o $1')}?`);
+    return answer('clarify','¿De qué plato quieres saber qué trae?');
   }
   // «Sin cebolla» es una opción del producto, nunca un plato aparte: «los dos cuartos sin cebolla».
   const noteRe=alt?new RegExp(`\\bsin (${alt})\\b`,'g'):null;
@@ -352,18 +376,33 @@ export function interpretLocal(text,cart,menu,lastId=null,context={}){
     return answer('edit',`${describeOps(operations,menu)}${extra} ${followUp(cart,operations,menu,context.drinkOffered)}`,{operations});
   }
   if(/\b(cuanto|precio|cuesta|cuestan)\b/.test(n)){
+    if(!hits.length&&context.focus){const p=menu.find(x=>x.id===context.focus);if(p)return answer('price',`${p.name} cuesta ${money(p.price)}.`,{suggest_ids:[p.id]});}
+    const shown=(context.shown||[]).map(x=>menu.find(p=>p.id===x)).filter(Boolean);
+    if(!hits.length&&shown.length>=2&&shown.length<=6) return answer('clarify',`¿De cuál quieres saber el precio: ${listWords(shown.map(one)).replace(/ y ([^,]*)$/,' o $1')}?`);
     if(!hits.length) return answer('clarify','¿De qué producto quieres saber el precio?');
     return answer('price',hits.map(h=>{const p=menu.find(p=>p.id===h.id);return `${p.name} cuesta ${money(p.price)}.`;}).join(' '),{suggest_ids:[...new Set(hits.map(h=>h.id))]});
   }
-  const correction=n.match(/^(?:mejor|que sean|dejalo en) (\d+|uno|una|dos|tres|cuatro|cinco)$/);
+  // «Dámelo», «ponme ese», «me quedo con ese», «dame dos de esos»: lo que está en pantalla o se acaba de mencionar.
+  if(!hits.length&&context.focus&&menu.some(p=>p.id===context.focus&&p.available)){
+    const lead='(?:(?:si|ya|bueno|entonces|ok|dale|listo|va|ya pues) )*';
+    const clitic='(?:damelo|damela|ponmelo|ponmela|anotamelo|anotamela|anotalo|anotala|agregamelo|agregamela|agregalo|agregala|ponlo|ponla|traemelo|traemela|mandamelo|regalamelo|pasamelo|(?:me|si) lo (?:das|llevo|quiero|anotas|pones|traes)|(?:me|si) la (?:das|llevo|quiero|anotas|pones|traes)|lo quiero|la quiero|lo pido|la pido)';
+    const verb='(?:dame|deme|ponme|quiero|quisiera|anotame|agregame|traeme|me das|mandame|regalame|pasame|pido|voy a pedir|vamos con|me quedo con|elijo|escojo|me llevo)';
+    const that='(?:ese|esa|este|esta|ese mismo|esa misma|el mismo|la misma|ese de ahi|esa de ahi|el de ahi|la de ahi|ese combo|ese plato|esa bebida|esa opcion|eso mismo)';
+    const many=n.match(/\b(dos|tres|cuatro|cinco|seis|\d+) de (?:esos|esas|estos|estas)\b/);
+    if(many||new RegExp(`^${lead}(?:${clitic}(?: (?:uno|una|nomas|porfa))?|${verb} ${that}|${that}(?: (?:quiero|mismo|misma|nomas))?)$`).test(n)){
+      const qty=many?count(many[1]):1;const operations=[{type:'add',id:context.focus,qty}];
+      return answer('edit',`${describeOps(operations,menu)} ${followUp(cart,operations,menu,context.drinkOffered)}`,{operations});
+    }
+  }
+  const correction=n.match(/^(?:mejor |no )?(?:que sean|que sea|dejalo en|ponle|mejor) (\d+|uno|una|dos|tres|cuatro|cinco)$/);
   if(correction){const id=lastId||(cart.length===1?cart[0].id:null);if(!id)return answer('clarify','¿De qué producto cambio la cantidad?');const operations=[{type:'set',id,qty:count(correction[1])}];return answer('edit',describeOps(operations,menu),{operations});}
   // Frases complejas/negadas se dejan a la IA; nunca adivinar una sustitución.
   if(/\b(no|cambia|cambiar|sustituye|en vez|pero|sin)\b/.test(remaining)) return null;
   if(!hits.length) return null;
   // «trae» solo no es pedir: «el combo trae ensalada» pregunta qué incluye. Se pide con «tráeme».
-  const verbs='quiero|quisiera|dame|deme|da|das|traeme|traenos|regalame|mandame|agrega|agregame|anade|pon|ponme|quita|quitale|quitame|saca|sacale|elimina|borra|mejor|necesito|me|nos|otra|otro|otras|otros|tambien';
+  const verbs='quiero|quisiera|dame|deme|da|das|traeme|traenos|regalame|mandame|agrega|agregame|anade|pon|ponme|quita|quitale|quitame|saca|sacale|elimina|borra|mejor|necesito|me|nos|otra|otro|otras|otros|tambien|regaleme|traigame|traiga|traigan|traiganos|pongame|mandeme|sirvame|sirveme|queremos|quisieramos|querer|regalanos|pasame|pasanos|alcanzame|deseo|deseamos|pido|pedimos|vamos|a';
   if(!new RegExp(`\\b(${verbs})\\b`).test(n)&&!/^\d|^(un|una|unas|unos|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\b/.test(n)) return null;
-  const residue=normalize(remaining).split(' ').filter(w=>w&&!new RegExp(`^(${verbs}|si|y|tambien|por|favor|porfa|pues|el|la|los|las|de|del|un|una|unas|unos|uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|-?\\d+)$`).test(w));
+  const residue=normalize(remaining).split(' ').filter(w=>w&&!new RegExp(`^(${verbs}|si|y|tambien|por|favor|porfa|pues|el|la|los|las|de|del|un|una|unas|unos|uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|bien|super|fria|frias|frio|helada|heladas|fresca|frescas|grande|-?\\d+)$`).test(w));
   if(residue.length) return null;
   const remove=/\b(quita|quitale|quitame|saca|sacale|elimina|borra)\b/.test(n);
   const replace=/\bmejor\b/.test(n);

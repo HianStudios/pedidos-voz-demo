@@ -24,7 +24,8 @@ let menu=[],restaurant,mode='demo',cart=[],history=[],busy=false,epoch=0,request
  choices=null, // opciones que Milo acaba de ofrecer («el primero», «la segunda»)
  rating=null, // pedido recién enviado que espera calificación
  detail=null, // ficha abierta: {id, notes:Set}
- upsold=false,roundNote=false,kiosk=null; // sugerencia de acompañante (una vez), aviso de pedido aparte, avisos a caja
+ upsold=false,roundNote=false,kiosk=null,
+ onScreen=[],mentioned=null; // tarjetas en pantalla y el último producto que Milo nombró // sugerencia de acompañante (una vez), aviso de pedido aparte, avisos a caja
 function saveDraft(){try{localStorage.setItem(storageKey,JSON.stringify({cart,pending,customer:customerName}));}catch{}}
 let toastTimer;
 function toast(text){$('toast').textContent=text;$('toast').classList.add('visible');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').classList.remove('visible'),4500);}
@@ -57,8 +58,26 @@ async function reply(text,next='listen'){
  if(/para cu[aá]ntos|cu[aá]ntas personas|cu[aá]ntos son/i.test(question))asked='people';
  else if(/para tomar|bebida/i.test(question)){asked='drink';drinkOffered=true;}
  else if(/hielo|botella/i.test(question))asked='serve';
+ else if(/qu[eé] trae|el precio/i.test(question))asked=/precio/.test(question)?'price':'detail';
+ // Si Milo nombra un solo producto («Lo que más sale es el combo personal»), ese es «ese» para el cliente.
+ const named=productsIn(text);if(named.length)mentioned=named.length===1?named[0]:null;
  history.push({role:'assistant',content:text});history=history.slice(-10);
  if(voice.enabled&&sessionActive)await voice.respond(text,next);else{voice.state(voice.enabled?'waiting':'off');spotlight(text);}
+}
+// «El primero», «la segunda», «el último»: posición de la tarjeta en pantalla.
+function ordinal(n,named=0){
+ return /\b(primer[oa]?|el uno|la uno)\b/.test(n)?0:/\b(segund[oa]|el dos|la dos)\b/.test(n)?1:/\b(tercer[oa]?)\b/.test(n)?2:!named&&/\b(cuart[oa])\b/.test(n)&&!/cuarto de pollo/.test(n)?3:/\b(quint[oa])\b/.test(n)?4:/\b(ultim[oa])\b/.test(n)?onScreen.length-1:-1;
+}
+function productsIn(text){
+ const n=` ${normalize(text)} `;
+ return [...new Set(menu.filter(p=>p.available&&[p.name,...(p.aliases||[])].some(a=>a.length>3&&n.includes(` ${normalize(a)} `))).map(p=>p.id))];
+}
+// De qué producto se habla cuando el cliente no lo nombra: la ficha abierta, la única tarjeta en pantalla o,
+// con varias, la que Milo acaba de nombrar (si no, se pregunta cuál). Sin menú abierto: lo último nombrado o pedido.
+function focusId(){
+ if(detail&&$('detailSheet').open)return detail.id;
+ if($('optionsModal').open&&onScreen.length){if(onScreen.length===1)return onScreen[0];return onScreen.includes(mentioned)?mentioned:null;}
+ return mentioned||lastId;
 }
 function interrupt(){epoch++;request?.abort();request=null;voice.pause();busy=false;}
 function setCart(next){
@@ -92,11 +111,11 @@ function menuSign(cat){
  return `<div class="menu-sign" role="note"><span class="sign-pin" aria-hidden="true"></span><span class="sign-icon" aria-hidden="true">${drinks?'🧊':'🍗'}</span><p>${text}</p></div>`;
 }
 function showCategories(){
- category=null;
+ category=null;onScreen=[];
  openSheet('Menú',`${menuSign()}<div class="doors">${Object.keys(categories).map((c,i)=>{const items=menu.filter(p=>p.category===c&&p.available);const hero=items.find(p=>p.tag)||items[0];return hero?`<button class="door" style="--i:${i}" data-category="${c}"><span class="art">${foodArt(hero)}</span><strong>${c}</strong><span>${items.length} opciones</span></button>`:'';}).join('')}</div>`);
 }
 function showProducts(items,title,cat=null){
- category=cat;
+ category=cat;onScreen=items.map(p=>p.id);
  if(!items.length){reply('Ahora mismo no hay productos disponibles aquí.');return;}
  openSheet(title,`${menuSign(cat||(items.every(p=>p.category==='Bebidas')?'Bebidas':null))}<div class="shelf" tabindex="0" aria-label="${esc(title)}">${items.map((p,i)=>`<article class="dish" style="--i:${i}" data-product="${p.id}"><div class="art">${foodArt(p)}</div><span class="tag">${esc(p.tag||'')}</span><h3>${esc(p.name)}</h3><p>${esc(p.desc)}</p><footer><span class="price">${money(p.price)}</span>${p.ingredients?.length>1?`<button class="info" data-detail="${p.id}">Qué trae</button>`:''}<button class="add" data-add="${p.id}" aria-label="Agregar ${esc(p.name)}">Agregar</button></footer></article>`).join('')}</div>`,cat);
 }
@@ -207,7 +226,9 @@ async function handleInput(raw){
   const p=menu.find(x=>x.id===detail.id);const {remove,restore}=removalsFor(said,p);
   if(remove.length||restore.length){remove.forEach(o=>detail.notes.add(o));restore.forEach(o=>detail.notes.delete(o));renderDetail();
    reply(`${remove.length?`Listo, ${listWords(remove)}`:`Listo, ${listWords(restore.map(o=>o.replace(/^sin /,'con ')))}`}. ¿Te lo anoto así?`);return;}
-  if(isConfirmation(raw)||/\b(agregalo|agregamelo|anotalo|anotamelo|ponlo|ponmelo|dame ese|lo quiero|asi esta bien|asi nomas|dale|guardalo)\b/.test(n)){commitDetail();return;}
+  // «Cierra», «no», «nada» cierran la ficha sin anotar (aunque «cierra» también sirva para cerrar el pedido).
+  if(/^(?:no|no gracias|nada|cierra|cierralo|cierra eso|cerrar|despues|ahora no|asi no|mejor no)$/.test(n)){detail=null;$('detailSheet').close();reply('Listo. ¿Qué más te provoca?');return;}
+  if(isConfirmation(raw)||/\b(agregalo|agregamelo|anotalo|anotamelo|ponlo|ponmelo|damelo|damela|dame ese|dame eso|lo quiero|la quiero|me lo llevo|me quedo con (?:ese|esa)|asi esta bien|asi nomas|dale|guardalo|de una|simon)\b/.test(n)){commitDetail();return;}
   detail=null;$('detailSheet').close();
   if(/^(no|no gracias|nada|cierra|cerrar|despues)$/.test(n)){reply('Listo. ¿Qué más te provoca?');return;}
  }
@@ -227,6 +248,22 @@ async function handleInput(raw){
  }
  // Respuestas a lo último que Milo preguntó o propuso.
  const lastAsked=asked,offer=proposal,options=choices;asked=null;proposal=null;choices=null;
+ // «¿De cuál quieres saber qué trae?» → «el familiar», «el segundo»: se abre su ficha, no se agrega.
+ if(lastAsked==='detail'){
+  const named=productsIn(raw);const pick=named.length===1?named[0]:onScreen[ordinal(n,named.length)];
+  if(pick&&!/\b(dame|ponme|quiero|agrega|anota|traeme)\b/.test(n)){openDetail(pick);return;}
+ }
+ if(lastAsked==='price'){
+  const named=productsIn(raw);const p=menu.find(x=>x.id===(named.length===1?named[0]:onScreen[ordinal(n,named.length)]));
+  if(p&&!/\b(dame|ponme|quiero|agrega|anota|traeme)\b/.test(n)){mentioned=p.id;reply(`${p.name} cuesta ${money(p.price)}. ¿Te lo anoto?`);proposal={operations:[{type:'add',id:p.id,qty:1}]};return;}
+ }
+  // Con tarjetas en pantalla: «qué trae la segunda», «cuánto cuesta el primero», «dame el último».
+ if($('optionsModal').open&&onScreen.length>1&&!productsIn(raw).length){
+  const p=menu.find(x=>x.id===onScreen[ordinal(n)]);
+  if(p&&/\b(que (?:trae|tiene|lleva|incluye)|ingredientes|de que es)\b/.test(n)){openDetail(p.id);return;}
+  if(p&&/\b(cuanto|precio|cuesta|vale)\b/.test(n)){mentioned=p.id;reply(`${p.name} cuesta ${money(p.price)}. ¿Te lo anoto?`);proposal={operations:[{type:'add',id:p.id,qty:1}]};return;}
+  if(p&&/\b(dame|ponme|quiero|anotame|agregame|agrega|traeme|me das|regalame|pasame|me llevo|me quedo con)\b/.test(n)){addDirect(p.id);return;}
+ }
  // «¿Con hielo, sin hielo o solo la botella?»
  const serving=serveId;serveId=null;
  if(lastAsked==='serve'&&serving&&cart.some(l=>l.id===serving)){
@@ -269,7 +306,7 @@ async function handleInput(raw){
  if(/^(no quiero bebida|sin bebida|no deseo bebida|no gracias)$/.test(n)){reviewed=null;awaitingName=false;drinkOffered=true;reply('Sin bebida, entonces. ¿Algo más, o cerramos el pedido?');return;}
  reviewed=null;awaitingName=false;busy=true;$('sendText').disabled=true;request=new AbortController();
  try{
-  const res=await fetch('/api/match',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({transcript:said,cart,lastId,category,table,drinkOffered,history:history.slice(0,-1).slice(-6)}),signal:AbortSignal.any([request.signal,AbortSignal.timeout(22000)])});
+  const res=await fetch('/api/match',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({transcript:said,cart,lastId,category,table,drinkOffered,focus:focusId(),shown:$('optionsModal').open?onScreen:[],history:history.slice(0,-1).slice(-6)}),signal:AbortSignal.any([request.signal,AbortSignal.timeout(22000)])});
   const result=await res.json();if(turn!==epoch)return;if(!res.ok)throw new Error(result.error||'No pude entender.');
   if(result.intent==='edit'){
    setCart(applyOperations(cart,result.operations,menu));lastId=result.operations.at(-1)?.id;
@@ -306,7 +343,7 @@ async function submit(){
    if(!order){order={id:pending.key,number:pending.key.slice(0,6).toUpperCase(),items:pending.items.map(l=>({...l,name:menu.find(p=>p.id===l.id).name,price:menu.find(p=>p.id===l.id).price})),total:total(pending.items,menu),customer:pending.customer,...(pending.table?{table:pending.table}:{}),fulfillment:pending.table?'mesa':'retiro',status:'nuevo',createdAt:new Date().toISOString()};saveOrders([order,...orders].slice(0,200));}
   }else{const res=await fetch('/api/orders',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(pending),signal:AbortSignal.timeout(15000)});const data=await res.json();if(!res.ok)throw new Error(data.error);order=data.order;}
   const t=tab();saveTab({orders:[...(t.billed?[]:t.orders),order.id].slice(-10),billed:false});
-  pending=null;customerName='';setCart([]);lastId=null;awaitingName=false;drinkOffered=false;upsold=false;roundNote=false;history=[];
+  pending=null;customerName='';setCart([]);lastId=null;mentioned=null;awaitingName=false;drinkOffered=false;upsold=false;roundNote=false;history=[];
   toast(`Pedido ${mode==='demo'?'de prueba ':''}#${order.number} registrado`);
   const done=mode==='demo'?'Listo, tu pedido de prueba quedó registrado.':order.table?'¡Listo! Tu pedido ya está en cocina. ¡Buen provecho!':`¡Listo, ${order.customer}! Tu pedido es el número ${order.number}.`;
   startRating(order);await reply(`${done} ¿Qué te pareció mi atención? Dime de una a cinco estrellas.`,'listen');
@@ -378,7 +415,7 @@ $('detailChips').addEventListener('click',e=>{const b=e.target.closest('[data-no
 $('detailAdd').addEventListener('click',()=>{interrupt();commitDetail();});
 $('detailSheet').addEventListener('close',()=>{detail=null;});
 for(const b of document.querySelectorAll('[data-close]'))b.addEventListener('click',()=>$(b.dataset.close).close());
-$('optionsModal').addEventListener('close',()=>{clearSpot();category=null;});
+$('optionsModal').addEventListener('close',()=>{clearSpot();category=null;onScreen=[];});
 $('summaryModal').addEventListener('close',()=>{reviewed=null;awaitingName=false;});
 addEventListener('resize',()=>{if($('optionsModal').open)setTab(category);});
 addEventListener('pointerdown',activity);addEventListener('keydown',activity);

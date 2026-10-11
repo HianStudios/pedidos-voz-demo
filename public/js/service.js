@@ -13,7 +13,8 @@ const person=/\b(un mesero|una mesera|al mesero|a la mesera|el mesero|la mesera|
 const callVerb=/\b(llama|llamame|llamen|llamar|necesito|necesitamos|quiero|queremos|hablar con|que venga|que se acerque|ven|venga|pasame|puede venir|ayuda|ayudame|ayudenme)\b/;
 
 export function staffRequest(text){
-  const n=normalize(text);if(!n)return null;
+  // Sin saludos ni vocativos de la calle: «oe ñaño, la cuenta» es «la cuenta».
+  const n=normalize(text).replace(/\b(?:oe|oiga|oye|ve|nano|nana|mijo|mija|pana|bro|veci|vecino|vecina|jefe|jefecito|jefa|caserito|casera|amigo|amiga|maestro|hola|buenas|disculpa|disculpe)\b/g,' ').replace(/\s+/g,' ').trim();if(!n)return null;
   // La cuenta: «la cuenta, por favor», «quiero pagar», «cóbrame», «cuánto te debo».
   if(/\b(la cuenta|cuenta por favor|quiero pagar|queremos pagar|vamos a pagar|para pagar|pagar ya|cobr(?:a|ame|anos|en|eme)|cuanto (?:le |te )?debo|cuanto (?:le |te )?debemos|cuanto es (?:todo|en total|lo que debo)|cuanto salio todo|la factura|la boleta)\b/.test(n)){
     const pay=/\b(tarjeta|credito|debito|datafast)\b/.test(n)?'tarjeta':/\b(efectivo|cash|billete|sencillo)\b/.test(n)?'efectivo':/\b(transferencia|transfiero|deposito)\b/.test(n)?'transferencia':null;
@@ -23,6 +24,7 @@ export function staffRequest(text){
   const complaint=/\b(se demora mucho|demora mucho|ya se demoro|tarda mucho|se tarda mucho|todavia no (?:llega|viene|sale)|aun no (?:llega|viene|sale)|no (?:llega|viene) (?:nada|mi|el|nuestro)|por que (?:se )?(?:demora|tarda)|hace rato)\b/.test(n);
   if(complaint||/\b(ya viene|ya vienen|ya sale|cuanto (?:falta|se demora|demora|tarda|se tarda|mas)|como va (?:mi|el|nuestro) pedido|(?:mi|el|nuestro) pedido (?:ya )?(?:viene|esta listo|sale|llega)|ya esta (?:mi|el|nuestro) pedido|esta listo (?:mi|el) pedido|donde esta (?:mi|el|nuestro) pedido|en que va (?:mi|el) pedido)\b/.test(n))
     return {type:'status',complaint};
+  if(/^(?:y )?(?:mi|nuestro|el) (?:pedido|comida|orden)(?: (?:pues|ve|que paso|para cuando))?$|^(?:y )?(?:la|mi|nuestra) comida(?: (?:pues|ve))?$|\bque paso con (?:mi|el|nuestro) (?:pedido|comida|orden)\b/.test(n))return {type:'status',complaint:false};
   // Pedir algo de la mesa: «tráeme servilletas», «nos faltan cubiertos», «más ají». Nunca «sin ají».
   if(!/\bsin\b/.test(n)&&askVerb.test(n)){
     const need=things.filter(([,re])=>re.test(n)).map(([name])=>name);
