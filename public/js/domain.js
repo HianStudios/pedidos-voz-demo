@@ -130,6 +130,31 @@ const yes='(?:si|ya|listo|dale|ok|okey|perfecto|correcto|de una|claro|esta bien|
 const act='(?:confirm(?:a|o|ar|alo)|envia(?:lo|r)?|enviamelo|manda(?:lo|r)?|finaliz(?:a|ar|amos|alo)|cierr(?:a|alo)|cerrar|cerramos|procede|hazlo)(?: (?:el |la |mi )?(?:pedido|orden))?';
 const confirmRe=new RegExp(`^(?:${yes}(?: ${yes})*(?: ${act})?|${act})(?: por favor)?$`);
 export function isConfirmation(text){return confirmRe.test(normalize(text).replace(/^si si\b/,'si'));}
+// Frases con las que la gente cierra un pedido sin decir «envíalo»: «gracias», «eso es todo»,
+// «así está bien», «mándalo a la cocina», «ya pueden prepararlo»… Con el resumen a la vista
+// envían; sin él, abren el resumen. «No, gracias» queda fuera: ahí el cliente está frenando.
+const lead='(?:(?:si|ya|bueno|ok|okey|eh|este|entonces|listo|ahora|perfecto|dale|vale|claro|no|gracias|muchas gracias|eso) )*';
+const tail='(?: (?:gracias|muchas gracias|mil gracias|por favor|porfa|nomas|no mas|amigo|amiga|milo|mijo|pana|ve|pues))*';
+const done=[
+  'gracias','muchas gracias','mil gracias','muy amable','gracias muy amable',
+  'eso es todo','eso seria todo','seria todo','es todo','eso nomas','eso no mas','eso nada mas','eso eso','eso','eso es',
+  'nada mas','nada mas por ahora','por ahora nada mas','por ahora eso','por ahora es todo','ya no','ya no mas','ya nada','ya nada mas',
+  '(?:ya )?no quiero nada mas','(?:ya )?no deseo nada mas','(?:ya )?no necesito nada mas','no gracias eso es todo',
+  'ya esta','ya estaria','ya estamos','ya estuvo','ya quedo','ya queda','asi esta bien','asi esta perfecto','asi nomas','asi no mas','asi queda','asi dejalo','dejalo asi','asi',
+  'con eso','con eso basta','con eso estamos','con eso esta bien','con eso es suficiente','con eso nomas','suficiente','es suficiente','estamos','estamos bien','todo bien','todo listo','todo perfecto','esta todo bien','esta perfecto','esta bien',
+  '(?:ya )?termine(?: (?:de pedir|mi pedido))?','he terminado','ya pedi','ya pedimos','eso pedimos','eso pido','eso quiero','eso queremos',
+  'listo','ya','perfecto','de una','vale','hagale','chevere','bacan','excelente','genial','super',
+  '(?:ya )?(?:puedes|pueden|podes) (?:enviar|mandar|pasar|pedir)(?:lo|la)?(?: (?:a (?:la )?cocina|el pedido|la orden))?',
+  '(?:manda|mandalo|mandala|mandame|envia|envialo|enviala|pasa|pasalo|pasala|lleva|llevalo|llevala|pidelo|pide|ordena|ordenalo|despacha|despachalo|mete|metelo|sube|subelo)(?: (?:el pedido|la orden|eso|todo))?(?: (?:a|para) (?:la )?cocina)?',
+  '(?:a|para) (?:la )?cocina','(?:que|ya) (?:lo |la |los )?(?:preparen|hagan|cocinen|traigan|saquen)','(?:que|ya) (?:empiecen|arranquen)','pueden (?:prepararlo|empezar|traerlo)',
+  'adelante','proceda','procede','vamos','dale nomas','listo para cocina','ya cierra','cierra nomas','finaliza(?:r)?(?: (?:el pedido|la orden))?','(?:ya )?(?:sale|salio)',
+];
+const finishRe=new RegExp(`^${lead}(?:${done.join('|')})${tail}$`);
+export function isFinish(text){
+  const n=normalize(text);
+  if(!n||/^no(?: gracias)?$/.test(n)||/^no (?:gracias )?(?:todavia|aun|espera|un momento)/.test(n))return false;
+  return finishRe.test(n)||isConfirmation(text);
+}
 const answer=(intent,reply,extra={})=>({intent,reply,operations:[],...extra});
 const one=p=>p.one||p.name,many=p=>p.many||p.name;
 const more=['¿Algo más, o cerramos el pedido?','¿Te traigo algo más o ya finalizamos?','¿Sumamos algo más o lo envío a cocina?'];
