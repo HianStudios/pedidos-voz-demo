@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {menu} from '../server/catalog.js';
-import {applyOperations,interpretLocal,isConfirmation,validateCart,validateResult,total} from '../public/js/domain.js';
+import {applyOperations,interpretLocal,isConfirmation,isFinish,validateCart,validateResult,total} from '../public/js/domain.js';
 const cart=[{id:'cuarto',qty:2,notes:[]},{id:'cocacola',qty:2,notes:[]}];
 test('confirmación exige una frase completa, nunca subcadenas ni negaciones',()=>{
   for(const text of ['sin cebolla','no confirmes todavía','sí, agrega papas','eso es todo','quiero seis pollos','no está bien','sí pero quita la cola'])assert.equal(isConfirmation(text),false,text);
@@ -68,4 +68,9 @@ test('salidas casi válidas del modelo se reparan sin inventar ediciones',async(
   assert.deepEqual(fixed.operations,[{type:'note',id:'cuarto',note:'sin cebolla'}]);
   assert.deepEqual(repairResult({intent:'recommend',reply:'x',operations:[{type:'add',id:'cuarto',qty:1}],suggest_ids:['cuarto','inventado']},menu).operations,[]);
   assert.deepEqual(repairResult({intent:'recommend',reply:'x',suggest_ids:['cuarto','inventado']},menu).suggest_ids,['cuarto']);
+});
+
+test('frases de cierre: gracias, eso es todo, mándalo a la cocina',()=>{
+  for(const t of ['Gracias','muchas gracias','eso es todo','Eso sería todo, gracias','gracias, eso es todo','eso, mándalo','ya, gracias','nada más','no, eso es todo','así está bien','con eso nomás','mándalo a la cocina','ya pueden prepararlo','que lo preparen','listo, envíalo','pásalo a cocina','ya no quiero nada más','por ahora es todo','ya está, gracias','bueno, ya','sí, envíalo'])assert.equal(isFinish(t),true,t);
+  for(const t of ['no','no gracias','no, todavía no','no, espera','quiero un cuarto','sin cebolla','gracias, pero agrega papas','eso no','ya no quiero cola','mejor un medio','qué trae el combo'])assert.equal(isFinish(t),false,t);
 });

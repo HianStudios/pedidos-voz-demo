@@ -1,4 +1,4 @@
-import {money,total,validateCart,applyOperations,isConfirmation,normalize,describeOps,followUp,amount,parsePeople,suggestForPeople,soundsLike,parseRating,removalsFor} from './domain.js';
+import {money,total,validateCart,applyOperations,isConfirmation,isFinish,normalize,describeOps,followUp,amount,parsePeople,suggestForPeople,soundsLike,parseRating,removalsFor} from './domain.js';
 import {navigation,plausibleName,cartSignature} from './conversation.js';
 import {foodArt} from './art.js';
 import {VoiceController} from './voice.js';
@@ -159,7 +159,9 @@ async function handleInput(raw){
   proposal=plan;showProducts(plan.operations.map(o=>menu.find(p=>p.id===o.id)),'Para ti');reply(plan.reply);return;
  }
  if(/^(cierra|cierra eso|cierra la ventana|cerrar)$/.test(n)){closeModals();reviewed=null;reply('Listo.');return;}
- if(isConfirmation(raw)){
+ // Cerrar el pedido: «sí, envíalo», pero también «gracias», «eso es todo», «mándalo a la cocina»…
+ // Con el resumen vigente en pantalla se envía; si no, primero se muestra el resumen.
+ if(isConfirmation(raw)||(cart.length&&isFinish(raw))){
   if(cart.length&&customerName&&reviewed===cartSignature(cart,customerName))return submit();
   review();return;
  }

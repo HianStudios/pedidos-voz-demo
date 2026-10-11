@@ -25,7 +25,7 @@ const assert=require('node:assert/strict');const fs=require('node:fs');
  await say('finalizar pedido');await page.locator('#summaryModal[open]').waitFor();await page.locator('[data-close="summaryModal"]').click();
  await say('eso es todo');await page.locator('#summaryModal[open]').waitFor();assert.match(await page.locator('#summaryBody').textContent(),/sin cebolla/);assert.match(await page.locator('#summaryBody').textContent(),/mesa 7/);assert.equal(await page.locator('#customerName').count(),0,'con mesa no se pide nombre');
  await page.waitForTimeout(700);await page.screenshot({path:'test-results/resumen-desktop.png'});
- await page.locator('#confirmButton').click();await cash.locator('.queue-card').waitFor();const card=await cash.locator('.queue-card').textContent();assert.match(card,/Mesa 7/);assert.match(card,/sin cebolla/);assert.match(card,/Combo de alitas/);
+ await say('gracias, eso es todo');await cash.locator('.queue-card').waitFor();const card=await cash.locator('.queue-card').textContent();assert.match(card,/Mesa 7/);assert.match(card,/sin cebolla/);assert.match(card,/Combo de alitas/);
  assert.equal(await cash.locator('.queue-card').count(),1);await cash.locator('[data-status="aceptado"][data-order]').click();await cash.locator('.status-pill[data-status="aceptado"]').waitFor();
  const cash2=await ctx.newPage();await cash2.goto('http://localhost:3000/caja.html');await cash2.locator('.status-pill[data-status="aceptado"]').waitFor();
  await cash.locator('[data-status="preparando"][data-order]').click();await cash2.locator('.status-pill[data-status="preparando"]').waitFor();
