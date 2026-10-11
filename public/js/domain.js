@@ -80,14 +80,35 @@ export function validateResult(result,cart,menu){
 }
 // Notas válidas de un producto: ingredientes que se quitan («sin cebolla») y cómo se sirve una bebida.
 export const allowedNotes=p=>[...(p?.options||[]),...(p?.serve||[])];
-// Cómo quiere la bebida: «con hielo», «sin hielo», «solo la botella». «Vaso» a secas → falta saber el hielo.
+// Cómo quiere la bebida, solo si lo dice: «en botella», «con hielo», «sin hielo». Milo no lo pregunta.
 export function serveFor(text){
   const n=normalize(text);
-  if(/\b(sin hielo|sin hielito|sin hielos|al clima|clima|sin frio|natural)\b/.test(n))return 'en vaso sin hielo';
-  if(/\b(con hielo|con hielito|con hielos|hielo|hielito)\b/.test(n))return 'en vaso con hielo';
-  if(/\b(solo (?:la )?botella|sin vaso|botella nomas|botella no mas|la botella sola|botella sola|en (?:la )?botella|no necesito vaso|no quiero vaso|tal cual)\b/.test(n)||/^(?:(?:no|solo) )?(?:la )?botella(?: nomas)?$/.test(n))return 'solo la botella';
-  if(/\bvaso\b/.test(n))return 'vaso';
+  if(/\b(sin hielo|sin hielito|sin hielos|al clima|sin frio)\b/.test(n))return 'sin hielo';
+  if(/\b(con hielo|con hielito|con hielos|hielo|hielito)\b/.test(n))return 'con hielo';
+  if(/\b(botella|botellita)\b/.test(n))return 'en botella';
   return null;
+}
+// Nombre con tildes de un ingrediente normalizado («aji» → «ají»), tomado de las opciones del catálogo.
+export function ingredientName(word,menu){
+  for(const p of menu)for(const o of p.options||[])if(normalize(o)===`sin ${word}`)return o.replace(/^sin /,'');
+  return word;
+}
+// Quitar algo que el producto no trae («combo pechuga sin ají»): se avisa claro que va tal cual.
+// Devuelve [{id, ingredient}] según el producto nombrado más cerca antes de cada «sin X».
+export function unavailableRemovals(text,menu){
+  const n=soundsLike(text,menu);
+  const removable=[...new Set(menu.flatMap(p=>(p.options||[]).map(o=>normalize(o).replace(/^sin /,''))))].sort((a,b)=>b.length-a.length);
+  if(!removable.length)return [];
+  const asks=[...n.matchAll(new RegExp(`\\b(?:sin|quitale|quitales|sacale|sacales|cero|no le pongas|que no tenga|que no traiga|que no lleve)\\s+(?:nada de |el |la |los |las )*(${removable.join('|')})\\b`,'g'))];
+  const aliases=menu.filter(p=>p.category!=='Mesa').flatMap(p=>[p.name,...(p.aliases||[])].map(a=>({id:p.id,a:normalize(a)}))).sort((x,y)=>y.a.length-x.a.length);
+  const out=[];
+  for(const m of asks){
+    const before=n.slice(0,m.index);let best=null;
+    for(const {id,a} of aliases){const i=before.lastIndexOf(a);if(i>=0&&(!best||i+a.length>best.end||(i+a.length===best.end&&a.length>best.len)))best={id,end:i+a.length,len:a.length};}
+    const p=best&&menu.find(x=>x.id===best.id);
+    if(p&&!(p.options||[]).some(o=>normalize(o)===`sin ${m[1]}`))out.push({id:p.id,ingredient:ingredientName(m[1],menu)});
+  }
+  return out;
 }
 // Con la ficha de un producto abierta: qué ingredientes quitar («sin cebolla», «quítale el ají») o volver a
 // poner («ponle cebolla», «con tomate»). Devuelve las opciones exactas del producto.
@@ -254,7 +275,7 @@ const streetTalk=[
 export function soundsLike(text,menu){let n=normalize(text);for(const [re,to] of [...streetTalk,...soundAlikes])n=n.replace(re,to);n=n.replace(/\s+/g,' ').trim();return fixWords(n,menu);}
 export function interpretLocal(text,cart,menu,lastId=null,context={}){
   // Cómo se sirve la bebida («una pepsi sin hielo») lo anota la app aparte; aquí no es un ingrediente.
-  let n=soundsLike(text,menu).replace(/\s*\b(?:(?:en )?vaso )?(?:con|sin) hielos?\b|\s*\b(?:solo (?:la )?botella|sin vaso|al clima)\b/g,'').trim();
+  let n=soundsLike(text,menu).replace(/\s*\b(?:(?:en )?vaso )?(?:con|sin) hielos?\b|\s*\b(?:(?:solo |en )?(?:la |su )?botellita|(?:solo |en )?(?:la |su )?botella|sin vaso|al clima)\b/g,'').trim();
   // Solo el nombre de un producto («medio pollo», «combo familiar»), como se lo dice a un mesero: es un pedido.
   if(!context.nested&&menu.some(p=>p.available!==false&&[p.name,...(p.aliases||[])].some(x=>normalize(x)===n)))n=`quiero ${n}`;
   // Ingredientes que se pueden quitar (todas las opciones «sin X» del catálogo), más largos primero.
@@ -368,8 +389,9 @@ export function interpretLocal(text,cart,menu,lastId=null,context={}){
     const product=menu.find(p=>p.id===id);
     const notes=found.map(m=>product.options.find(o=>normalize(o)===`sin ${m[1]}`));
     const valid=[...new Set(notes.filter(Boolean))],missing=found.filter((m,i)=>!notes[i]).map(m=>m[1]);
-    if(!valid.length)return answer('clarify',`${product.name} no lleva ${listWords(missing)}. ¿Quieres quitarle otra cosa?`);
-    const extra=missing.length?` ${listWords(missing).replace(/^./,c=>c.toUpperCase())} no viene en ${one(product)}.`:'';
+    const pretty=missing.map(w=>ingredientName(w,menu));
+    if(!valid.length)return answer('clarify',`Tranquilo: ${one(product).replace(/^(un|una|unas|unos) /,a=>({'un ':'el ','una ':'la ','unas ':'las ','unos ':'los '})[a])} no lleva ${listWords(pretty)}, así que va tal cual. ${more[cart.length%3]}`);
+    const extra=pretty.length?` Ojo: ${one(product).replace(/^(un|una|unas|unos) /,a=>({'un ':'el ','una ':'la ','unas ':'las ','unos ':'los '})[a])} no lleva ${listWords(pretty)}.`:'';
     const inCart=cart.some(l=>l.id===id);
     const notesOps=valid.map(note=>({type:'note',id,note}));
     if(inCart&&!/\b(otro|otra|otros|otras|agrega|agregame|anade|suma|aparte)\b/.test(n))return answer('edit',`Anotado: ${product.name.toLowerCase()} ${listWords(valid)}.${extra} ${more[cart.length%3]}`,{operations:notesOps});

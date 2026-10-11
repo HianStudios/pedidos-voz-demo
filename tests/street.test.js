@@ -66,7 +66,7 @@ const C=[
 ];
 let bad=0;const fails=[];const log=(...a)=>fails.push(a.join(' '));
 for(const [t,ok,ctx,cart,last] of C){const r=L(t,ctx||{},cart||[],last||null);if(!ok(r)){bad++;log('FAIL',t,'→',soundsLike(t,menu),'→',JSON.stringify(r&&{i:r.intent,o:r.operations,c:r.category,r:r.reply}));}}
-const misc=[[isConfirmation(soundsLike('ya mijo, dale',menu)),true,'ya mijo dale'],[isFinish(soundsLike('ya estuvo ñaño, mándalo',menu)),true,'ya estuvo mandalo'],[parseRating('le doy un cinco'),5,'cinco'],[parseRating('cuatro estrellitas'),4,'estrellitas'],[parseRating('full bacán'),5,'full bacan'],[parsePeople('somos cuatro',false),4,'somos'],[parsePeople('pa tres',true),3,'pa tres'],[serveFor('heladita con hielo'),'en vaso con hielo','hielo'],[staffRequest('ñaño tráeme unos cubiertos')?.type,'waiter','cubiertos'],[staffRequest('cóbrame')?.type,'bill','cobrame']];
+const misc=[[isConfirmation(soundsLike('ya mijo, dale',menu)),true,'ya mijo dale'],[isFinish(soundsLike('ya estuvo ñaño, mándalo',menu)),true,'ya estuvo mandalo'],[parseRating('le doy un cinco'),5,'cinco'],[parseRating('cuatro estrellitas'),4,'estrellitas'],[parseRating('full bacán'),5,'full bacan'],[parsePeople('somos cuatro',false),4,'somos'],[parsePeople('pa tres',true),3,'pa tres'],[serveFor('heladita con hielo'),'con hielo','hielo'],[serveFor('una coca en botella'),'en botella','botella'],[staffRequest('ñaño tráeme unos cubiertos')?.type,'waiter','cubiertos'],[staffRequest('cóbrame')?.type,'bill','cobrame']];
 for(const [g,v,l] of misc)if(g!==v){bad++;log('FAIL misc',l,g);}
 assert.deepEqual(fails,[]);void(C.length+misc.length);
 });

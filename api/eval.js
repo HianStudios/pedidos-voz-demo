@@ -15,7 +15,7 @@ export default endpoint(async(req,res)=>{
     const started=Date.now();
     try{
       const r=await interpret({transcript:c.say,cart:c.cart||[],history:c.history||[],category:c.category,lastId:c.lastId,table:5},{effort,debug:true});
-      return {id:c.id,say:c.say,ok:Boolean(c.expect(r)),ms:Date.now()-started,source:r.source,intent:r.intent,category:r.category,operations:r.operations,suggest:r.suggest_ids,reply:r.reply,...(r.error?{error:r.error}:{})};
+      return {id:c.id,say:c.say,ok:Boolean(c.expect(r)),ms:Date.now()-started,source:r.source,intent:r.intent,category:r.category,operations:r.operations,suggest:r.suggest_ids,reply:r.reply,...(r.styled?{base:r.base}:{}),...(r.error?{error:r.error}:{})};
     }catch(e){return {id:c.id,say:c.say,ok:false,ms:Date.now()-started,error:e.message};}
   })());
   json(res,200,{total:cases.length,from,effort:effort||process.env.GROQ_REASONING||'low',passed:results.filter(r=>r.ok).length,count:results.length,results});

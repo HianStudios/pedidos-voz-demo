@@ -1,5 +1,6 @@
 import {menu} from '../server/catalog.js';
-import {validateCart,validateResult,repairResult,interpretLocal,isConfirmation,followUp,parsePeople,suggestForPeople,applyOperations,describeOps,soundsLike,normalize} from '../public/js/domain.js';
+import {validateCart,validateResult,repairResult,interpretLocal,isConfirmation,followUp,parsePeople,suggestForPeople,applyOperations,describeOps,soundsLike,normalize,serveFor,unavailableRemovals} from '../public/js/domain.js';
+import {styleReply} from '../server/style.js';
 import {readFileSync} from 'node:fs';
 import {endpoint,guard,json,body,rateLimit,fail} from '../server/http.js';
 // Instrucciones compactas (resumen de la PARTE I del prompt maestro): deben caber en el límite de
@@ -8,16 +9,46 @@ const system=readFileSync(new URL('../prompts/milo-sistema.md',import.meta.url),
 const persona=system.slice(system.indexOf('## Quién eres')).trim();
 const money=c=>`$${(c/100).toFixed(2).replace('.',',')}`;
 // Catálogo en líneas cortas: id | nombre | categoría | precio | descripción | opciones | alias.
-const catalog=menu.filter(p=>p.available).map(p=>{
+const catalog=menu.filter(p=>p.available&&p.category!=='Mesa').map(p=>{
   // Alias útiles para el sonido; se omiten los que solo agregan «un/una» o repiten el nombre.
   const name=normalize(p.name),aliases=[...new Set(p.aliases.map(normalize))].filter(a=>a!==name&&!/^(un|una|unas|unos|el|la|dame) /.test(a));
   return `${p.id} | ${p.name} | ${p.category} | ${money(p.price)} | trae: ${(p.ingredients||[p.desc]).join(', ')} | ${p.feel||'-'} | quitar: ${p.options.map(o=>o.replace(/^sin /,'')).join(', ')||'-'} | alias: ${aliases.join(', ')}`;
-}).join('\n');
+}).join('\n')+`\nPara la mesa, sin costo (se anotan con add): ${menu.filter(p=>p.category==='Mesa').map(p=>p.id).join(', ')}`;
 const categories=['Platos','Combos','Extras','Bebidas'];
 const fallbacks=['No te capté bien. Te muestro el menú: ¿platos, combos, extras o bebidas?','Se me escapó esa parte. Aquí tienes el menú, ¿por dónde empezamos?'];
 let turn=0;
-// Interpreta una frase con el estado del pedido. Exportada para la evaluación con el modelo real.
-export async function interpret(data,{effort=process.env.GROQ_REASONING||'low',fetchImpl=fetch,debug=false}={}){
+// Interpreta una frase y luego la pule: lo que el cliente dijo de cómo servir la bebida, avisar si pidió
+// quitar algo que el plato no trae y, si hay IA, decirlo con la voz de Milo (sin cambiar ningún dato).
+export async function interpret(data,options={}){
+  const result=await understand(data,options);
+  try{enrich(result,data);}catch{}
+  if(result.source==='local'&&['edit','recommend','clarify','price','keep'].includes(result.intent)&&result.reply){
+    const styled=await styleReply({said:data.transcript,reply:result.reply,cart:Array.isArray(data.cart)?data.cart:[],history:data.history,fetchImpl:options.fetchImpl});
+    if(styled){result.base=result.reply;result.reply=styled;result.styled=true;}
+  }
+  return result;
+}
+const beforeQuestion=(reply,sentence)=>/¿[^¿]*\?\s*$/.test(reply)?reply.replace(/\s*(¿[^¿]*\?)\s*$/,` ${sentence} $1`):`${reply.replace(/[.!]?\s*$/,'.')} ${sentence}`;
+const article=p=>(p.one||p.name).replace(/^(un|una|unas|unos) /,a=>({'un ':'el ','una ':'la ','unas ':'las ','unos ':'los '})[a]);
+function enrich(result,data){
+  if(result.intent!=='edit')return;
+  const cart=validateCart(data.cart??[],menu);
+  // «Una Coca-Cola en botella»: la forma de servir queda anotada y sale en la factura.
+  const how=serveFor(data.transcript);
+  const drink=how&&[...result.operations].reverse().find(o=>o.type==='add'&&menu.find(p=>p.id===o.id)?.serve?.includes(how));
+  if(drink&&!result.operations.some(o=>o.type==='note'&&o.id===drink.id)){
+    const before=describeOps(result.operations,menu),ops=[...result.operations,{type:'note',id:drink.id,note:how}];
+    applyOperations(cart,ops,menu);result.operations=ops;
+    result.reply=result.reply.includes(before)?result.reply.replace(before,describeOps(ops,menu)):beforeQuestion(result.reply,`${menu.find(p=>p.id===drink.id).name} va ${how}.`);
+  }
+  // «A los de pechuga quítale el ají» y el combo pechuga no lleva ají: se dice claro que va tal cual.
+  if(!/no lleva|no trae|no viene/i.test(result.reply)){
+    const ids=new Set([...cart.map(l=>l.id),...result.operations.map(o=>o.id)]);
+    const missing=unavailableRemovals(data.transcript,menu).filter(x=>ids.has(x.id));
+    if(missing.length)result.reply=beforeQuestion(result.reply,`Ojo: ${missing.map(x=>`${article(menu.find(p=>p.id===x.id))} no lleva ${x.ingredient}`).join(' y ')}, así que va tal cual.`);
+  }
+}
+async function understand(data,{effort=process.env.GROQ_REASONING||'low',fetchImpl=fetch,debug=false}={}){
   const {transcript}=data;
   if(typeof transcript!=='string'||!transcript.trim()||transcript.length>1200)throw fail('Escribe un pedido de hasta 1200 caracteres.');
   let cart;try{cart=validateCart(data.cart??[],menu);}catch(e){throw fail(e.message);}
