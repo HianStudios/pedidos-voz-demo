@@ -283,6 +283,9 @@ export function interpretLocal(text,cart,menu,lastId=null,context={}){
   if(/\b(alergia|alergico|celiaco|gluten)\b/.test(n)) return answer('clarify','Con alergias prefiero no adivinar. Pídele al personal que te confirme los ingredientes, por favor.');
   if(/^(no|no gracias|no confirmes(?: todavia)?|no lo envies|todavia no|espera|espera un momento)$/.test(n)) return answer('keep','Sin problema, no envío nada todavía. Tómate tu tiempo.');
   if(/^(?:(?:no |ya |bueno |ok |eh |este )*)(eso es todo|eso seria todo|seria todo|es todo|eso nomas|eso no mas|eso nada mas|ya esta|ya estaria|eso seria|termine(?: mi pedido)?|he terminado|listo|nada mas|ya no|nada mas gracias|ver (?:mi )?pedido|mi pedido|resumen|que llevo|que tengo)$/.test(n)) return answer('review',cart.length?'Repasemos tu pedido.':'Todavía no has pedido nada. ¿Qué se te antoja?');
+  // «Lo de siempre»: Milo no recuerda visitas anteriores; nunca inventa un pedido.
+  if(/\b(lo de siempre|lo mismo de siempre|lo mismo que (?:la otra vez|siempre|antes|ayer)|lo (?:mismo )?de la otra vez|lo que (?:pedi|pido) (?:siempre|antes|la otra vez|ayer)|lo de ayer|lo usual|lo de costumbre|lo de cajon)\b/.test(n)&&!/\b(cuarto|medio|combo|pollo|alitas|pechuga)\b/.test(n))
+    return answer('clarify','Todavía no recuerdo lo que pides otras veces. Dime qué se te antoja hoy y te lo anoto.');
   if(/^(cancelar|cancela|borra) (?:todo|el pedido|mi pedido)$/.test(n)) return answer('cancel','¿Borro todo el pedido y empezamos de cero?');
   if(/^(gracias|hasta luego|chao|adios)$/.test(n)) return answer(cart.length?'review':'goodbye',cart.length?'Antes de irte, repasemos tu pedido.':'¡Gracias a ti! Aquí estaré si se te antoja algo más.');
 

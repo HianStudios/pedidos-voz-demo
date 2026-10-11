@@ -62,7 +62,7 @@ const C=[
  ['para cuatro personas qué me recomiendas',intent('recommend')],['algo pa picar',r=>!r||noAdd(r)],['algo bien llenador',r=>r?.intent==='recommend'||!r],
  ['tengo un hambre tenaz',r=>r?.intent==='recommend'||!r],['algo light',intent('recommend')],['me muero del hambre',r=>r?.intent==='recommend'||!r],
  ['muéstrame lo que hay',r=>r?.intent==='menu'||r?.intent==='recommend'],['a ver el menú',intent('menu')],['las bebidas',intent('menu')],['qué jugos tienes',r=>!r||noAdd(r)],
- ['cuánto está el medio',intent('price')],['a cuánto el combo familiar',r=>r?.intent==='price'||!r],
+ ['cuánto está el medio',intent('price')],['lo de siempre ñaño',r=>r?.intent==='clarify'&&noAdd(r)],['lo mismo que la otra vez',r=>r?.intent==='clarify'&&noAdd(r)],['a cuánto el combo familiar',r=>r?.intent==='price'||!r],
 ];
 let bad=0;const fails=[];const log=(...a)=>fails.push(a.join(' '));
 for(const [t,ok,ctx,cart,last] of C){const r=L(t,ctx||{},cart||[],last||null);if(!ok(r)){bad++;log('FAIL',t,'→',soundsLike(t,menu),'→',JSON.stringify(r&&{i:r.intent,o:r.operations,c:r.category,r:r.reply}));}}
