@@ -88,7 +88,14 @@ button,input{font:inherit;color:inherit}button{cursor:pointer;-webkit-tap-highli
 .door span{font-size:13px;color:var(--muted)}
 
 /* Repisa de productos */
-.shelf-hint{margin:6px auto 14px;max-width:1200px;font-size:14px;color:var(--muted)}
+/* Letrerito colgado sobre el menú */
+.menu-sign{position:relative;align-self:center;display:flex;align-items:center;gap:10px;margin:8px auto 18px;max-width:min(560px,100%);padding:10px 16px 10px 12px;border-radius:14px;background:#fff6dc;border:1px solid #f0d58f;box-shadow:0 6px 18px -10px rgba(120,80,10,.45);color:#5b4410;font-size:14px;line-height:1.35;transform-origin:50% -14px;animation:sign-in .7s var(--ease) both,sign-sway 5s ease-in-out .7s infinite}
+.menu-sign p{margin:0}
+.sign-pin{position:absolute;top:-6px;left:50%;width:10px;height:10px;margin-left:-5px;border-radius:50%;background:var(--accent);box-shadow:0 1px 2px rgba(0,0,0,.25)}
+.sign-icon{flex:none;width:30px;height:30px;border-radius:50%;display:grid;place-items:center;background:#ffe9a8;font-size:16px}
+@keyframes sign-in{from{opacity:0;transform:translateY(-12px) rotate(-4deg)}to{opacity:1;transform:none}}
+@keyframes sign-sway{0%,100%{transform:rotate(0)}50%{transform:rotate(.8deg)}}
+@media (prefers-reduced-motion:reduce){.menu-sign{animation:none}}
 .shelf{display:flex;justify-content:safe center;gap:clamp(14px,2vw,28px);overflow-x:auto;scroll-snap-type:x mandatory;padding:26px 6px 48px;scrollbar-width:none;scroll-padding:0 24px}
 .shelf::-webkit-scrollbar{display:none}
 .dish{flex:none;width:clamp(232px,27vw,320px);scroll-snap-align:center;background:var(--bg);border-radius:30px;padding:18px 20px 20px;display:flex;flex-direction:column;animation:rise .75s var(--ease) both;animation-delay:calc(var(--i,0)*90ms);transition:transform .5s var(--ease),box-shadow .5s,background .5s}

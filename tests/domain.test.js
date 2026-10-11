@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {menu} from '../server/catalog.js';
-import {applyOperations,interpretLocal,isConfirmation,isFinish,validateCart,validateResult,total} from '../public/js/domain.js';
+import {applyOperations,interpretLocal,isConfirmation,isFinish,serveFor,validateCart,validateResult,total} from '../public/js/domain.js';
 const cart=[{id:'cuarto',qty:2,notes:[]},{id:'cocacola',qty:2,notes:[]}];
 test('confirmación exige una frase completa, nunca subcadenas ni negaciones',()=>{
   for(const text of ['sin cebolla','no confirmes todavía','sí, agrega papas','eso es todo','quiero seis pollos','no está bien','sí pero quita la cola'])assert.equal(isConfirmation(text),false,text);
@@ -71,6 +71,17 @@ test('salidas casi válidas del modelo se reparan sin inventar ediciones',async(
 });
 
 test('frases de cierre: gracias, eso es todo, mándalo a la cocina',()=>{
-  for(const t of ['Gracias','muchas gracias','eso es todo','Eso sería todo, gracias','gracias, eso es todo','eso, mándalo','ya, gracias','nada más','no, eso es todo','así está bien','con eso nomás','mándalo a la cocina','ya pueden prepararlo','que lo preparen','listo, envíalo','pásalo a cocina','ya no quiero nada más','por ahora es todo','ya está, gracias','bueno, ya','sí, envíalo'])assert.equal(isFinish(t),true,t);
+  for(const t of ['Gracias','muchas gracias','eso es todo','Eso sería todo, gracias','gracias, eso es todo','eso, mándalo','sí, ya lo puedes mandar','sí, ya lo puedes mandar a la cocina','mándalo ya','sí, gracias','ya, mándalo nomás','sí, envíalo a cocina por favor','listo, ya puedes enviarlo','ya, gracias','nada más','no, eso es todo','así está bien','con eso nomás','mándalo a la cocina','ya pueden prepararlo','que lo preparen','listo, envíalo','pásalo a cocina','ya no quiero nada más','por ahora es todo','ya está, gracias','bueno, ya','sí, envíalo'])assert.equal(isFinish(t),true,t);
   for(const t of ['no','no gracias','no, todavía no','no, espera','quiero un cuarto','sin cebolla','gracias, pero agrega papas','eso no','ya no quiero cola','mejor un medio','qué trae el combo'])assert.equal(isFinish(t),false,t);
+});
+
+test('bebida: con hielo, sin hielo o solo la botella',()=>{
+  const cases={'con hielo':'en vaso con hielo','sin hielo, por favor':'en vaso sin hielo','al clima':'en vaso sin hielo','solo la botella':'solo la botella','la botella nomás':'solo la botella','botella con el vaso':'vaso','no':null};
+  for(const [t,v] of Object.entries(cases))assert.equal(serveFor(t),v,t);
+});
+test('una bebida con su forma de servir se anota sin confundir el hielo con un ingrediente',()=>{
+  const r=interpretLocal('una pepsi sin hielo',[],menu);assert.equal(r.intent,'edit');assert.deepEqual(r.operations,[{type:'add',id:'pepsi',qty:1}]);
+  const cart=applyOperations(applyOperations([],[{type:'add',id:'pepsi',qty:1},{type:'note',id:'pepsi',note:'en vaso con hielo'}],menu),[{type:'note',id:'pepsi',note:'solo la botella'}],menu);
+  assert.deepEqual(cart[0].notes,['solo la botella'],'una sola forma de servir');
+  assert.equal(interpretLocal('medio pollo',[],menu).operations[0].id,'medio','solo el nombre es un pedido');
 });

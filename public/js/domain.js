@@ -11,7 +11,7 @@ export function validateCart(cart, menu) {
     if(!item || !item.available || seen.has(line.id) || !Number.isInteger(line.qty) || line.qty<1 || line.qty>20) throw new Error('Producto o cantidad inválida.');
     seen.add(line.id);
     const notes=line.notes??[];
-    if(!Array.isArray(notes) || notes.length>6 || notes.some(n=>!item.options.includes(n))) throw new Error('Opción inválida.');
+    if(!Array.isArray(notes) || notes.length>6 || notes.some(n=>!allowedNotes(item).includes(n))) throw new Error('Opción inválida.');
     return {id:item.id,qty:line.qty,notes:[...new Set(notes)]};
   });
 }
@@ -24,8 +24,10 @@ export function applyOperations(cart, ops, menu) {
     if(!product) throw new Error('Producto no disponible.');
     let line=next.find(l=>l.id===op.id);
     if(op.type==='note'){
-      if(!line || !product.options.includes(op.note)) throw new Error('Ese cambio no está disponible para este producto.');
-      line.notes=[...new Set([...line.notes,op.note])]; continue;
+      if(!line || !allowedNotes(product).includes(op.note)) throw new Error('Ese cambio no está disponible para este producto.');
+      // Una sola forma de servir: «sin hielo» reemplaza a «con hielo».
+      const kept=product.serve?.includes(op.note)?line.notes.filter(n=>!product.serve.includes(n)):line.notes;
+      line.notes=[...new Set([...kept,op.note])]; continue;
     }
     // Volver a poner un ingrediente («con cebolla, mejor»): se retira la nota.
     if(op.type==='unnote'){
@@ -54,6 +56,17 @@ export function validateResult(result,cart,menu){
     try{if(result.proposal.every(o=>o?.type==='add')){applyOperations(cart,result.proposal,menu);proposal=result.proposal.map(o=>({type:'add',id:o.id,qty:o.qty}));}}catch{}
   }
   return {intent:result.intent,reply:result.reply,operations,suggest_ids:ids,...(category?{category}:{}),...(proposal?{proposal}:{})};
+}
+// Notas válidas de un producto: ingredientes que se quitan («sin cebolla») y cómo se sirve una bebida.
+export const allowedNotes=p=>[...(p?.options||[]),...(p?.serve||[])];
+// Cómo quiere la bebida: «con hielo», «sin hielo», «solo la botella». «Vaso» a secas → falta saber el hielo.
+export function serveFor(text){
+  const n=normalize(text);
+  if(/\b(sin hielo|sin hielito|sin hielos|al clima|clima|sin frio|natural)\b/.test(n))return 'en vaso sin hielo';
+  if(/\b(con hielo|con hielito|con hielos|hielo|hielito)\b/.test(n))return 'en vaso con hielo';
+  if(/\b(solo (?:la )?botella|sin vaso|botella nomas|botella no mas|la botella sola|botella sola|en (?:la )?botella|no necesito vaso|no quiero vaso|tal cual)\b/.test(n)||/^(?:(?:no|solo) )?(?:la )?botella(?: nomas)?$/.test(n))return 'solo la botella';
+  if(/\bvaso\b/.test(n))return 'vaso';
+  return null;
 }
 // Con la ficha de un producto abierta: qué ingredientes quitar («sin cebolla», «quítale el ají») o volver a
 // poner («ponle cebolla», «con tomate»). Devuelve las opciones exactas del producto.
@@ -134,7 +147,7 @@ export function isConfirmation(text){return confirmRe.test(normalize(text).repla
 // «así está bien», «mándalo a la cocina», «ya pueden prepararlo»… Con el resumen a la vista
 // envían; sin él, abren el resumen. «No, gracias» queda fuera: ahí el cliente está frenando.
 const lead='(?:(?:si|ya|bueno|ok|okey|eh|este|entonces|listo|ahora|perfecto|dale|vale|claro|no|gracias|muchas gracias|eso) )*';
-const tail='(?: (?:gracias|muchas gracias|mil gracias|por favor|porfa|nomas|no mas|amigo|amiga|milo|mijo|pana|ve|pues))*';
+const tail='(?: (?:gracias|muchas gracias|mil gracias|por favor|porfa|nomas|no mas|amigo|amiga|milo|mijo|pana|ve|pues|ya|a (?:la )?cocina|de una|por fa))*';
 const done=[
   'gracias','muchas gracias','mil gracias','muy amable','gracias muy amable',
   'eso es todo','eso seria todo','seria todo','es todo','eso nomas','eso no mas','eso nada mas','eso eso','eso','eso es',
@@ -144,7 +157,8 @@ const done=[
   'con eso','con eso basta','con eso estamos','con eso esta bien','con eso es suficiente','con eso nomas','suficiente','es suficiente','estamos','estamos bien','todo bien','todo listo','todo perfecto','esta todo bien','esta perfecto','esta bien',
   '(?:ya )?termine(?: (?:de pedir|mi pedido))?','he terminado','ya pedi','ya pedimos','eso pedimos','eso pido','eso quiero','eso queremos',
   'listo','ya','perfecto','de una','vale','hagale','chevere','bacan','excelente','genial','super',
-  '(?:ya )?(?:puedes|pueden|podes) (?:enviar|mandar|pasar|pedir)(?:lo|la)?(?: (?:a (?:la )?cocina|el pedido|la orden))?',
+  '(?:ya )?(?:lo |la )?(?:puedes|pueden|puede|podes|podrias) (?:ya )?(?:enviar|mandar|pasar|pedir|llevar|confirmar)(?:lo|la)?(?: (?:a (?:la )?cocina|el pedido|la orden))?',
+  '(?:si )?(?:por favor )?(?:envia|manda|pasa)(?:lo|la)?(?: ya)?','lo puedes mandar','envialo nomas','mandalo nomas','si mandalo','si envialo','ya mandalo','ya envialo','asi mandalo',
   '(?:manda|mandalo|mandala|mandame|envia|envialo|enviala|pasa|pasalo|pasala|lleva|llevalo|llevala|pidelo|pide|ordena|ordenalo|despacha|despachalo|mete|metelo|sube|subelo)(?: (?:el pedido|la orden|eso|todo))?(?: (?:a|para) (?:la )?cocina)?',
   '(?:a|para) (?:la )?cocina','(?:que|ya) (?:lo |la |los )?(?:preparen|hagan|cocinen|traigan|saquen)','(?:que|ya) (?:empiecen|arranquen)','pueden (?:prepararlo|empezar|traerlo)',
   'adelante','proceda','procede','vamos','dale nomas','listo para cocina','ya cierra','cierra nomas','finaliza(?:r)?(?: (?:el pedido|la orden))?','(?:ya )?(?:sale|salio)',
@@ -195,7 +209,10 @@ const soundAlikes=[
 ];
 export function soundsLike(text,menu){let n=normalize(text);for(const [re,to] of soundAlikes)n=n.replace(re,to);return fixWords(n,menu);}
 export function interpretLocal(text,cart,menu,lastId=null,context={}){
-  let n=soundsLike(text,menu);
+  // Cómo se sirve la bebida («una pepsi sin hielo») lo anota la app aparte; aquí no es un ingrediente.
+  let n=soundsLike(text,menu).replace(/\s*\b(?:(?:en )?vaso )?(?:con|sin) hielos?\b|\s*\b(?:solo (?:la )?botella|sin vaso|al clima)\b/g,'').trim();
+  // Solo el nombre de un producto («medio pollo», «combo familiar»), como se lo dice a un mesero: es un pedido.
+  if(!context.nested&&menu.some(p=>p.available!==false&&[p.name,...(p.aliases||[])].some(x=>normalize(x)===n)))n=`quiero ${n}`;
   // Ingredientes que se pueden quitar (todas las opciones «sin X» del catálogo), más largos primero.
   const removable=[...new Set(menu.flatMap(p=>p.options.map(o=>normalize(o).replace(/^sin /,''))))].sort((a,b)=>b.length-a.length);
   const alt=removable.map(x=>x.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')).join('|');
