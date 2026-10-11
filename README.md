@@ -46,6 +46,16 @@ Al enviar el pedido, Milo pregunta «¿Qué te pareció mi atención? Dime de un
 
 Cada producto tiene `ingredients` y opciones «sin X» en `server/catalog.js` (datos de prueba). Para quitar ingredientes, Milo entiende frases como «quítale la cebolla», «que no tenga lechuga ni ají», «sin cebolla, tomate» o «no le pongas ají»; con «ponle la cebolla» vuelve a ponerla. Al preguntar «¿qué trae…?», o al tocar «Qué trae» en una tarjeta, se abre una ficha con los ingredientes y botones para quitar cada uno; por voz se ajusta y con «agrégalo» se anota. Caja ve cada «sin X» en el pedido.
 
+## Servicio de mesa
+Milo atiende lo que un mesero resuelve aparte de la comida, sin pasar por la IA:
+- **Llamar al personal:** «tráeme servilletas», «nos faltan cubiertos», «más ají», «llama al mesero», «se me regó la cola». Llega a caja como aviso, con lo que se necesita.
+- **La cuenta:** «la cuenta, por favor», «cuánto te debo», «pago con tarjeta». Milo dice el total de lo enviado desde la mesa y caja recibe el aviso con el total y la forma de pago. Si hay cosas sin enviar, primero muestra el resumen.
+- **Cómo va el pedido:** «¿ya viene mi pedido?», «cuánto falta». Milo responde según el estado que marca caja. Si el cliente se queja («se demora mucho»), además avisa al personal.
+- **Segunda ronda:** lo que se pide después de enviar sale como un pedido aparte para la misma mesa.
+- **Bebidas:** las gaseosas y el agua sueltas se sirven en vaso con hielo, sin hielo o solo la botella. Los combos no preguntan.
+- **Preparaciones distintas:** «dos cuartos, uno sin cebolla» queda en dos líneas.
+- **Un acompañante, una vez:** con un plato, Milo sugiere lo que el plato no trae (arroz si ya trae papas).
+
 ## Entender como habla la gente
 
 - **Palabras parecidas:** «piatos», «conbos», «pechuca», «bevidas» y «conbo persnal» se corrigen por parecido con las palabras del menú (`public/js/fuzzy.js`). No se tocan números ni palabras comunes como «cuatro», «cosa», «plata» o «media».

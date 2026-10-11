@@ -85,3 +85,13 @@ test('una bebida con su forma de servir se anota sin confundir el hielo con un i
   assert.deepEqual(cart[0].notes,['solo la botella'],'una sola forma de servir');
   assert.equal(interpretLocal('medio pollo',[],menu).operations[0].id,'medio','solo el nombre es un pedido');
 });
+
+test('mismo plato con preparaciones distintas: «dos cuartos, uno sin cebolla»',()=>{
+  const r=interpretLocal('dos cuartos de pollo, uno sin cebolla y el otro normal',[],menu);
+  assert.equal(r.intent,'edit');assert.match(r.reply,/dos cuartos de pollo, uno sin cebolla/);
+  assert.deepEqual(applyOperations([],r.operations,menu),[{id:'cuarto',qty:1,notes:[]},{id:'cuarto',qty:1,notes:['sin cebolla']}]);
+  const later=interpretLocal('uno sin cebolla',[{id:'cuarto',qty:2,notes:[]}],menu,'cuarto');
+  assert.deepEqual(applyOperations([{id:'cuarto',qty:2,notes:[]}],later.operations,menu).map(l=>l.notes),[[],['sin cebolla']]);
+  // Si después todos quedan iguales, vuelven a ser una sola línea.
+  assert.deepEqual(applyOperations([{id:'cuarto',qty:1,notes:[]},{id:'cuarto',qty:1,notes:['sin cebolla']}],[{type:'note',id:'cuarto',note:'sin cebolla'}],menu),[{id:'cuarto',qty:2,notes:['sin cebolla']}]);
+});

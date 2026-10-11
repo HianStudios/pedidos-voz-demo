@@ -58,6 +58,13 @@ const assert=require('node:assert/strict');const fs=require('node:fs');
  await page.waitForFunction(()=>document.body.classList.contains('kiosk'));await cash.bringToFront();await cash.locator('.alert-row[data-type="kiosk-on"]').waitFor();
  await page.bringToFront();await page.mouse.move(corner.x+20,corner.y+20);await page.mouse.down();await page.waitForTimeout(3200);await page.mouse.up();
  await page.locator('#pinPad[open]').waitFor();for(const k of '1234')await page.locator(`#pinPad [data-key="${k}"]`).click();await page.locator('#pinPad [data-key="ok"]').click();await page.waitForFunction(()=>!document.body.classList.contains('kiosk'));
+// Servicio de mesa: pedir servilletas y la cuenta llega a caja como aviso.
+ await page.evaluate(()=>window.__miloInput('tráeme servilletas'));assert.match(await page.locator('#reply').textContent(),/servilletas/);
+ await page.evaluate(()=>window.__miloInput('la cuenta por favor'));assert.match(await page.locator('#reply').textContent(),/Lo envío a cocina/,'con cosas sin enviar, primero el resumen');
+ await page.evaluate(()=>window.__miloInput('sí'));await page.locator('#rateSheet[open]').waitFor();
+ await page.evaluate(()=>window.__miloInput('la cuenta por favor, pago con tarjeta'));assert.match(await page.locator('#reply').textContent(),/ya pedí tu cuenta: son/);assert.equal(await page.locator('#rateSheet').evaluate(e=>e.open),false,'pedir la cuenta deja la calificación');
+ await cash.bringToFront();await cash.locator('.alert-row[data-type="waiter"]',{hasText:'servilletas'}).waitFor();await cash.locator('.alert-row[data-type="bill"]',{hasText:'tarjeta'}).waitFor();await cash.evaluate(()=>scrollTo(0,0));await cash.screenshot({path:'test-results/caja-avisos.png',clip:{x:0,y:0,width:1280,height:420}});
+ await page.bringToFront();
  // Sin mesa configurada vuelve el flujo de retiro con nombre.
  await page.goto('http://localhost:3000/?mesa=&teclado=1');await page.locator('#menuOpen:not([disabled])').waitFor();assert.equal(await page.locator('#tableChip').isHidden(),true);
  await say('dos cuartos de pollo');await say('eso es todo');await page.locator('#customerName').waitFor();

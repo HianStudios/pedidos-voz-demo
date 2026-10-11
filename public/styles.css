@@ -142,6 +142,10 @@
 .alert-row[data-type=kiosk-on],.alert-row[data-type=kiosk-off]{background:#f1f5ec;border-color:#cfdcc3}
 .alert-dot{width:8px;height:8px;border-radius:50%;background:var(--orange);flex:none}
 .alert-row[data-type=kiosk-on] .alert-dot,.alert-row[data-type=kiosk-off] .alert-dot{background:#6f8f55}
+/* Lo que pide la mesa por voz: más visible que los avisos del kiosco */
+.alert-row[data-type=waiter],.alert-row[data-type=bill]{background:#fff6dc;border-color:#ecc96a;font-size:15px}
+.alert-row[data-type=waiter] .alert-dot,.alert-row[data-type=bill] .alert-dot{width:10px;height:10px;background:#d79a0b;animation:alert-pulse 1.2s ease-in-out infinite}
+@keyframes alert-pulse{50%{transform:scale(1.6);opacity:.5}}
 
 /* ---------- Panel de administración ---------- */
 .admin-page{--bar:#ce502d;--grid:#e6e2d7;--card:#fffcf6}

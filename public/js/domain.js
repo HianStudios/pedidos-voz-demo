@@ -5,15 +5,25 @@ export const normalize = s => String(s).toLowerCase().normalize('NFD').replace(/
 export const money = cents => new Intl.NumberFormat('es-EC',{style:'currency',currency:'USD'}).format(cents/100);
 export function validateCart(cart, menu) {
   if(!Array.isArray(cart) || cart.length>30) throw new Error('Pedido inválido.');
+  // Un mismo plato puede ir en varias líneas si cambia la preparación: «dos cuartos, uno sin cebolla».
   const seen = new Set();
   return cart.map(line=>{
     const item=menu.find(p=>p.id===line.id);
-    if(!item || !item.available || seen.has(line.id) || !Number.isInteger(line.qty) || line.qty<1 || line.qty>20) throw new Error('Producto o cantidad inválida.');
-    seen.add(line.id);
+    if(!item || !item.available || !Number.isInteger(line.qty) || line.qty<1 || line.qty>20) throw new Error('Producto o cantidad inválida.');
     const notes=line.notes??[];
     if(!Array.isArray(notes) || notes.length>6 || notes.some(n=>!allowedNotes(item).includes(n))) throw new Error('Opción inválida.');
-    return {id:item.id,qty:line.qty,notes:[...new Set(notes)]};
+    const clean={id:item.id,qty:line.qty,notes:[...new Set(notes)]};
+    if(seen.has(lineKey(clean))) throw new Error('Producto repetido.');
+    seen.add(lineKey(clean));
+    return clean;
   });
+}
+export const lineKey=l=>`${l.id}|${[...l.notes].sort().join(',')}`;
+// Líneas que quedaron con la misma preparación se juntan («uno sin cebolla» + «otro sin cebolla» = dos sin cebolla).
+function merge(lines){
+  const out=[];
+  for(const l of lines){const same=out.find(o=>lineKey(o)===lineKey(l));if(same)same.qty+=l.qty;else out.push(l);}
+  return out;
 }
 export const total = (cart,menu)=>cart.reduce((sum,l)=>sum+menu.find(p=>p.id===l.id).price*l.qty,0);
 export function applyOperations(cart, ops, menu) {
@@ -23,22 +33,33 @@ export function applyOperations(cart, ops, menu) {
     const product=menu.find(p=>p.id===op.id && p.available);
     if(!product) throw new Error('Producto no disponible.');
     let line=next.find(l=>l.id===op.id);
+    const lines=next.filter(l=>l.id===op.id);
     if(op.type==='note'){
       if(!line || !allowedNotes(product).includes(op.note)) throw new Error('Ese cambio no está disponible para este producto.');
-      // Una sola forma de servir: «sin hielo» reemplaza a «con hielo».
-      const kept=product.serve?.includes(op.note)?line.notes.filter(n=>!product.serve.includes(n)):line.notes;
-      line.notes=[...new Set([...kept,op.note])]; continue;
+      // Una sola forma de servir: «sin hielo» reemplaza a «con hielo». La nota vale para todas sus líneas.
+      for(const l of lines){const kept=product.serve?.includes(op.note)?l.notes.filter(n=>!product.serve.includes(n)):l.notes;l.notes=[...new Set([...kept,op.note])];}
+      continue;
     }
     // Volver a poner un ingrediente («con cebolla, mejor»): se retira la nota.
     if(op.type==='unnote'){
       if(!line) throw new Error('Ese producto no está en tu pedido.');
-      line.notes=line.notes.filter(n=>n!==op.note); continue;
+      for(const l of lines)l.notes=l.notes.filter(n=>n!==op.note); continue;
+    }
+    // Separar preparaciones: de los iguales, «qty» van con estas notas («uno sin cebolla»).
+    if(op.type==='split'){
+      const notes=Array.isArray(op.notes)?op.notes:[];
+      if(!notes.length||notes.some(n=>!allowedNotes(product).includes(n))) throw new Error('Ese cambio no está disponible para este producto.');
+      if(!Number.isInteger(op.qty)||op.qty<1) throw new Error('Cantidad inválida.');
+      const from=[...lines].sort((a,b)=>a.notes.length-b.notes.length).find(l=>l.qty>=op.qty);
+      if(!from) throw new Error('No hay tantos en tu pedido para separar.');
+      from.qty-=op.qty;next.push({id:op.id,qty:op.qty,notes:[...new Set([...from.notes,...notes])]});
+      continue;
     }
     if(!['add','set','remove'].includes(op.type) || !Number.isInteger(op.qty)||op.qty<0||op.qty>20 || (op.type==='add'&&op.qty===0)) throw new Error('Cantidad inválida.');
     if(!line){if(op.type!=='add') throw new Error('Ese producto no está en tu pedido.');line={id:op.id,qty:0,notes:[]}; next.push(line);}
     line.qty=op.type==='set'?op.qty:op.type==='remove'?Math.max(0,line.qty-op.qty):line.qty+op.qty;
   }
-  return validateCart(next.filter(l=>l.qty>0),menu);
+  return validateCart(merge(next.filter(l=>l.qty>0)),menu);
 }
 export function validateResult(result,cart,menu){
   const intents=['edit','menu','recommend','price','detail','review','clarify','keep','goodbye','cancel'];
@@ -109,6 +130,7 @@ export function repairResult(raw,menu){
   if(intent==='edit'&&Array.isArray(r.operations))operations=r.operations.filter(o=>o&&typeof o==='object').map(o=>{
     const type=String(o.type??o.op??o.action??'').toLowerCase().trim();const id=o.id??o.product_id??o.productId;
     if(type==='note'||type==='unnote')return {type,id,note:String(o.note??o.option??'').toLowerCase().trim()};
+    if(type==='split')return {type,id,qty:Number(o.qty??1),notes:(Array.isArray(o.notes)?o.notes:[o.note]).filter(Boolean).map(x=>String(x).toLowerCase().trim())};
     return {type,id,qty:Number(o.qty??o.quantity??(type==='add'?1:NaN))};
   });
   if(intent==='edit'&&!operations.length)intent='clarify';
@@ -183,8 +205,15 @@ export function describeOps(ops,menu){
   const parts=[];
   const single=added.length===1&&ops.find(o=>o.type==='add').qty===1&&!/^un[ao]s /.test(added[0]);
   if(added.length)parts.push(`${single?'Va':'Van'} ${listWords(added)}.`);
+  const splitSeen=new Set();
   for(const o of ops){
     const p=find(o.id);
+    if(o.type==='split'){
+      const fem=/^una /.test(one(p)),again=splitSeen.has(o.id);splitSeen.add(o.id);
+      const who=o.qty===1?(again?(fem?'otra':'otro'):(fem?'una':'uno')):`${again?'otros ':''}${numberWords(o.qty)}`;
+      if(newIds.has(o.id)&&parts.length)parts[parts.length-1]=parts.at(-1).replace(/\.$/,`, ${who} ${listWords(o.notes)}.`);
+      else parts.push(`Anotado: ${who} de ${/^una /.test(one(p))?'las':'los'} ${many(p).toLowerCase()} ${listWords(o.notes)}.`);
+    }
     if(o.type==='note'&&!newIds.has(o.id))parts.push(`Anotado: ${p.name.toLowerCase()} ${o.note}.`);
     if(o.type==='set')parts.push(o.qty?`Listo, quedan ${amount(p,o.qty)}.`.replace('quedan un','queda un').replace('quedan una','queda una'):`Listo, saqué ${one(p)} del pedido.`);
     if(o.type==='remove')parts.push(`Listo, saqué ${amount(p,o.qty)}.`);
@@ -282,9 +311,26 @@ export function interpretLocal(text,cart,menu,lastId=null,context={}){
   const noteRe=alt?new RegExp(`\\bsin (${alt})\\b`,'g'):null;
   const found=noteRe?[...n.matchAll(noteRe)]:[];
   const note=found[0]?.[0];
-  // «Dos cuartos, uno sin cebolla»: el pedido aún no separa preparaciones del mismo plato; se pregunta.
-  if(note&&/\b(?:uno|una|el otro|la otra|solo uno|solo una|uno de|una de)\b[^.]*\bsin\b/.test(n)&&/\b(dos|tres|cuatro|cinco|\d+)\b/.test(n))
-    return answer('clarify',`Por ahora anoto la misma preparación para todos los iguales. ¿Los preparo todos ${note}, o todos normales y se lo avisas al personal?`);
+  // «Dos cuartos, uno sin cebolla (y el otro normal)»: preparaciones distintas del mismo plato en líneas separadas.
+  const splitRe=alt?new RegExp(`\\b(?:solo |nada mas |pero )?(uno|una|dos|tres|el otro|la otra|otro|otra)(?: de (?:ellos|ellas|esos|esas|los|las))?((?:\\s+(?:y\\s+|ni\\s+)?sin (?:${alt}))+)`,'g'):null;
+  const splits=note&&splitRe?[...n.matchAll(splitRe)]:[];
+  if(splits.length){
+    const inNote=h=>splits.some(m=>h.index>=m.index&&h.index<m.index+m[0].length);
+    const named=[...new Set(hits.filter(h=>!inNote(h)).map(h=>h.id))];
+    const id=named.length===1?named[0]:named.length?null:lastId;
+    const product=id&&menu.find(p=>p.id===id);
+    if(product){
+      const token=named.length?n.slice(0,hits.find(h=>!inNote(h)).index).trim().split(' ').at(-1):'';const said=count(token);
+      const have=cart.filter(l=>l.id===id).reduce((a,l)=>a+l.qty,0);
+      const qty=Number.isInteger(said)&&said>0?said:named.length?0:have;
+      const parts=splits.map(m=>({qty:count(m[1].replace(/^(el|la) /,''))||1,notes:[...m[2].matchAll(noteRe)].map(x=>product.options.find(o=>normalize(o)===`sin ${x[1]}`)).filter(Boolean)}));
+      const used=parts.reduce((a,x)=>a+x.qty,0);
+      if(qty>=2&&parts.every(x=>x.notes.length)&&used<=qty){
+        const operations=[...(named.length&&said>0?[{type:'add',id,qty}]:[]),...parts.map(x=>({type:'split',id,qty:x.qty,notes:x.notes}))];
+        return answer('edit',`${describeOps(operations,menu)} ${operations[0].type==='add'?followUp(cart,operations,menu,context.drinkOffered):more[cart.length%3]}`,{operations});
+      }
+    }
+  }
   if(found.length&&!/\b(no|cuanto|precio|cuesta)\b/.test(n.replace(noteRe,''))){
     // La palabra de un producto dentro de la opción («sin ensalada», «sin papas») no cuenta como otro producto.
     const inNote=h=>found.some(m=>h.index>=m.index&&h.index<m.index+m[0].length);
@@ -315,7 +361,7 @@ export function interpretLocal(text,cart,menu,lastId=null,context={}){
   if(/\b(no|cambia|cambiar|sustituye|en vez|pero|sin)\b/.test(remaining)) return null;
   if(!hits.length) return null;
   // «trae» solo no es pedir: «el combo trae ensalada» pregunta qué incluye. Se pide con «tráeme».
-  const verbs='quiero|quisiera|dame|deme|da|das|traeme|traenos|regalame|mandame|agrega|agregame|anade|pon|ponme|quita|quitale|quitame|saca|sacale|elimina|borra|mejor|necesito|me|nos';
+  const verbs='quiero|quisiera|dame|deme|da|das|traeme|traenos|regalame|mandame|agrega|agregame|anade|pon|ponme|quita|quitale|quitame|saca|sacale|elimina|borra|mejor|necesito|me|nos|otra|otro|otras|otros|tambien';
   if(!new RegExp(`\\b(${verbs})\\b`).test(n)&&!/^\d|^(un|una|unas|unos|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\b/.test(n)) return null;
   const residue=normalize(remaining).split(' ').filter(w=>w&&!new RegExp(`^(${verbs}|si|y|tambien|por|favor|porfa|pues|el|la|los|las|de|del|un|una|unas|unos|uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|-?\\d+)$`).test(w));
   if(residue.length) return null;

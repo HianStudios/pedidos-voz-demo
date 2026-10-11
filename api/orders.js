@@ -8,6 +8,14 @@ export default endpoint(async(req,res)=>{
   if(!liveOrders())throw fail('Caja compartida no configurada. Está activo el modo demo.',503);
   await rateLimit(req,'orders',60);
   if(req.method==='GET'){
+    // La mesa consulta el estado de sus propios pedidos («¿ya viene mi pedido?»): solo por id, sin datos del personal.
+    const own=new URL(req.url||'/','http://x').searchParams.get('ids');
+    if(own!==null){
+      if(!getSession(req))throw fail('La sesión venció. Recarga la página.',401);
+      const wanted=own.split(',').filter(id=>/^[0-9a-f-]{36}$/.test(id)).slice(0,10);
+      const values=wanted.length?await redis(['MGET',...wanted.map(id=>`${prefix}:order:${id}`)]):[];
+      return json(res,200,{orders:values.filter(Boolean).map(v=>{const o=JSON.parse(v);return {id:o.id,number:o.number,status:o.status,total:o.total,createdAt:o.createdAt};})});
+    }
     // ?limit=1000 para el panel de administración (los pedidos se guardan 30 días).
     staff(req);const limit=Math.min(1000,Math.max(1,Number(new URL(req.url||'/','http://x').searchParams.get('limit'))||200));
     const ids=await redis(['ZREVRANGE',`${prefix}:orders`,0,limit-1]);

@@ -3,6 +3,7 @@ import {navigation,plausibleName,cartSignature} from './conversation.js';
 import {foodArt} from './art.js';
 import {VoiceController} from './voice.js';
 import {initKiosk} from './kiosk.js';
+import {staffRequest,statusLine} from './service.js';
 import {listWords,numberWords} from './speech-text.js';
 import {storageKey,ordersKey,readStore,saveOrders} from './order-store.js';
 const $=id=>document.getElementById(id);
@@ -22,7 +23,8 @@ let menu=[],restaurant,mode='demo',cart=[],history=[],busy=false,epoch=0,request
  asked=null,proposal=null,serveId=null, // pregunta pendiente de Milo y propuesta que espera un «sí»
  choices=null, // opciones que Milo acaba de ofrecer («el primero», «la segunda»)
  rating=null, // pedido recién enviado que espera calificación
- detail=null; // ficha abierta: {id, notes:Set}
+ detail=null, // ficha abierta: {id, notes:Set}
+ upsold=false,roundNote=false,kiosk=null; // sugerencia de acompañante (una vez), aviso de pedido aparte, avisos a caja
 function saveDraft(){try{localStorage.setItem(storageKey,JSON.stringify({cart,pending,customer:customerName}));}catch{}}
 let toastTimer;
 function toast(text){$('toast').textContent=text;$('toast').classList.add('visible');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').classList.remove('visible'),4500);}
@@ -39,7 +41,7 @@ function unstick(text){
  const prev=history.filter(h=>h.role==='assistant').at(-1)?.content;
  if(!prev||normalize(prev)!==normalize(text))return text;
  // Volver a mostrar un menú que se pidió otra vez no es atasco; sí lo es repetir la misma pregunta o el mismo «no entendí».
- if(!($('summaryModal').open&&cart.length)&&!/hielo|botella|cu[aá]nt|puedes decir|entend|repet|¿cu[aá]l te anoto/i.test(text))return text;
+ if(!($('summaryModal').open&&cart.length)&&!/hielo|botella|cu[aá]nt|puedes decir|entend|repet|pedido nada|¿cu[aá]l te anoto/i.test(text))return text;
  if($('summaryModal').open&&cart.length)return 'Para mandarlo a cocina dime «sí» o «envíalo». Si quieres cambiar algo, dime qué.';
  if(/hielo|botella/.test(text))return '¿Cómo la quieres: con hielo, sin hielo o solo la botella?';
  if(/cu[aá]ntos/.test(text))return 'Dime solo el número, por ejemplo «dos». ¿Para cuántas personas es?';
@@ -47,6 +49,8 @@ function unstick(text){
 }
 async function reply(text,next='listen'){
  text=unstick(text);
+ // Segunda ronda: lo nuevo se envía como otro pedido para la misma mesa.
+ if(roundNote&&/^(Va|Van) /.test(text)){roundNote=false;text=text.replace(/\s*(¿[^¿]*\?)\s*$/,' Lo mando como un pedido aparte para tu mesa. $1');}
  fresh($('reply'),text);document.querySelectorAll('.dialog-reply').forEach(el=>fresh(el,text));
  // Solo cuenta la última pregunta de la frase («Aquí tienes las bebidas… ¿Cuál te provoca?» no es ofrecer bebida).
  const question=text.match(/¿([^¿?]*)\?\s*$/)?.[1]||'';
@@ -59,7 +63,8 @@ async function reply(text,next='listen'){
 function interrupt(){epoch++;request?.abort();request=null;voice.pause();busy=false;}
 function setCart(next){
  const before=cart.reduce((n,l)=>n+l.qty,0);cart=next;reviewed=null;saveDraft();
- const count=cart.reduce((n,l)=>n+l.qty,0),badge=$('cartCount');badge.textContent=count;badge.classList.toggle('on',count>0);
+ const count=cart.reduce((n,l)=>n+l.qty,0);if(!before&&count&&menu.length&&tab().orders.length&&!tab().billed)roundNote=true;
+ const badge=$('cartCount');badge.textContent=count;badge.classList.toggle('on',count>0);
  if(count>before){badge.classList.remove('bump');void badge.offsetWidth;badge.classList.add('bump');}
 }
 // Pantalla siempre encendida mientras la app está abierta (Chrome Android, Safari iOS 16.4+).
@@ -127,6 +132,52 @@ function review(){
  const lines=cart.map(l=>{const p=menu.find(p=>p.id===l.id);return amount(p,l.qty)+(l.notes.length?` ${l.notes.join(' y ')}`:'');});
  reply(`Tienes ${listWords(lines)}. Son ${money(total(cart,menu))}. ${table?'¿Lo envío a cocina?':customerName?'¿Lo envío?':'¿A nombre de quién va?'}`);
 }
+// ---------- Servicio de mesa: llamar al personal, la cuenta y cómo va el pedido ----------
+const tabKey=`${storageKey}:mesa`;
+function tab(){const t=readStore(tabKey,{orders:[]});return Date.now()-(t.at||0)<6*3600000?t:{orders:[]};}
+function saveTab(t){try{localStorage.setItem(tabKey,JSON.stringify({...t,at:Date.now()}));}catch{}}
+async function tabOrders(){
+ const ids=tab().orders;if(!ids.length)return [];
+ if(mode==='demo'){const all=readStore(ordersKey,[]);return ids.map(id=>all.find(o=>o.id===id)).filter(Boolean);}
+ const res=await fetch(`/api/orders?ids=${ids.join(',')}`,{signal:AbortSignal.timeout(8000)});const data=await res.json();if(!res.ok)throw new Error(data.error);return data.orders;
+}
+const payWords={efectivo:'en efectivo',tarjeta:'con tarjeta',transferencia:'por transferencia'};
+async function serveTable(req){
+ if(req.type==='waiter'){
+  if(!table){reply('Para eso acércate a caja, por favor. ¿Te ayudo con algo del menú?');return;}
+  kiosk?.notify('waiter',req.need?{need:req.need}:{});
+  reply(req.need?`Listo, ya le avisé al personal que necesitas ${req.need}. En un momento te lo traen.`:'Listo, ya le avisé al personal. En un momento se acerca alguien.');return;
+ }
+ if(req.type==='bill'){
+  if(!table){reply('La cuenta se paga en caja al retirar tu pedido.');return;}
+  // Con cosas sin enviar, primero el resumen (ahí ya va el total y la pregunta de enviarlo).
+  if(cart.length){review();return;}
+  let orders=[];try{orders=(await tabOrders()).filter(o=>o.status!=='cancelado');}catch{}
+  const due=orders.reduce((a,o)=>a+o.total,0);
+  kiosk?.notify('bill',{...(req.pay?{pay:req.pay}:{}),...(orders.length?{total:due}:{})});
+  saveTab({...tab(),billed:true});
+  reply(orders.length?`Listo, ya pedí tu cuenta: son ${money(due)}. ${req.pay?`Le avisé que pagas ${payWords[req.pay]}.`:'Puedes pagar en efectivo, con tarjeta o por transferencia.'} En un momento se acerca alguien.`:'Listo, ya le avisé al personal que quieres la cuenta. En un momento se acerca alguien.');return;
+ }
+ // Estado del pedido según lo que marca caja.
+ let orders;
+ try{orders=await tabOrders();}catch{kiosk?.notify('waiter',{need:'pregunta por su pedido'});reply('No pude ver tu pedido ahora, así que le avisé al personal para que te cuente.');return;}
+ if(!orders.length){if(cart.length){review();return;}reply('Todavía no has enviado ningún pedido desde esta mesa. ¿Qué se te antoja?');return;}
+ const last=[...orders].sort((a,b)=>Date.parse(b.createdAt)-Date.parse(a.createdAt))[0];
+ let text=statusLine[last.status]||'Tu pedido está en camino.';
+ if(req.complaint||last.status==='cancelado'){kiosk?.notify('waiter',{need:'pregunta por su pedido'});text+=' Igual le avisé al personal para que lo revise.';}
+ reply(text);
+}
+// Un buen mesero sugiere un acompañante una sola vez: lo que el plato no trae (arroz si ya trae papas).
+function upsellStep(ops,text){
+ if(upsold||serveId||/para tomar|hielo|botella/i.test(text))return text;
+ const plate=ops.filter(o=>o.type==='add').map(o=>menu.find(p=>p.id===o.id)).find(p=>p?.category==='Platos');
+ if(!plate||cart.some(l=>['Extras','Combos'].includes(menu.find(p=>p.id===l.id)?.category)))return text;
+ const has=normalize([plate.desc,...(plate.ingredients||[])].join(' '));
+ const side=['papas','arroz','ensalada'].map(id=>menu.find(p=>p.id===id&&p.available)).find(p=>p&&!has.includes(normalize(p.name).split(' ')[0]));
+ if(!side)return text;
+ upsold=true;proposal={operations:[{type:'add',id:side.id,qty:1}],no:'Listo. ¿Algo más, o cerramos el pedido?'};
+ return `${text.replace(/\s*¿[^¿]*\?\s*$/,'')} ¿Le sumo ${side.one||side.name}? Va muy bien con ${(plate.one||plate.name).replace(/^(un|una|unas|unos) /,a=>({'un ':'el ','una ':'la ','unas ':'las ','unos ':'los '})[a])}.`;
+}
 // Bebida suelta recién pedida: si ya dijo cómo la quiere («una coca sin hielo») se anota; si no, se pregunta.
 // Los combos no preguntan: la gaseosa del combo se sirve como siempre.
 const SERVE_Q='¿La quieres en vaso con hielo, en vaso sin hielo, o solo la botella?';
@@ -140,7 +191,7 @@ function serveStep(ops,said,text){
 }
 function addDirect(id){
  interrupt();activity();const operations=[{type:'add',id,qty:1}];
- try{const before=cart;setCart(applyOperations(cart,operations,menu));lastId=id;$('modalBody').querySelector(`.dish[data-product="${id}"]`)?.classList.add('added');reply(serveStep(operations,'',`${describeOps(operations,menu)} ${followUp(before,operations,menu,drinkOffered)}`));}
+ try{const before=cart;setCart(applyOperations(cart,operations,menu));lastId=id;$('modalBody').querySelector(`.dish[data-product="${id}"]`)?.classList.add('added');reply(upsellStep(operations,serveStep(operations,'',`${describeOps(operations,menu)} ${followUp(before,operations,menu,drinkOffered)}`)));}
  catch(e){reply(e.message);}
 }
 
@@ -164,8 +215,15 @@ async function handleInput(raw){
  if(rating){
   const stars=parseRating(said);
   if(stars){finishRating(stars,said);return;}
-  if(/\b(no|ahora no|despues|luego|no gracias|nada)\b/.test(n)||rating.tries++>=1){finishRating(null);reply('Sin problema. ¡Buen provecho!','wait');return;}
-  reply('¿De una a cinco, cuántas estrellas me das?');return;
+  const other=staffRequest(said);
+  if(!other&&/^(no|ahora no|despues|luego|no gracias|nada|paso)\b/.test(n)){finishRating(null);reply('Sin problema. ¡Buen provecho!','wait');return;}
+  if(!other&&n.split(' ').length<=2&&rating.tries++<1){reply('¿De una a cinco, cuántas estrellas me das?');return;}
+  // Ya está pidiendo otra cosa («otra coca», «la cuenta»): se deja la calificación y se le atiende.
+  finishRating(null);
+ }
+ const service=staffRequest(said);
+ if(service&&asked!=='serve'&&!(service.type==='waiter'&&service.need&&menu.some(p=>[p.name,...(p.aliases||[])].some(a=>new RegExp(`\\b${normalize(a)}\\b`).test(n))))){
+  asked=null;proposal=null;choices=null;serveId=null;await serveTable(service);return;
  }
  // Respuestas a lo último que Milo preguntó o propuso.
  const lastAsked=asked,offer=proposal,options=choices;asked=null;proposal=null;choices=null;
@@ -187,7 +245,7 @@ async function handleInput(raw){
   try{const before=cart;setCart(applyOperations(cart,offer.operations,menu));lastId=offer.operations.at(-1).id;reply(serveStep(offer.operations,said,`${describeOps(offer.operations,menu)} ${followUp(before,offer.operations,menu,drinkOffered)}`));}catch(e){reply(e.message);}
   return;
  }
- if(offer&&/^(no|no gracias|mejor no|nada|todavia no)$/.test(n)){reply('Sin problema. ¿Qué se te antoja entonces?');return;}
+ if(offer&&/^(no|no gracias|mejor no|nada|todavia no|asi nomas|asi esta bien|no asi esta bien)$/.test(n)){reply(offer.no||'Sin problema. ¿Qué se te antoja entonces?');return;}
  // «¿Algo para tomar?» → «sí» muestra las bebidas; «no» no vuelve a ofrecerlas.
  if(lastAsked==='drink'&&/^(si|sí|claro|dale|ya|bueno|ok|okey|si por favor|si porfa|de una|obvio)$/.test(n)){showCategory('Bebidas');reply(categoryPitch('Bebidas'));return;}
  if(lastAsked==='drink'&&/^(no|no gracias|nada|nada de tomar|sin bebida|asi esta bien|no gracias asi esta bien)$/.test(n)){drinkOffered=true;reply('Sin bebida, entonces. ¿Algo más, o cerramos el pedido?');return;}
@@ -216,7 +274,7 @@ async function handleInput(raw){
   if(result.intent==='edit'){
    setCart(applyOperations(cart,result.operations,menu));lastId=result.operations.at(-1)?.id;
    if($('summaryModal').open)renderSummary();
-   reply(serveStep(result.operations,said,result.reply||'Listo. ¿Algo más, o cerramos el pedido?'));
+   reply(upsellStep(result.operations,serveStep(result.operations,said,result.reply||'Listo. ¿Algo más, o cerramos el pedido?')));
   }else if(result.intent==='menu'&&result.source==='fallback'&&$('optionsModal').open){reply(result.reply.replace(/Te muestro el menú: |Aquí tienes el menú, /,''));
   }else if(result.intent==='menu'){
    // Categoría concreta: siempre la presentación completa (nombra todo y sincroniza el foco de las tarjetas).
@@ -247,7 +305,8 @@ async function submit(){
    const orders=readStore(ordersKey,[]);order=orders.find(o=>o.id===pending.key);
    if(!order){order={id:pending.key,number:pending.key.slice(0,6).toUpperCase(),items:pending.items.map(l=>({...l,name:menu.find(p=>p.id===l.id).name,price:menu.find(p=>p.id===l.id).price})),total:total(pending.items,menu),customer:pending.customer,...(pending.table?{table:pending.table}:{}),fulfillment:pending.table?'mesa':'retiro',status:'nuevo',createdAt:new Date().toISOString()};saveOrders([order,...orders].slice(0,200));}
   }else{const res=await fetch('/api/orders',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(pending),signal:AbortSignal.timeout(15000)});const data=await res.json();if(!res.ok)throw new Error(data.error);order=data.order;}
-  pending=null;customerName='';setCart([]);lastId=null;awaitingName=false;drinkOffered=false;history=[];
+  const t=tab();saveTab({orders:[...(t.billed?[]:t.orders),order.id].slice(-10),billed:false});
+  pending=null;customerName='';setCart([]);lastId=null;awaitingName=false;drinkOffered=false;upsold=false;roundNote=false;history=[];
   toast(`Pedido ${mode==='demo'?'de prueba ':''}#${order.number} registrado`);
   const done=mode==='demo'?'Listo, tu pedido de prueba quedó registrado.':order.table?'¡Listo! Tu pedido ya está en cocina. ¡Buen provecho!':`¡Listo, ${order.customer}! Tu pedido es el número ${order.number}.`;
   startRating(order);await reply(`${done} ¿Qué te pareció mi atención? Dime de una a cinco estrellas.`,'listen');
@@ -327,7 +386,7 @@ document.addEventListener('visibilitychange',()=>{if(document.hidden){interrupt(
 addEventListener('pointerdown',keepAwake,{once:true});
 async function init(){
  keepAwake();if(table){$('tableNumber').textContent=table;$('tableChip').hidden=false;}
- initKiosk({table,mode:()=>mode,toast});
+ kiosk=initKiosk({table,mode:()=>mode,toast});
  // Sin teclado para el cliente: solo voz. «?teclado=1» lo habilita para el personal y las pruebas.
  if(/[?&]teclado=1\b/.test(location.search)){window.__miloInput=handleInput;$('keyboardOpen').hidden=false;document.querySelectorAll('.inline-chat[data-typing]').forEach(f=>f.hidden=false);}
  try{const res=await fetch('/api/menu');const data=await res.json();if(!res.ok)throw new Error(data.error);({menu,restaurant,mode}=data);voice.greeting=restaurant.greeting;voice.neural=data.voice==='neural';
