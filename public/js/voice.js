@@ -1,5 +1,4 @@
 import {speakable,chunks} from './speech-text.js';
-import {isConfirmation} from './domain.js';
 const Recognition=window.SpeechRecognition||window.webkitSpeechRecognition;
 export class VoiceController{
   constructor({onState,onLevel,onText,onInput,onError,onSentence,greeting}){Object.assign(this,{onState,onLevel,onText,onInput,onError,onSentence,greeting});this.rate=1.2;this.neural=false;
@@ -147,9 +146,10 @@ export class VoiceController{
     };
     rec.onend=()=>{
       clearTimeout(this.timer);if(token!==this.generation||failed||!this.enabled)return;this.recognition=null;
-      // Chrome/Edge a veces cierran sin marcar el resultado como final («cinco»). Se acepta lo oído,
-      // salvo una confirmación provisional: un «sí» a medias nunca debe enviar ni aceptar nada.
-      const heard=finalText||(text&&!isConfirmation(text)?text:'');
+      // Chrome/Edge a veces cierran sin marcar el resultado como final («cinco», y sobre todo un «sí» corto).
+      // Al cerrarse el reconocedor el cliente ya terminó de hablar, así que se acepta lo oído; antes se
+      // descartaba el «sí» provisional y Milo se quedaba esperando frente al resumen.
+      const heard=finalText||text;
       if(heard){this.state('thinking');this.onInput(heard.replace(/^milo[\s,]+/i,''));}
       else this.relisten();
     };

@@ -11,8 +11,8 @@ function setup(){let inputs=[],states=[],errors=[];const voice=new VoiceControll
 test('la sesión escucha un pedido sin exigir palabra de activación',()=>{
   const {voice,inputs}=setup();voice.listen();const rec=voice.recognition;const result=[{transcript:'dame dos cuartos de pollo'}];result.isFinal=true;rec.onresult({results:[result]});rec.onend();assert.deepEqual(inputs,['dame dos cuartos de pollo']);voice.disable();
 });
-test('texto provisional nunca se procesa como confirmación',()=>{
-  const {voice,inputs}=setup();voice.listen();const rec=voice.recognition;const result=[{transcript:'sí'}];result.isFinal=false;rec.onresult({results:[result]});rec.onend();assert.deepEqual(inputs,[]);voice.disable();
+test('un «sí» provisional solo se procesa cuando el reconocedor cierra',()=>{
+  const {voice,inputs}=setup();voice.listen();const rec=voice.recognition;const result=[{transcript:'sí'}];result.isFinal=false;rec.onresult({results:[result]});assert.deepEqual(inputs,[],'no a mitad de frase');rec.onend();assert.deepEqual(inputs,['sí']);voice.disable();
 });
 test('callbacks de un reconocimiento cancelado no crean otro pedido',()=>{
   const {voice,inputs}=setup();voice.listen();const rec=voice.recognition;const callback=rec.onend;const result=[{transcript:'dos pollos'}];result.isFinal=true;rec.onresult({results:[result]});voice.disable();callback();assert.deepEqual(inputs,[]);assert.equal(voice.mode,'off');
@@ -42,9 +42,9 @@ test('frase provisional de varias palabras se acepta si Chrome no la marca final
 test('un fallo del reconocedor pasa a grabación sin pedir toque',()=>{
   const {voice}=setup();let recorded=0;voice.record=()=>{recorded++;};voice.listen();voice.recognition.onerror({error:'network'});assert.equal(voice.nativeFailed,true);assert.equal(recorded,1);assert.equal(voice.mode,'listening');voice.disable();
 });
-test('una palabra provisional se acepta, salvo un «sí»',()=>{
+test('una palabra provisional se acepta, también un «sí» (Edge no lo marca final)',()=>{
  const {voice,inputs}=setup();for(const word of ['cinco','sí']){voice.listen();const result=[{transcript:word}];result.isFinal=false;voice.recognition.onresult({results:[result]});voice.recognition.onend();}
- assert.deepEqual(inputs,['cinco']);voice.disable();
+ assert.deepEqual(inputs,['cinco','sí']);voice.disable();
 });
 test('en celular graba y transcribe; el ruido del local no cuenta como voz',async(t)=>{
  t.mock.timers.enable({apis:['setInterval','setTimeout','Date'],now:0});

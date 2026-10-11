@@ -10,13 +10,13 @@ const assert=require('node:assert/strict');const fs=require('node:fs');
  await page.bringToFront();await page.locator('#menuOpen').click();await page.locator('.door').first().waitFor();assert.equal(await page.locator('.door').count(),4);
  await page.waitForTimeout(800);await page.screenshot({path:'test-results/menu-desktop.png'});
  await page.locator('.door[data-category="Platos"]').click();await page.locator('.dish').first().waitFor();assert.equal(await page.locator('.dish').count(),5);
- assert.equal(await page.locator('#tabs [data-category="Platos"]').getAttribute('aria-current'),'true');
+ assert.equal(await page.locator('#tabs [data-category="Platos"]').getAttribute('aria-current'),'true');assert.match(await page.locator('.menu-sign').textContent(),/qué trae/,'letrerito de ingredientes');
  await page.waitForTimeout(900);await page.screenshot({path:'test-results/platos-desktop.png'});
  async function say(text){const modal=await page.locator('#optionsModal').evaluate(e=>e.open);const summary=await page.locator('#summaryModal').evaluate(e=>e.open);const id=modal?'modalText':summary?'summaryText':'chatText';if(id==='chatText'&&await page.locator('#composer').isHidden())await page.locator('#keyboardOpen').click();await page.locator('#'+id).fill(text);await page.locator('#'+id).press('Enter');await page.waitForTimeout(160);await page.waitForFunction(()=>!document.getElementById('sendText').disabled);}
  await say('me apoyo');assert.match(await page.locator('#reply').textContent(),/medio pollo/);assert.equal(await page.locator('#cartCount').textContent(),'0');
  await say('medio pollo');assert.equal(await page.locator('#cartCount').textContent(),'1');assert.match(await page.locator('#reply').textContent(),/Va un medio pollo/);
  assert.match(await page.locator('#reply').textContent(),/para tomar/);await say('sí');await page.locator('.dish[data-product="sprite"]').waitFor();assert.equal(await page.locator('#cartCount').textContent(),'1','el sí a la bebida muestra opciones, no agrega');
- await page.locator('[data-close="optionsModal"]').click();await say('dame unas bebidas');await page.locator('.dish[data-product="pepsi"]').waitFor();
+ await page.locator('[data-close="optionsModal"]').click();await say('dame unas bebidas');await page.locator('.dish[data-product="pepsi"]').waitFor();assert.match(await page.locator('.menu-sign').textContent(),/hielo/);await page.waitForTimeout(700);await page.screenshot({path:'test-results/bebidas-letrero.png'});
  await say('sin cebolla');assert.match(await page.locator('#reply').textContent(),/sin cebolla/);
  await say('quiero ver los combos');await page.locator('.dish[data-product="combo-personal"]').waitFor();for(const id of ['combo-personal','combo-familiar','combo-pechuga'])await page.locator(`.dish.is-spot[data-product="${id}"]`).waitFor({timeout:15000});assert.equal(await page.locator('.dish.is-spot').count(),1,'Milo nombra e ilumina todos, uno a la vez');assert.match(await page.locator('#reply').textContent(),/combo pechuga/);
  await page.locator('[data-add="combo-alitas"]').click();assert.equal(await page.locator('#cartCount').textContent(),'2');assert.equal(await page.locator('#optionsModal').evaluate(e=>e.open),true,'agregar no cierra el menú');
@@ -58,6 +58,13 @@ const assert=require('node:assert/strict');const fs=require('node:fs');
  await page.waitForFunction(()=>document.body.classList.contains('kiosk'));await cash.bringToFront();await cash.locator('.alert-row[data-type="kiosk-on"]').waitFor();
  await page.bringToFront();await page.mouse.move(corner.x+20,corner.y+20);await page.mouse.down();await page.waitForTimeout(3200);await page.mouse.up();
  await page.locator('#pinPad[open]').waitFor();for(const k of '1234')await page.locator(`#pinPad [data-key="${k}"]`).click();await page.locator('#pinPad [data-key="ok"]').click();await page.waitForFunction(()=>!document.body.classList.contains('kiosk'));
+// Servicio de mesa: pedir servilletas y la cuenta llega a caja como aviso.
+ await page.evaluate(()=>window.__miloInput('tráeme servilletas'));assert.match(await page.locator('#reply').textContent(),/servilletas/);
+ await page.evaluate(()=>window.__miloInput('la cuenta por favor'));assert.match(await page.locator('#reply').textContent(),/Lo envío a cocina/,'con cosas sin enviar, primero el resumen');
+ await page.evaluate(()=>window.__miloInput('sí'));await page.locator('#rateSheet[open]').waitFor();
+ await page.evaluate(()=>window.__miloInput('la cuenta por favor, pago con tarjeta'));assert.match(await page.locator('#reply').textContent(),/ya pedí tu cuenta: son/);assert.equal(await page.locator('#rateSheet').evaluate(e=>e.open),false,'pedir la cuenta deja la calificación');
+ await cash.bringToFront();await cash.locator('.alert-row[data-type="waiter"]',{hasText:'servilletas'}).waitFor();await cash.locator('.alert-row[data-type="bill"]',{hasText:'tarjeta'}).waitFor();await cash.evaluate(()=>scrollTo(0,0));await cash.screenshot({path:'test-results/caja-avisos.png',clip:{x:0,y:0,width:1280,height:420}});
+ await page.bringToFront();
  // Sin mesa configurada vuelve el flujo de retiro con nombre.
  await page.goto('http://localhost:3000/?mesa=&teclado=1');await page.locator('#menuOpen:not([disabled])').waitFor();assert.equal(await page.locator('#tableChip').isHidden(),true);
  await say('dos cuartos de pollo');await say('eso es todo');await page.locator('#customerName').waitFor();

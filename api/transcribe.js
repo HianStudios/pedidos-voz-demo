@@ -17,8 +17,12 @@ export default endpoint(async(req,res)=>{
   try{
     const response=await fetch('https://api.groq.com/openai/v1/audio/transcriptions',{method:'POST',headers:{Authorization:`Bearer ${process.env.GROQ_API_KEY}`},body:outgoing,signal:AbortSignal.timeout(20000)});
     if(!response.ok)throw new Error('Provider failed');const result=await response.json();
-    const silent=result.segments?.length&&result.segments.every(s=>s.no_speech_prob>0.8);
     const text=String(result.text||'').trim();
+    // Respuestas cortas («Sí.», «Sí, gracias.», «Cinco.») suelen venir con no_speech_prob alto aunque sí se dijeron;
+    // descartarlas dejaba a Milo esperando frente al resumen. El micrófono ya comprobó que hubo voz.
+    // «Gracias.» sola no entra: es lo que Whisper más inventa con ruido, y frente al resumen enviaría el pedido.
+    const short=/^(?:s[ií]|no|ya|listo|dale|ok|okey|claro|s[ií],? gracias|perfecto|bueno|uno|una|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|\d+)[.!¡¿?,\s]*$/i.test(text);
+    const silent=!short&&result.segments?.length&&result.segments.every(s=>s.no_speech_prob>0.8);
     // Frases que Whisper «inventa» con ruido o silencio en español.
     const phantom=/subt[ií]tul|amara\.org|gracias por ver|suscr[ií]b|^\W*$/i.test(text);
     json(res,200,{text:silent||phantom?'':text.slice(0,1200)});

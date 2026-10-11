@@ -8,14 +8,15 @@ const $=id=>document.getElementById(id);
 export function initKiosk({table,mode,toast}){
   let active=false,pinMode='on',pin='',lastAlert={};
   try{active=localStorage.getItem(key)==='1';}catch{}
-  const notify=type=>{
-    // Un aviso por tipo cada 30 s: un niño tocando la pantalla no debe llenar la caja de avisos.
-    const now=Date.now();if(now-(lastAlert[type]||0)<30000||!table)return;lastAlert[type]=now;
-    const alert={id:crypto.randomUUID(),table,type,at:new Date().toISOString()};
-    if(mode()==='demo'){saveAlert(alert);return;}
-    const data=JSON.stringify({table,type});
+  const notify=(type,extra={})=>{
+    // Un aviso igual cada 30 s: un niño tocando la pantalla no debe llenar la caja de avisos.
+    const tag=type+(extra.need||'');const now=Date.now();if(now-(lastAlert[tag]||0)<30000||!table)return false;lastAlert[tag]=now;
+    const alert={id:crypto.randomUUID(),table,type,at:new Date().toISOString(),...extra};
+    if(mode()==='demo'){saveAlert(alert);return true;}
+    const data=JSON.stringify({table,type,...extra});
     if(type==='app-hidden'&&navigator.sendBeacon)navigator.sendBeacon('/api/alerts',new Blob([data],{type:'text/plain'}));
     else fetch('/api/alerts',{method:'POST',headers:{'Content-Type':'application/json'},body:data,keepalive:true}).catch(()=>{});
+    return true;
   };
   const full=()=>document.fullscreenElement||document.webkitFullscreenElement;
   const enterFull=()=>{const el=document.documentElement;(el.requestFullscreen?.({navigationUI:'hide'})||el.webkitRequestFullscreen?.())?.catch?.(()=>{});};
@@ -64,5 +65,5 @@ export function initKiosk({table,mode,toast}){
   for(const ev of ['contextmenu','selectstart','gesturestart'])document.addEventListener(ev,e=>{if(active)e.preventDefault();});
   addEventListener('beforeunload',e=>{if(active){e.preventDefault();e.returnValue='';}});
   apply();
-  return {get active(){return active;}};
+  return {get active(){return active;},notify};
 }
