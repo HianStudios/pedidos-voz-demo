@@ -143,6 +143,8 @@ PREGUNTA PENDIENTE: ${JSON.stringify(pending)}${heard!==normalize(transcript)?`\
       if(second.wait){await new Promise(r=>setTimeout(r,second.wait));try{return await ask();}catch(third){e=third;errors.push(third.message);}}
       // Visible en los logs de Vercel para afinar el prompt con casos reales.
       console.warn('match: respuesta descartada:',first.message,'/',e.message,JSON.stringify(transcript).slice(0,200));
+      // Con un pedido en curso nunca se manda al menú: se pregunta si sigue o cierra (así no se pierde el final).
+      if(cart.length)return {intent:'clarify',operations:[],suggest_ids:[],reply:['Perdona, con el ruido no te escuché bien. ¿Quieres algo más o cerramos el pedido?','Se me fue esa parte. ¿Sumamos algo o ya cerramos el pedido?'][turn++%2],source:'fallback',...(debug?{error:errors.map(m=>m.slice(0,160)).join(' | ')}:{})};
       return {intent:'menu',category:'all',operations:[],suggest_ids:[],reply:fallbacks[turn++%fallbacks.length],source:'fallback',...(debug?{error:errors.map(m=>m.slice(0,160)).join(' | ')}:{})};
     }
   }

@@ -207,6 +207,16 @@ const done=[
   'adelante','proceda','procede','vamos','dale nomas','listo para cocina','ya cierra','cierra nomas','finaliza(?:r)?(?: (?:el pedido|la orden))?','(?:ya )?(?:sale|salio)',
 ];
 const finishRe=new RegExp(`^${lead}(?:${done.join('|')})(?: (?:${done.join('|')}))?${tail}$`);
+// Querer terminar dicho de cualquier forma y aunque llegue con ruido de la mesa alrededor:
+// «quiero finalizar el pedido», «ya terminamos», «jajaja ya finaliza el pedido», «vamos a finalizar».
+// No cuenta si se niega o se pospone («no finalices», «todavía no termino», «espera, antes de cerrar…»).
+const finishWord=/\b(finali[zc]\w*|termin(?:a|ar|amos|emos|alo|amelo)(?: (?:el|mi|la|nuestro) (?:pedido|orden))?|ya (?:termine|terminamos|acabamos|acabe)|cerr(?:ar|amos|emos|alo|a) (?:el |mi |la )?(?:pedido|orden|cuenta)|envi\w* (?:el |mi |la )?(?:pedido|orden)|(?:manda|envia|pasa|mande|envie)(?:lo|la|le)? (?:a|para) (?:la )?cocina|eso (?:seria|es|sera) todo|seria todo|ya (?:esta|estaria|es) todo|ya pedimos todo|eso nomas|nada mas|(?:ya|si) (?:mandalo|mandala|mandale|envialo|enviala|enviale))\b/;
+const holdOn=/\b(?:no|ni) (?:lo |la |le |me |nos |se )?(?:finali|termin|cierr|cerr|envi|mand|pas)|\b(?:todavia|aun|espera|esperate|esperame|un momento|antes de|despues|luego)\b(?:\s+\w+){0,2}\s+(?:finali|termin|cerr|envi|mand|pas)|\b(?:no|todavia no|aun no) (?:es todo|seria todo)|\btodavia no\b|\baun no\b|\b(?:falta|faltan|me falta|nos falta)\b/;
+export function finishIntent(text){
+  const n=normalize(text);if(!n)return false;
+  if(isFinish(text))return true;
+  return finishWord.test(n)&&!holdOn.test(n);
+}
 export function isFinish(text){
   const n=normalize(text);
   if(!n||/^no(?: gracias)?$/.test(n)||/^no (?:gracias )?(?:todavia|aun|espera|un momento)/.test(n))return false;

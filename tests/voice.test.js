@@ -63,3 +63,22 @@ test('en celular graba y transcribe; el ruido del local no cuenta como voz',asyn
  assert.equal(uploads,1);assert.deepEqual(inputs,['dos cuartos de pollo']);
  globalThis.fetch=realFetch;voice.disable();
 });
+test('con gente conversando en la mesa, la frase del cliente se corta cuando él termina',async(t)=>{
+ t.mock.timers.enable({apis:['setInterval','setTimeout','Date'],now:0});
+ let recorders=[],uploads=0;
+ globalThis.MediaRecorder=class{static isTypeSupported(){return true;}constructor(){this.state='inactive';this.mimeType='audio/webm';recorders.push(this);}start(){this.state='recording';}stop(){this.state='inactive';this.ondataavailable?.({data:{size:4000}});this.onstop?.();}};
+ window.MediaRecorder=globalThis.MediaRecorder;globalThis.Blob=class{constructor(){this.size=4000;}};globalThis.FormData=class{append(){}};
+ const realFetch=globalThis.fetch;globalThis.fetch=async()=>{uploads++;return {ok:true,json:async()=>({text:'ya finaliza el pedido'})};};
+ const advance=ms=>{for(let i=0;i<ms;i+=100)t.mock.timers.tick(100);};
+ const {voice,inputs}=setup();voice.preferRecorder=true;voice.stream={getTracks:()=>[]};voice.analyser={};voice.listen();
+ voice.rms=.01;advance(700);            // mesa tranquila al empezar: umbral ≈ 0.025
+ voice.rms=.15;advance(1500);           // el cliente le habla de cerca a Milo
+ voice.rms=.04;advance(1200);           // sigue la charla de los amigos, más bajo: ya no es su voz
+ await new Promise(r=>setImmediate(r));await new Promise(r=>setImmediate(r));
+ assert.equal(uploads,1,'no espera a que la mesa se calle');assert.deepEqual(inputs,['ya finaliza el pedido']);
+ // Charla que nunca baja: la frase se corta igual a los 9 s.
+ voice.listen();voice.rms=.01;advance(700);voice.rms=.15;advance(9500);
+ await new Promise(r=>setImmediate(r));await new Promise(r=>setImmediate(r));
+ assert.equal(uploads,2,'máximo 9 s por frase');
+ globalThis.fetch=realFetch;voice.disable();
+});

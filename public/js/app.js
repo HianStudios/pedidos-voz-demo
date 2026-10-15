@@ -1,4 +1,4 @@
-import {money,total,validateCart,applyOperations,isConfirmation,isFinish,normalize,describeOps,followUp,amount,parsePeople,suggestForPeople,soundsLike,parseRating,removalsFor,serveFor} from './domain.js';
+import {money,total,validateCart,applyOperations,isConfirmation,isFinish,finishIntent,normalize,describeOps,followUp,amount,parsePeople,suggestForPeople,soundsLike,parseRating,removalsFor,serveFor} from './domain.js';
 import {navigation,plausibleName,cartSignature} from './conversation.js';
 import {foodArt} from './art.js';
 import {VoiceController} from './voice.js';
@@ -304,7 +304,11 @@ async function handleInput(raw){
  if(/^(cierra|cierra eso|cierra la ventana|cerrar)$/.test(n)){closeModals();reviewed=null;reply('Listo.');return;}
  // Cerrar el pedido: «sí, envíalo», pero también «gracias», «eso es todo», «mándalo a la cocina»…
  // Con el resumen vigente en pantalla se envía; si no, primero se muestra el resumen.
- if(isConfirmation(raw)||(cart.length&&isFinish(raw))){
+ // Con ruido alrededor («jajaja ya finaliza el pedido») también cuenta, si no nombra productos nuevos.
+ // Frente a la factura, un «sí» que llega con charla detrás («sí sí, oye pásame…») también envía; nunca si
+ // pone condiciones («sí, pero quita la cola») o nombra productos.
+ const summaryYes=$('summaryModal').open&&/^(?:si|ya|dale|listo|ok|okey|claro|de una|simon|bueno)\b/.test(n)&&!/\b(pero|no|quita|quitale|cambia|agrega|agregale|sin|otro|otra|falta|espera|aunque)\b/.test(n)&&!productsIn(said).length;
+ if(isConfirmation(raw)||summaryYes||(cart.length&&(isFinish(raw)||(finishIntent(said)&&!productsIn(said).length)))){
   if(cart.length&&customerName&&reviewed===cartSignature(cart,customerName))return submit();
   review();return;
  }

@@ -20,3 +20,16 @@ test('Coca-Cola en botella, 8 vasos y servilletas: todo en el pedido, lo de la m
   assert.match(r.reply,/Coca-Cola en botella/);assert.match(r.reply,/ocho vasos/);
   assert.equal(menu.find(p=>p.id==='vasos').price,0);
 });
+import {finishIntent,soundsLike} from '../public/js/domain.js';
+test('terminar el pedido con amigos hablando alrededor: no se va al menú',async()=>{
+  const yes=['finalizar','quiero finalizar el pedido','ya quiero finalizar','finalicemos','terminar el pedido','ya terminamos','vamos a finalizar','para finalizar','ya podemos finalizar','ya acabamos','ya está todo','ya pedimos todo','jajaja no sé ya finaliza el pedido','finalizar el pedido oye qué vas a pedir tú','ya finaliza que ya nos vamos','oye ya finalizamos o qué','sería todo gracias finaliza','ya, finalízame el pedido','mándalo a la cocina que ya nos vamos','cerremos el pedido'];
+  const no=['no finalices todavía','todavía no termino','espera antes de finalizar','no, todavía no es todo','me falta pedir algo, no finalices','aún no','ya quiero pedir','qué trae el combo','quiero un cuarto','no lo envíes','después finalizamos'];
+  for(const t of yes)assert.equal(finishIntent(soundsLike(t,menu)),true,t);
+  for(const t of no)assert.equal(finishIntent(soundsLike(t,menu)),false,t);
+  assert.equal(soundsLike('vamos a querer dos cuartos',menu),'vamos a querer dos cuartos','«vamos» no se corrige a «vasos»');
+  // Si la IA no responde y ya hay pedido, Milo pregunta si sigue o cierra; no abre el menú.
+  const old=process.env.GROQ_API_KEY;process.env.GROQ_API_KEY='test';
+  try{const r=await interpret({transcript:'bla bla algo que no se entiende ñaño',cart:[{id:'cuarto',qty:1,notes:[]}]},{fetchImpl:async()=>new Response('caído',{status:500})});
+    assert.equal(r.intent,'clarify');assert.equal(r.source,'fallback');assert.match(r.reply,/cerramos el pedido/);}
+  finally{if(old)process.env.GROQ_API_KEY=old;else delete process.env.GROQ_API_KEY;}
+});
