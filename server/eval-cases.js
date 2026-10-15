@@ -66,5 +66,13 @@ export const cases=[
   {id:'sin-verduras',say:'sin nada de verduras',cart:[line('cuarto')],lastId:'cuarto',expect:r=>r.intent==='edit'&&r.operations.some(o=>o.type==='note'&&['sin ensalada','sin lechuga','sin tomate','sin cebolla'].includes(o.note))},
   {id:'con-todo-menos',say:'con todo menos la cebolla',cart:[line('combo-personal')],lastId:'combo-personal',expect:has('note','combo-personal',{note:'sin cebolla'})},
   {id:'sin-picante',say:'que no pique',cart:[line('medio')],lastId:'medio',expect:any(has('note','medio',{note:'sin ají'}),all(r=>r.intent==='clarify',helpful))},
+  // Habla de la calle que llega a la IA.
+  {id:'colita-heladita',say:'una colita bien heladita',expect:all(noAdd,helpful)},
+  {id:'que-hay-pa-comer',say:'oe ñaño, qué hay pa comer',expect:all(noAdd,helpful)},
+  {id:'pollito-entero',say:'jefe, mándese un pollito entero',expect:add('entero',1)},
+  {id:'algo-bacan-para-dos',say:'algo pa los dos que esté bacán',expect:all(noAdd,r=>['recommend','menu','clarify'].includes(r.intent))},
+  {id:'no-sea-pollo',say:'dame algo que no sea pollo',expect:all(noAdd,helpful)},
+  {id:'que-tal-alitas',say:'qué tal está el combo de alitas',expect:noAdd},
+  {id:'el-de-siempre',say:'lo de siempre ñaño',expect:all(noAdd,helpful)},
   {id:'autocorreccion',say:'un cuarto, no, mejor medio',expect:all(add('medio',1),r=>!add('cuarto')(r))},
 ];

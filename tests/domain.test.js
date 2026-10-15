@@ -75,14 +75,14 @@ test('frases de cierre: gracias, eso es todo, mándalo a la cocina',()=>{
   for(const t of ['no','no gracias','no, todavía no','no, espera','quiero un cuarto','sin cebolla','gracias, pero agrega papas','eso no','ya no quiero cola','mejor un medio','qué trae el combo'])assert.equal(isFinish(t),false,t);
 });
 
-test('bebida: con hielo, sin hielo o solo la botella',()=>{
-  const cases={'con hielo':'en vaso con hielo','sin hielo, por favor':'en vaso sin hielo','al clima':'en vaso sin hielo','solo la botella':'solo la botella','la botella nomás':'solo la botella','botella con el vaso':'vaso','no':null};
+test('bebida: en botella, con hielo o sin hielo (solo si el cliente lo dice)',()=>{
+  const cases={'con hielo':'con hielo','sin hielo, por favor':'sin hielo','al clima':'sin hielo','solo la botella':'en botella','quiero la coca en botella':'en botella','un vaso':null,'no':null};
   for(const [t,v] of Object.entries(cases))assert.equal(serveFor(t),v,t);
 });
 test('una bebida con su forma de servir se anota sin confundir el hielo con un ingrediente',()=>{
   const r=interpretLocal('una pepsi sin hielo',[],menu);assert.equal(r.intent,'edit');assert.deepEqual(r.operations,[{type:'add',id:'pepsi',qty:1}]);
-  const cart=applyOperations(applyOperations([],[{type:'add',id:'pepsi',qty:1},{type:'note',id:'pepsi',note:'en vaso con hielo'}],menu),[{type:'note',id:'pepsi',note:'solo la botella'}],menu);
-  assert.deepEqual(cart[0].notes,['solo la botella'],'una sola forma de servir');
+  const cart=applyOperations(applyOperations([],[{type:'add',id:'pepsi',qty:1},{type:'note',id:'pepsi',note:'con hielo'}],menu),[{type:'note',id:'pepsi',note:'en botella'}],menu);
+  assert.deepEqual(cart[0].notes,['en botella'],'una sola forma de servir');
   assert.equal(interpretLocal('medio pollo',[],menu).operations[0].id,'medio','solo el nombre es un pedido');
 });
 

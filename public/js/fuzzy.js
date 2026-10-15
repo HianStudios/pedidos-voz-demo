@@ -9,7 +9,8 @@ const base=['platos','plato','combos','combo','bebidas','bebida','extras','extra
 const keep=new Set(['uno','una','dos','tres','cuatro','cinco','seis','siete','ocho','nueve','diez','once','doce','cuanto','cuantos','cuantas','cuesta','cuestan',
   'para','pero','como','todo','toda','nada','algo','solo','sola','mejor','puedo','tengo','tiene','tienen','ahora','luego','bueno','buena','claro','gracias','favor',
   'plata','cosa','cosas','casa','mesa','mesas','media','medios','medias','modo','mismo','misma','quien','queso','quiere','quieres','dime','dale','pues','entonces',
-  'cerrar','cierra','cerramos','listo','lista','ligero','pesado','hambre','llenar','llenarme','pato','gato','colas','copa','pala','sala','salsa','sopa','papa']);
+  'cerrar','cierra','cerramos','listo','lista','ligero','pesado','hambre','llenar','llenarme','pato','gato','colas','copa','pala','sala','salsa','sopa','papa',
+  'fria','frias','frio','frios','vamos','vemos','vaya','vayan','vamo','varios','vacio','helada','heladas','fresca','frescas','bien','tenaz','full','bacan','chevere']);
 function distance(a,b){
   if(Math.abs(a.length-b.length)>2)return 3;
   const d=Array.from({length:a.length+1},(_,i)=>[i,...Array(b.length).fill(0)]);for(let j=1;j<=b.length;j++)d[0][j]=j;

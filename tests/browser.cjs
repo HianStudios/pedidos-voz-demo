@@ -48,6 +48,16 @@ const assert=require('node:assert/strict');const fs=require('node:fs');
  assert.equal(await page.locator('#detailChips [aria-pressed="true"]').count(),2);await page.screenshot({path:'test-results/ficha-desktop.png'});
  await page.evaluate(()=>window.__miloInput('agrégalo'));await page.locator('#detailSheet[open]').waitFor({state:'hidden'});
  assert.equal(Number(await page.locator('#cartCount').textContent()),cartBefore+1);assert.match(await page.locator('#reply').textContent(),/sin cebolla y sin tomate/);
+ // Lo que está en pantalla: «¿y qué trae?» sin nombrarlo, «cierra» no agrega, y con varias tarjetas pregunta cuál.
+ const screenBefore=Number(await page.locator('#cartCount').textContent());
+ await page.evaluate(()=>window.__miloInput('qué es lo que más sale'));await page.locator('.dish[data-product="combo-personal"]').waitFor();
+ await page.evaluate(()=>window.__miloInput('y qué trae'));await page.locator('#detailSheet[open]').waitFor();assert.match(await page.locator('#detailName').textContent(),/Combo personal/);
+ await page.evaluate(()=>window.__miloInput('cierra'));await page.locator('#detailSheet[open]').waitFor({state:'hidden'});assert.equal(Number(await page.locator('#cartCount').textContent()),screenBefore,'cerrar la ficha no agrega');
+ await page.evaluate(()=>window.__miloInput('oe ñaño, muéstrame los combos'));await page.locator('.dish[data-product="combo-familiar"]').waitFor();
+ await page.evaluate(()=>window.__miloInput('qué trae'));assert.match(await page.locator('#reply').textContent(),/De cuál/);
+ await page.evaluate(()=>window.__miloInput('el familiar'));await page.locator('#detailSheet[open]').waitFor();assert.match(await page.locator('#detailName').textContent(),/Combo familiar/);
+ await page.evaluate(()=>window.__miloInput('cierra'));await page.locator('#detailSheet[open]').waitFor({state:'hidden'});assert.equal(Number(await page.locator('#cartCount').textContent()),screenBefore);
+ await page.locator('[data-close="optionsModal"]').click().catch(()=>{});
  // Panel: el pedido y su calificación aparecen.
  const admin=await ctx.newPage();admin.on('pageerror',e=>errors.push(e.message));await admin.goto('http://localhost:3000/admin.html');await admin.locator('#dashboard:not([hidden])').waitFor();
  assert.equal(await admin.locator('#kpiOrders').textContent(),'1');assert.match(await admin.locator('#kpiRating').textContent(),/4,5/);assert.ok(await admin.locator('[data-chart="food"] .hbar').count()>=2);
@@ -59,11 +69,12 @@ const assert=require('node:assert/strict');const fs=require('node:fs');
  await page.bringToFront();await page.mouse.move(corner.x+20,corner.y+20);await page.mouse.down();await page.waitForTimeout(3200);await page.mouse.up();
  await page.locator('#pinPad[open]').waitFor();for(const k of '1234')await page.locator(`#pinPad [data-key="${k}"]`).click();await page.locator('#pinPad [data-key="ok"]').click();await page.waitForFunction(()=>!document.body.classList.contains('kiosk'));
 // Servicio de mesa: pedir servilletas y la cuenta llega a caja como aviso.
- await page.evaluate(()=>window.__miloInput('tráeme servilletas'));assert.match(await page.locator('#reply').textContent(),/servilletas/);
+ const mesaBefore=Number(await page.locator('#cartCount').textContent());await page.evaluate(()=>window.__miloInput('tráeme servilletas'));assert.match(await page.locator('#reply').textContent(),/servilletas/);assert.equal(Number(await page.locator('#cartCount').textContent()),mesaBefore+1,'con pedido en curso, las servilletas van al pedido sin costo');
  await page.evaluate(()=>window.__miloInput('la cuenta por favor'));assert.match(await page.locator('#reply').textContent(),/Lo envío a cocina/,'con cosas sin enviar, primero el resumen');
  await page.evaluate(()=>window.__miloInput('sí'));await page.locator('#rateSheet[open]').waitFor();
  await page.evaluate(()=>window.__miloInput('la cuenta por favor, pago con tarjeta'));assert.match(await page.locator('#reply').textContent(),/ya pedí tu cuenta: son/);assert.equal(await page.locator('#rateSheet').evaluate(e=>e.open),false,'pedir la cuenta deja la calificación');
- await cash.bringToFront();await cash.locator('.alert-row[data-type="waiter"]',{hasText:'servilletas'}).waitFor();await cash.locator('.alert-row[data-type="bill"]',{hasText:'tarjeta'}).waitFor();await cash.evaluate(()=>scrollTo(0,0));await cash.screenshot({path:'test-results/caja-avisos.png',clip:{x:0,y:0,width:1280,height:420}});
+ await page.evaluate(()=>window.__miloInput('tráeme unos cubiertos'));assert.match(await page.locator('#reply').textContent(),/avisé al personal/,'ya enviado, se avisa a caja');
+ await cash.bringToFront();await cash.locator('.alert-row[data-type="waiter"]',{hasText:'cubiertos'}).waitFor();await cash.locator('.alert-row[data-type="bill"]',{hasText:'tarjeta'}).waitFor();await cash.evaluate(()=>scrollTo(0,0));await cash.screenshot({path:'test-results/caja-avisos.png',clip:{x:0,y:0,width:1280,height:420}});
  await page.bringToFront();
  // Sin mesa configurada vuelve el flujo de retiro con nombre.
  await page.goto('http://localhost:3000/?mesa=&teclado=1');await page.locator('#menuOpen:not([disabled])').waitFor();assert.equal(await page.locator('#tableChip').isHidden(),true);

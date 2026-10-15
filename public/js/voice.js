@@ -12,7 +12,7 @@ export class VoiceController{
     if(!navigator.mediaDevices?.getUserMedia){this.onError('Este navegador necesita HTTPS y permiso de micrófono. Puedes usar texto.');return;}
     this.activatePending=true;const token=++this.generation;
     try{
-      const stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}});
+      const stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true,channelCount:1,voiceIsolation:true}});
       if(token!==this.generation){stream.getTracks().forEach(t=>t.stop());return;}
       this.stream=stream;this.enabled=true;
       const Context=window.AudioContext||window.webkitAudioContext;
@@ -134,7 +134,11 @@ export class VoiceController{
   }
   recognize(kind){
     const token=this.generation;const rec=new Recognition();this.recognition=rec;rec.lang='es-EC';rec.interimResults=true;rec.continuous=false;let text='',finalText='',failed=false;
-    rec.onresult=e=>{text=Array.from(e.results).map(r=>r[0].transcript).join(' ').trim();finalText=Array.from(e.results).filter(r=>r.isFinal).map(r=>r[0].transcript).join(' ').trim();if(kind==='command')this.onText(text);};
+    let cap=null;
+    rec.onresult=e=>{
+      // Con charla alrededor el reconocedor puede no cortar nunca: 9 s después de empezar a oír, se cierra la frase.
+      if(!cap)cap=setTimeout(()=>{if(token===this.generation)try{rec.stop();}catch{}},9000);
+      text=Array.from(e.results).map(r=>r[0].transcript).join(' ').trim();finalText=Array.from(e.results).filter(r=>r.isFinal).map(r=>r[0].transcript).join(' ').trim();if(kind==='command')this.onText(text);};
     rec.onerror=e=>{
       if(token!==this.generation)return;
       if(e.error==='aborted')return;
@@ -145,7 +149,7 @@ export class VoiceController{
       else{this.nativeFailed=true;this.listen(true);}
     };
     rec.onend=()=>{
-      clearTimeout(this.timer);if(token!==this.generation||failed||!this.enabled)return;this.recognition=null;
+      clearTimeout(this.timer);clearTimeout(cap);if(token!==this.generation||failed||!this.enabled)return;this.recognition=null;
       // Chrome/Edge a veces cierran sin marcar el resultado como final («cinco», y sobre todo un «sí» corto).
       // Al cerrarse el reconocedor el cliente ya terminó de hablar, así que se acepta lo oído; antes se
       // descartaba el «sí» provisional y Milo se quedaba esperando frente al resumen.
@@ -176,13 +180,18 @@ export class VoiceController{
     recorder.start();
     // Detección de voz adaptada al ruido del lugar: se mide el ambiente unos instantes (después del tono)
     // y se exige voz por encima de ese nivel durante 2 lecturas seguidas.
-    let noise=0,samples=0,loud=0,threshold=.018;
+    // Con más gente hablando en la mesa: quien habla al dispositivo suena más fuerte que el resto, así que
+    // cuando su voz baja a menos de un tercio de su volumen máximo cuenta como silencio aunque otros sigan
+    // conversando; y una frase nunca se graba más de 9 s, para no mezclar la charla de la mesa.
+    let noise=0,samples=0,loud=0,threshold=.018,peak=0,voiceStart=0;
     this.vad=setInterval(()=>{
       if(token!==this.generation)return;const now=Date.now(),rms=this.rms||0,age=now-started;
       if(age<250)return;
       if(age<600&&!hadVoice){noise+=rms;samples++;threshold=Math.min(.06,Math.max(.012,(noise/samples)*2.5));return;}
-      if(rms>threshold){if(++loud>=2){hadVoice=true;lastVoice=now;}}else loud=0;
-      if((hadVoice&&now-lastVoice>1000)||(!hadVoice&&age>8000&&this.analyser)){if(recorder.state==='recording')recorder.stop();}
+      const floor=hadVoice?Math.max(threshold,peak*.33):threshold;
+      if(rms>floor){if(++loud>=2){if(!hadVoice)voiceStart=now;hadVoice=true;lastVoice=now;}}else loud=0;
+      if(hadVoice)peak=Math.max(peak*.997,rms);
+      if((hadVoice&&(now-lastVoice>900||now-voiceStart>9000))||(!hadVoice&&age>8000&&this.analyser)){if(recorder.state==='recording')recorder.stop();}
     },100);
     this.timer=setTimeout(()=>{if(token===this.generation&&recorder.state==='recording')recorder.stop();},25000);
   }

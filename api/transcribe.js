@@ -17,7 +17,11 @@ export default endpoint(async(req,res)=>{
   try{
     const response=await fetch('https://api.groq.com/openai/v1/audio/transcriptions',{method:'POST',headers:{Authorization:`Bearer ${process.env.GROQ_API_KEY}`},body:outgoing,signal:AbortSignal.timeout(20000)});
     if(!response.ok)throw new Error('Provider failed');const result=await response.json();
-    const text=String(result.text||'').trim();
+    // Varias voces en la mesa: los tramos que Whisper oyó con poca confianza (otra persona lejos, ruido) o que
+    // parecen inventados se descartan; si no queda ninguno, se usa el texto completo.
+    const segs=Array.isArray(result.segments)?result.segments:[];
+    const clear=segs.filter(s=>!(s.no_speech_prob>.6&&s.avg_logprob<-.7)&&!(s.avg_logprob<-1.1)&&!(s.compression_ratio>2.4));
+    const text=String(segs.length>1&&clear.length&&clear.length<segs.length?clear.map(s=>s.text).join(' '):result.text||'').replace(/\s+/g,' ').trim();
     // Respuestas cortas («Sí.», «Sí, gracias.», «Cinco.») suelen venir con no_speech_prob alto aunque sí se dijeron;
     // descartarlas dejaba a Milo esperando frente al resumen. El micrófono ya comprobó que hubo voz.
     // «Gracias.» sola no entra: es lo que Whisper más inventa con ruido, y frente al resumen enviaría el pedido.

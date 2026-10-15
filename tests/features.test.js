@@ -54,7 +54,7 @@ test('«¿qué trae…?» abre la ficha sin agregar nada',()=>{
   const r=interpretLocal('qué trae el combo personal',[],menu);assert.equal(r.intent,'detail');assert.deepEqual(r.suggest_ids,['combo-personal']);assert.deepEqual(r.operations,[]);
   assert.equal(interpretLocal('qué contiene',[{id:'pechuga',qty:1,notes:[]}],menu,'pechuga').suggest_ids[0],'pechuga');
   assert.match(interpretLocal('cuánto cuesta el cuarto de pollo',[],menu).reply,/4,50/);
-  for(const p of menu.filter(p=>p.category!=='Bebidas'))assert.ok(p.ingredients?.length,`${p.id} tiene ingredientes`);
+  for(const p of menu.filter(p=>!['Bebidas','Mesa'].includes(p.category)))assert.ok(p.ingredients?.length,`${p.id} tiene ingredientes`);
 });
 test('una pregunta sin signos («el combo trae ensalada») no agrega nada',()=>{
   for(const said of ['el combo familiar trae ensalada','la pechuga lleva cebolla','el combo personal tiene gaseosa']){const r=interpretLocal(said,[],menu);assert.equal(r.intent,'detail',said);assert.deepEqual(r.operations,[],said);}

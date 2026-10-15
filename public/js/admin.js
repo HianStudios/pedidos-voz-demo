@@ -34,7 +34,7 @@ function render(){
   const units=new Map();for(const o of list)for(const l of o.items)units.set(l.id,{name:l.name,qty:(units.get(l.id)?.qty||0)+l.qty});
   const category=id=>menu.find(p=>p.id===id)?.category;
   const ranked=[...units.entries()].map(([id,v])=>({id,label:v.name,value:v.qty})).sort((a,b)=>b.value-a.value);
-  bars(chart('food'),ranked.filter(r=>category(r.id)!=='Bebidas').slice(0,8),{unit:' u.'});
+  bars(chart('food'),ranked.filter(r=>!['Bebidas','Mesa'].includes(category(r.id))).slice(0,8),{unit:' u.'});
   bars(chart('drinks'),ranked.filter(r=>category(r.id)==='Bebidas').slice(0,6),{unit:' u.'});
   const hours=Array.from({length:24},(_,h)=>({label:`${String(h).padStart(2,'0')}:00`,short:String(h),value:list.filter(o=>new Date(o.createdAt).getHours()===h).length}));
   // Horario base 11:00–22:00, ampliado si hubo pedidos fuera de él.
