@@ -126,3 +126,13 @@ El campo `id` del restaurante separa claves de almacenamiento en Redis; no se ac
 - `prompts/Milo_Prompt_Maestro_Mesero_Voz.md`: personalidad de Milo (en uso).
 
 Prueba de navegador: con `npm run dev` en marcha, `CODEX_PRIMARY_RUNTIME_NODE_MODULES=<ruta a node_modules con playwright> node tests/browser.cjs`.
+
+### Memoria de aclaraciones durante una orden
+
+El carrito conserva los productos ya anotados. Un contexto independiente (`memory`) guarda la solicitud que sigue pendiente y la pregunta de Milo; ambos se guardan en el borrador del navegador. Una respuesta corta a esa pregunta vuelve al intérprete con el carrito y ese contexto, aunque se haya recargado la página. No pasa por los atajos de confirmación del resumen.
+
+El modelo puede devolver `intent: edit` con los productos inequívocos y `awaiting` con la duda restante. Al resolverla debe devolver `awaiting: null` y operaciones solo sobre lo que falta. La interfaz no ofrece extras ni permite enviar mientras quede una aclaración. El contexto se limpia al enviar correctamente o confirmar la cancelación. Se limita a la frase original y las siete intervenciones recientes de esa aclaración (1.200 caracteres por frase); no es memoria de visitas anteriores ni un historial ilimitado.
+
+Las instrucciones incluyen pedidos directos, cantidades diferentes, errores de transcripción y alternativas del catálogo que requieren aceptación. Esto es contexto e instrucciones de inferencia, no fine-tuning ni entrenamiento de pesos. El proveedor y los modelos configurados siguen siendo los actuales de Groq; no se añade un proveedor denominado «boost».
+
+Validación: `npm test`, `npm run build`. Con Playwright disponible y el servidor local iniciado, `node tests/order-memory.browser.cjs` comprueba aclaración, recarga, cantidades y envío. Las pruebas de IA usan respuestas controladas; el comportamiento del proveedor real y el audio requieren una prueba con la configuración del despliegue.
