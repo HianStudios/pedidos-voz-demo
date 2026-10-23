@@ -76,7 +76,7 @@ export function validateResult(result,cart,menu){
   if(result.intent==='recommend'&&Array.isArray(result.proposal)&&result.proposal.length){
     try{if(result.proposal.every(o=>o?.type==='add')){applyOperations(cart,result.proposal,menu);proposal=result.proposal.map(o=>({type:'add',id:o.id,qty:o.qty}));}}catch{}
   }
-  return {intent:result.intent,reply:result.reply,operations,suggest_ids:ids,...(category?{category}:{}),...(proposal?{proposal}:{})};
+  return {intent:result.intent,reply:result.reply,operations,suggest_ids:ids,...(typeof result.awaiting==='string'&&result.awaiting.trim()?{awaiting:result.awaiting.slice(0,600)}:result.awaiting===null?{awaiting:null}:{}),...(category?{category}:{}),...(proposal?{proposal}:{})};
 }
 // Notas válidas de un producto: ingredientes que se quitan («sin cebolla») y cómo se sirve una bebida.
 export const allowedNotes=p=>[...(p?.options||[]),...(p?.serve||[])];
@@ -157,7 +157,7 @@ export function repairResult(raw,menu){
   if(intent==='edit'&&!operations.length)intent='clarify';
   const suggest_ids=(Array.isArray(r.suggest_ids)?r.suggest_ids:[]).filter(id=>menu.some(p=>p.id===id&&p.available)).slice(0,10);
   const proposal=intent==='recommend'&&Array.isArray(r.proposal)?r.proposal.filter(o=>o&&typeof o==='object').map(o=>({type:'add',id:o.id??o.product_id,qty:Number(o.qty??o.quantity??1)})):null;
-  return {intent,reply,operations,suggest_ids,...(r.category?{category:r.category}:{}),...(proposal?.length?{proposal}:{})};
+  return {intent,reply,operations,suggest_ids,...(typeof r.awaiting==='string'&&r.awaiting.trim()?{awaiting:r.awaiting.slice(0,600)}:['edit','keep','cancel'].includes(intent)?{awaiting:null}:{}),...(r.category?{category:r.category}:{}),...(proposal?.length?{proposal}:{})};
 }
 const numbers={un:1,una:1,uno:1,dos:2,tres:3,cuatro:4,cinco:5,seis:6,siete:7,ocho:8,nueve:9,diez:10,once:11,doce:12};
 // Respuesta a «¿Para cuántos es?»: «cinco», «para cinco», «somos 5 personas», «solo yo».
@@ -354,6 +354,8 @@ export function interpretLocal(text,cart,menu,lastId=null,context={}){
   // «¿Qué trae el combo personal?» → ficha con ingredientes (no agrega nada).
   // También sin signos de pregunta: «el combo familiar trae ensalada», «la pechuga lleva cebolla».
   const asksContents=/\b(que (?:contiene|trae|tiene|lleva|incluye|viene con)|ingredientes|de que es|con que viene|como viene|que tiene adentro)\b/.test(n)||(hits.length>0&&/^(?:(?:el|la|los|las|y|oye|una pregunta)\s+)*[^,]*\b(trae|lleva|tiene|incluye|viene con)\b/.test(n)&&!/\b(traeme|traenos|dame|quiero|ponme|agrega|sin)\b/.test(n));
+  // Una petición mixta no se reduce a la ficha del primer producto.
+  if(asksContents&&hits.length>1&&/^(?:quiero|dame|ponme|dos|tres|cuatro|cinco|\d+)\b/.test(n))return null;
   if(asksContents&&!/\b(cuanto|precio|cuesta)\b/.test(n)){
     const ids=[...new Set(hits.map(h=>h.id))];
     // «El combo familiar trae ensalada»: se pregunta por lo primero que se nombra. «¿Y qué trae?» sin nombrar

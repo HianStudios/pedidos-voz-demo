@@ -1,3 +1,4 @@
+import {readMemory} from './order-memory.js';
 import {money,total,validateCart,applyOperations,isConfirmation,isFinish,finishIntent,normalize,describeOps,followUp,amount,parsePeople,suggestForPeople,soundsLike,parseRating,removalsFor,serveFor} from './domain.js';
 import {navigation,plausibleName,cartSignature} from './conversation.js';
 import {foodArt} from './art.js';
@@ -18,7 +19,7 @@ function readTable(){
 }
 const table=readTable();
 let menu=[],restaurant,mode='demo',cart=[],history=[],busy=false,epoch=0,request=null,lastId=null,
- customerName='',pending=null,sending=false,sessionActive=false,awaitingName=false,reviewed=null,
+ customerName='',memory=null,pending=null,sending=false,sessionActive=false,awaitingName=false,reviewed=null,
  category=null,awaitingCancel=false,drinkOffered=false,spotTimers=[],idleTimer=0,
  asked=null,proposal=null, // pregunta pendiente de Milo y propuesta que espera un «sí»
  choices=null, // opciones que Milo acaba de ofrecer («el primero», «la segunda»)
@@ -26,7 +27,7 @@ let menu=[],restaurant,mode='demo',cart=[],history=[],busy=false,epoch=0,request
  detail=null, // ficha abierta: {id, notes:Set}
  upsold=false,roundNote=false,kiosk=null,
  onScreen=[],mentioned=null; // tarjetas en pantalla y el último producto que Milo nombró // sugerencia de acompañante (una vez), aviso de pedido aparte, avisos a caja
-function saveDraft(){try{localStorage.setItem(storageKey,JSON.stringify({cart,pending,customer:customerName}));}catch{}}
+function saveDraft(){try{localStorage.setItem(storageKey,JSON.stringify({cart,pending,memory,customer:customerName}));}catch{}}
 let toastTimer;
 function toast(text){$('toast').textContent=text;$('toast').classList.add('visible');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').classList.remove('visible'),4500);}
 const states={off:'Listo para ayudarte',waiting:'Toca a Milo para seguir',listening:'Te escucho',transcribing:'Entendiendo',thinking:'Pensando',speaking:'Milo habla',sending:'Enviando a cocina'};
@@ -148,6 +149,7 @@ function renderSummary(){
 }
 let reviewTurn=0;
 function review(){
+ if(memory){reply(`Antes de enviar falta aclarar una parte: ${memory.question}`);return;}
  if($('optionsModal').open)$('optionsModal').close();
  if(!cart.length){reply('Todavía no has pedido nada. ¿Qué se te antoja?');return;}
  renderSummary();if(!$('summaryModal').open)$('summaryModal').showModal();
@@ -224,7 +226,8 @@ async function handleInput(raw){
  const said=raw;raw=soundsLike(said,menu);
  activity();interrupt();const turn=epoch;voice.state('thinking');$('transcript').textContent=`«${said}»`;$('voiceHelp').textContent='';history.push({role:'user',content:said});const n=raw;
  if(pending){if(isConfirmation(raw))return submit();reply('Hay un envío pendiente de comprobar. Reintenta el mismo pedido desde el resumen.');return;}
- if(awaitingCancel){awaitingCancel=false;if(isConfirmation(raw)){setCart([]);drinkOffered=false;closeModals();reply('Listo, empezamos de cero. ¿Qué se te antoja?');return;}if(/^(no|no gracias)$/.test(n)){reply('Perfecto, lo dejo como está.');return;}}
+ if(awaitingCancel){awaitingCancel=false;if(isConfirmation(raw)){memory=null;history=[];setCart([]);drinkOffered=false;closeModals();reply('Listo, empezamos de cero. ¿Qué se te antoja?');return;}if(/^(no|no gracias)$/.test(n)){reply('Perfecto, lo dejo como está.');return;}}
+ if(memory)return matchInput(said,turn);
  // Ficha abierta: quitar/poner ingredientes por voz, «agrégalo» para anotarlo, cualquier otra cosa la cierra.
  if(detail&&$('detailSheet').open){
   const p=menu.find(x=>x.id===detail.id);const {remove,restore}=removalsFor(said,p);
@@ -317,14 +320,18 @@ async function handleInput(raw){
  const explicit=said.match(/^(?:me llamo|mi nombre es|a nombre de)\s+(.{2,60})$/i);
  if(!table&&((explicit&&plausibleName(explicit[1]))||(awaitingName&&plausibleName(said)))){customerName=(explicit?explicit[1]:said).trim();awaitingName=false;saveDraft();review();return;}
  if(/^(no quiero bebida|sin bebida|no deseo bebida|no gracias)$/.test(n)){reviewed=null;awaitingName=false;drinkOffered=true;reply('Sin bebida, entonces. ¿Algo más, o cerramos el pedido?');return;}
+ return matchInput(said,turn);
+}
+async function matchInput(said,turn){
  reviewed=null;awaitingName=false;busy=true;$('sendText').disabled=true;request=new AbortController();
  try{
-  const res=await fetch('/api/match',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({transcript:said,cart,lastId,category,table,drinkOffered,focus:focusId(),shown:$('optionsModal').open?onScreen:[],history:history.slice(0,-1).slice(-6)}),signal:AbortSignal.any([request.signal,AbortSignal.timeout(22000)])});
+  const res=await fetch('/api/match',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({transcript:said,cart,memory,lastId,category,table,drinkOffered,focus:focusId(),shown:$('optionsModal').open?onScreen:[],history:history.slice(0,-1).slice(-6)}),signal:AbortSignal.any([request.signal,AbortSignal.timeout(22000)])});
   const result=await res.json();if(turn!==epoch)return;if(!res.ok)throw new Error(result.error||'No pude entender.');
+  memory=readMemory(result.memory);saveDraft();
   if(result.intent==='edit'){
    setCart(applyOperations(cart,result.operations,menu));lastId=result.operations.at(-1)?.id;
    if($('summaryModal').open)renderSummary();
-   reply(upsellStep(result.operations,serveStep(result.operations,said,result.reply||'Listo. ¿Algo más, o cerramos el pedido?')));
+   reply(memory?result.reply:upsellStep(result.operations,serveStep(result.operations,said,result.reply||'Listo. ¿Algo más, o cerramos el pedido?')));
   }else if(result.intent==='menu'&&result.source==='fallback'&&$('optionsModal').open){reply(result.reply.replace(/Te muestro el menú: |Aquí tienes el menú, /,''));
   }else if(result.intent==='menu'){
    // Categoría concreta: siempre la presentación completa (nombra todo y sincroniza el foco de las tarjetas).
@@ -341,11 +348,12 @@ async function handleInput(raw){
   else if(result.intent==='cancel'){awaitingCancel=true;reply('¿Borro todo el pedido y empezamos de cero?');}
   else if(result.intent==='goodbye'&&!cart.length){await reply(result.reply||'¡Gracias! Aquí estaré.','wait');sessionActive=false;voice.disable();}
   else reply(result.reply||'¿Qué te provoca?');
- }catch(e){if(turn===epoch)reply(e.name==='TimeoutError'?'Me tardé demasiado. Tu pedido sigue igual; dímelo otra vez, por favor.':e.message);}
+ }catch(e){if(turn===epoch){memory=readMemory(memory)||{turns:[said],question:'No pude procesar tu última petición. ¿La retomamos?'};saveDraft();}if(turn===epoch)reply(e.name==='TimeoutError'?'Me tardé demasiado. Tu pedido sigue igual; dímelo otra vez, por favor.':e.message);}
  finally{if(turn===epoch){busy=false;$('sendText').disabled=false;}}
 }
 async function submit(){
  if(sending||!cart.length||!customerName)return;
+ if(memory){review();return;}
  if(!pending&&reviewed!==cartSignature(cart,customerName)){review();return;}
  closeModals();voice.pause();sending=true;voice.state('sending');
  pending=pending||{key:crypto.randomUUID(),items:structuredClone(cart),customer:customerName,...(table?{table}:{}),confirmed:true};saveDraft();
@@ -356,7 +364,7 @@ async function submit(){
    if(!order){order={id:pending.key,number:pending.key.slice(0,6).toUpperCase(),items:pending.items.map(l=>({...l,name:menu.find(p=>p.id===l.id).name,price:menu.find(p=>p.id===l.id).price})),total:total(pending.items,menu),customer:pending.customer,...(pending.table?{table:pending.table}:{}),fulfillment:pending.table?'mesa':'retiro',status:'nuevo',createdAt:new Date().toISOString()};saveOrders([order,...orders].slice(0,200));}
   }else{const res=await fetch('/api/orders',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(pending),signal:AbortSignal.timeout(15000)});const data=await res.json();if(!res.ok)throw new Error(data.error);order=data.order;}
   const t=tab();saveTab({orders:[...(t.billed?[]:t.orders),order.id].slice(-10),billed:false});
-  pending=null;customerName='';setCart([]);lastId=null;mentioned=null;awaitingName=false;drinkOffered=false;upsold=false;roundNote=false;history=[];
+  pending=null;memory=null;customerName='';setCart([]);lastId=null;mentioned=null;awaitingName=false;drinkOffered=false;upsold=false;roundNote=false;history=[];
   toast(`Pedido ${mode==='demo'?'de prueba ':''}#${order.number} registrado`);
   const done=mode==='demo'?'Listo, tu pedido de prueba quedó registrado.':order.table?'¡Listo! Tu pedido ya está en cocina. ¡Buen provecho!':`¡Listo, ${order.customer}! Tu pedido es el número ${order.number}.`;
   startRating(order);await reply(`${done} ¿Qué te pareció mi atención? Dime de una a cinco estrellas.`,'listen');
@@ -440,7 +448,7 @@ async function init(){
  // Sin teclado para el cliente: solo voz. «?teclado=1» lo habilita para el personal y las pruebas.
  if(/[?&]teclado=1\b/.test(location.search)){window.__miloInput=handleInput;$('keyboardOpen').hidden=false;document.querySelectorAll('.inline-chat[data-typing]').forEach(f=>f.hidden=false);}
  try{const res=await fetch('/api/menu');const data=await res.json();if(!res.ok)throw new Error(data.error);({menu,restaurant,mode}=data);voice.greeting=restaurant.greeting;voice.neural=data.voice==='neural';
- voice.preferRecorder=data.aiAvailable&&/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)&&!/[?&]voz=nativa\b/.test(location.search);const saved=readStore(storageKey,{});try{cart=validateCart(saved.cart||[],menu);pending=saved.pending||null;}catch{cart=[];pending=null;}customerName=saved.customer||'';setCart(cart);$('menuOpen').disabled=false;}
+ voice.preferRecorder=data.aiAvailable&&/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)&&!/[?&]voz=nativa\b/.test(location.search);const saved=readStore(storageKey,{});try{cart=validateCart(saved.cart||[],menu);pending=saved.pending||null;memory=readMemory(saved.memory);}catch{cart=[];pending=null;}customerName=saved.customer||'';setCart(cart);$('menuOpen').disabled=false;}
  catch{$('reply').textContent='No pude cargar el menú. Recarga la página.';$('mascot').disabled=true;}
 }
 init();
