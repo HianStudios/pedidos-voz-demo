@@ -21,7 +21,36 @@
       <article class="chart-card" data-chart="tables"><header><h2>Pedidos por mesa</h2><p>Mesas con más pedidos</p></header><div class="chart"></div></article>
       <article class="chart-card wide"><header><h2>Lo que dijeron</h2><p>Últimas calificaciones con sus palabras</p></header><ul class="voices" id="voices"></ul></article>
     </div>
+    <!-- Menú: lo que el dueño cambia sin tocar código -->
+    <section class="menu-editor" id="menuEditor" aria-labelledby="menuTitle">
+      <header class="menu-editor-head"><div><h2 id="menuTitle">Tu menú</h2><p class="muted">Cambia platos, precios y lo que trae cada uno. Milo lo aprende en menos de un minuto.</p></div>
+        <div class="menu-editor-actions"><button class="primary-button" id="menuAdd">+ Agregar producto</button><button class="text-button" id="menuReset">Volver al menú original</button></div></header>
+      <nav class="range" id="menuTabs" aria-label="Categoría"><button data-menu-tab="Platos" aria-pressed="true">Platos</button><button data-menu-tab="Combos" aria-pressed="false">Combos</button><button data-menu-tab="Extras" aria-pressed="false">Extras</button><button data-menu-tab="Bebidas" aria-pressed="false">Bebidas</button></nav>
+      <div class="menu-rows" id="menuRows"></div>
+      <p class="muted" id="menuNote" role="status"></p>
+      <div class="menu-settings">
+        <article><h3>Promoción del día</h3><p class="muted">Milo la dice al saludar y sale en el letrero del menú. Déjala vacía para quitarla.</p><div class="staff-entry"><input id="promoText" maxlength="140" placeholder="Ej.: combo familiar a $16 hasta las 6 pm"><button class="secondary-button" id="promoSave">Guardar</button></div></article>
+        <article><h3>Clave del modo kiosco</h3><p class="muted">La que usa el personal en las mesas (mantener la esquina 3 s). De 4 a 8 números.</p><div class="staff-entry"><input id="pinText" inputmode="numeric" maxlength="8" autocomplete="new-password" type="password" placeholder="Nueva clave"><button class="secondary-button" id="pinSave">Cambiar</button></div></article>
+      </div>
+    </section>
   </section>
 </main>
 <div class="chart-tip" id="tip" role="tooltip" hidden></div>
+<dialog id="productForm" class="cashier-dialog product-form" aria-labelledby="pfTitle"><form method="dialog" id="productFormBody">
+  <div class="dialog-heading"><h2 id="pfTitle">Producto</h2><button type="button" class="close-button" id="pfClose" aria-label="Cerrar">×</button></div>
+  <div class="drawer-content form-grid">
+    <label>Nombre<input id="pfName" maxlength="40" required></label>
+    <label>Categoría<select id="pfCategory"><option>Platos</option><option>Combos</option><option>Extras</option><option>Bebidas</option></select></label>
+    <label>Precio ($)<input id="pfPrice" inputmode="decimal" required></label>
+    <label>Se dice<select id="pfArticle"><option value="un">un (un cuarto de pollo)</option><option value="una">una (una pechuga)</option><option value="unos">unos</option><option value="unas">unas (unas alitas)</option></select></label>
+    <label class="span2">Descripción corta<input id="pfDesc" maxlength="160"></label>
+    <label class="span2">Qué trae <small>separado por comas</small><input id="pfIngredients" placeholder="Cuarto de pollo, papas, ensalada, ají de la casa"></label>
+    <label class="span2">Qué se le puede quitar <small>por comas, sin «sin»</small><input id="pfRemove" placeholder="papas, ensalada, cebolla, ají"></label>
+    <label class="span2">Otras formas de pedirlo <small>por comas</small><input id="pfAliases" placeholder="el personal, combo individual"></label>
+    <label>Etiqueta <small>opcional</small><input id="pfTag" maxlength="30" placeholder="El más pedido"></label>
+    <label>Perfil<select id="pfFeel"><option value="">—</option><option value="ligero">Ligero</option><option value="contundente">Contundente (para llenarse)</option></select></label>
+    <label class="check span2"><input type="checkbox" id="pfAvailable"> Disponible hoy</label>
+    <p class="form-error span2" id="pfError" role="alert"></p>
+    <div class="span2 form-actions"><button type="button" class="text-button danger" id="pfDelete">Quitar del menú</button><button class="primary-button" type="submit">Guardar</button></div>
+  </div></form></dialog>
 <script type="module" src="/public/js/admin.js"></script></body></html>

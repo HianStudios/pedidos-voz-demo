@@ -207,3 +207,10 @@ body.kiosk{user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;
   .dish{width:78vw}
 }
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+
+/* Agotado hoy (marcado en caja) */
+.dish.soldout{opacity:.55;filter:grayscale(.85)}
+.dish.soldout .tag{color:#9a4a2c}
+.soldout-note{font-size:13px;font-weight:600;color:#9a4a2c;padding:8px 14px;border-radius:999px;background:#f6e1d6}
+.menu-sign.promo{background:#fde9de;border-color:#f0b99c;color:#6b2c12}
+.menu-sign.promo .sign-icon{background:#f9cdb5}

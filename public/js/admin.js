@@ -2,6 +2,7 @@ import {money} from './domain.js';
 import {ordersKey,readStore,observeOrders} from './order-store.js';
 const $=id=>document.getElementById(id);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+import {initMenuEditor} from './menu-editor.js';
 let mode='demo',token='',orders=[],ratings={},menu=[],days=1;
 const compact=n=>n>=1000?`${(n/1000).toFixed(n>=10000?0:1).replace('.',',')} K`:String(n);
 // Barras horizontales: una serie, un color, valor en la punta; tooltip al pasar el cursor; tabla accesible.
@@ -67,8 +68,9 @@ $('refresh').addEventListener('click',()=>load().catch(err=>{$('adminInfo').text
 for(const b of document.querySelectorAll('[data-range]'))b.addEventListener('click',()=>{days=Number(b.dataset.range);document.querySelectorAll('[data-range]').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));render();});
 observeOrders(()=>{if(mode==='demo')load();});
 setInterval(()=>{if(token&&!document.hidden)load().catch(()=>{});},60000);
+const editor=initMenuEditor({getToken:()=>token,getMode:()=>mode,onLogout:m=>logout(m)});
 async function init(){
-  try{const res=await fetch('/api/menu');const data=await res.json();mode=data.mode;menu=data.menu;
+  try{const res=await fetch('/api/menu');const data=await res.json();mode=data.mode;menu=data.menu;editor.set(data);
     $('modeBadge').textContent=mode==='demo'?'Panel de prueba':'Panel conectado';
     if(mode==='demo'){$('dashboard').hidden=false;await load();}else logout('');}
   catch{$('adminInfo').textContent='No pude cargar el panel. Recarga para reintentar.';}

@@ -3,7 +3,7 @@ import {ordersKey,alertsKey,readStore,saveOrders,observeOrders} from './order-st
 import {consumeEvents} from './live-feed.js';
 const $=id=>document.getElementById(id);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-let mode='demo',token='',orders=[],filter='active',controller=null,retry=null,generation=0,delay=1000,signature='',changing=new Set();
+let cashMenu=[],mode='demo',token='',orders=[],filter='active',controller=null,retry=null,generation=0,delay=1000,signature='',changing=new Set();
 const next={nuevo:'aceptado',aceptado:'preparando',preparando:'listo',listo:'entregado'};
 const labels={aceptado:'Aceptar pedido',preparando:'Pasar a cocina',listo:'Marcar listo',entregado:'Entregar'};
 function connection(state,text){$('connection').dataset.state=state;$('connectionText').textContent=text;}
@@ -71,5 +71,20 @@ $('alerts').addEventListener('click',e=>{const id=e.target.closest('[data-dismis
 window.addEventListener('offline',()=>{stop();connection('offline','Sin conexión');});window.addEventListener('online',connect);
 document.addEventListener('visibilitychange',()=>{if(document.hidden){stop();connection('connecting','En pausa');}else connect();});
 window.addEventListener('pagehide',stop);
-async function init(){try{const res=await fetch('/api/menu');if(!res.ok)throw new Error();const data=await res.json();mode=data.mode;$('modeBadge').textContent=mode==='demo'?'Caja de prueba':'Caja compartida';$('cashierInfo').textContent=mode==='demo'?'Prueba en vivo entre pestañas de este navegador. Para otros dispositivos, configura caja compartida.':'Pedidos y estados actualizados automáticamente.';if(mode==='demo'){$('workspace').hidden=false;connect();}else logout('');}catch{connection('offline','No pude cargar caja. Recarga para reintentar.');}}
+async function init(){try{const res=await fetch('/api/menu');if(!res.ok)throw new Error();const data=await res.json();mode=data.mode;cashMenu=data.menu;renderSoldout();$('modeBadge').textContent=mode==='demo'?'Caja de prueba':'Caja compartida';$('cashierInfo').textContent=mode==='demo'?'Prueba en vivo entre pestañas de este navegador. Para otros dispositivos, configura caja compartida.':'Pedidos y estados actualizados automáticamente.';if(mode==='demo'){$('workspace').hidden=false;connect();}else logout('');}catch{connection('offline','No pude cargar caja. Recarga para reintentar.');}}
+function toast(text){const el=$('toast');el.textContent=text;el.classList.add('visible');clearTimeout(toast.t);toast.t=setTimeout(()=>el.classList.remove('visible'),2600);}
+// Agotados: un toque marca o desmarca. Necesita la caja compartida (el menú vive en el servidor).
+function renderSoldout(){
+ const items=cashMenu.filter(p=>p.category!=='Mesa');const out=items.filter(p=>!p.available);
+ $('soldoutCount').textContent=out.length?`(${out.length})`:'';
+ $('soldoutChips').innerHTML=['Platos','Combos','Extras','Bebidas'].map(cat=>{const list=items.filter(p=>p.category===cat);return list.length?`<div class="soldout-group"><span>${cat}</span>${list.map(p=>`<button data-soldout="${esc(p.id)}" aria-pressed="${!p.available}" ${mode==='demo'?'disabled':''}>${esc(p.name)}</button>`).join('')}</div>`:'';}).join('');
+ if(mode==='demo')$('soldoutError').textContent='Los agotados se guardan en la caja compartida; en la caja de prueba solo se ven.';
+}
+$('soldoutChips').addEventListener('click',async e=>{
+ const b=e.target.closest('[data-soldout]');if(!b||b.disabled)return;const id=b.dataset.soldout,p=cashMenu.find(x=>x.id===id);
+ b.disabled=true;$('soldoutError').textContent='';
+ try{const res=await fetch('/api/menu',{method:'PATCH',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify({id,available:!p.available}),signal:AbortSignal.timeout(12000)});const data=await res.json();if(res.status===401){logout();return;}if(!res.ok)throw new Error(data.error);cashMenu=data.menu;toast(`${p.name}: ${p.available?'agotado':'disponible otra vez'}`);}
+ catch(err){$('soldoutError').textContent=err.message||'No se pudo guardar.';}
+ finally{renderSoldout();}
+});
 init();

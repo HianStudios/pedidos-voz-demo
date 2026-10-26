@@ -46,6 +46,23 @@ Al enviar el pedido, Milo pregunta «¿Qué te pareció mi atención? Dime de un
 
 Cada producto tiene `ingredients` y opciones «sin X» en `server/catalog.js` (datos de prueba). Para quitar ingredientes, Milo entiende frases como «quítale la cebolla», «que no tenga lechuga ni ají», «sin cebolla, tomate» o «no le pongas ají»; con «ponle la cebolla» vuelve a ponerla. Al preguntar «¿qué trae…?», o al tocar «Qué trae» en una tarjeta, se abre una ficha con los ingredientes y botones para quitar cada uno; por voz se ajusta y con «agrégalo» se anota. Caja ve cada «sin X» en el pedido.
 
+## Menú editable, agotados y promoción
+Requiere la caja compartida (Redis). En modo demo el menú solo se ve.
+- **Panel → Tu menú:** agregar, editar o quitar platos.
+  - Se edita el precio, qué trae, qué se le puede quitar y otras formas de pedirlo («el salchi»).
+  - También la etiqueta («El más pedido») y el perfil (ligero o contundente).
+  - Milo, la mesa y caja usan los cambios en menos de un minuto.
+  - «Volver al menú original» deshace todo.
+- **Caja → Agotados hoy:** un toque marca lo que se acabó.
+  - Milo dice «Uy, hoy ya no nos quedan alitas BBQ» y ofrece otro de la misma categoría.
+  - Si en la misma frase pidieron más cosas, esas sí se anotan.
+  - La mesa ve el producto en gris.
+  - Si se acaba mientras la mesa pedía, se quita del pedido con aviso y la caja no recibe un pedido con productos agotados.
+- **Promoción del día:** Milo la dice al saludar y aparece en el letrero del menú.
+- **Clave del modo kiosco:** se cambia desde el panel y reemplaza a `KIOSK_PIN`. Solo se guarda su huella (sha256).
+- **Aviso de pedido listo:** cuando caja marca un pedido como «listo», Milo lo dice en la mesa sin que el cliente pregunte.
+- Prueba de punta a punta: `tests/menu-live.cjs`, con el servidor en modo en vivo (ver la cabecera del archivo).
+
 ## Servicio de mesa
 Milo atiende lo que un mesero resuelve aparte de la comida, sin pasar por la IA:
 - **Llamar al personal:** «tráeme servilletas», «nos faltan cubiertos», «más ají», «llama al mesero», «se me regó la cola». Llega a caja como aviso, con lo que se necesita.
