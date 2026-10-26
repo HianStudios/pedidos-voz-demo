@@ -1,6 +1,7 @@
 import {readMemory,nextMemory} from '../public/js/order-memory.js';
-import {menu} from '../server/catalog.js';
-import {validateCart,validateResult,repairResult,interpretLocal,isConfirmation,followUp,parsePeople,suggestForPeople,applyOperations,describeOps,soundsLike,normalize,serveFor,unavailableRemovals} from '../public/js/domain.js';
+import {getMenu} from '../server/menu-store.js';
+import {validateCart,validateResult,repairResult,interpretLocal,isConfirmation,followUp,parsePeople,suggestForPeople,applyOperations,describeOps,soundsLike,normalize,serveFor,unavailableRemovals,productHits} from '../public/js/domain.js';
+import {listWords} from '../public/js/speech-text.js';
 import * as style from '../server/style.js';
 import {readFileSync} from 'node:fs';
 import {endpoint,guard,json,body,rateLimit,fail} from '../server/http.js';
@@ -10,21 +11,23 @@ const system=readFileSync(new URL('../prompts/milo-sistema.md',import.meta.url),
 const persona=system.slice(system.indexOf('## Quién eres')).trim();
 const money=c=>`$${(c/100).toFixed(2).replace('.',',')}`;
 // Catálogo en líneas cortas: id | nombre | categoría | precio | descripción | opciones | alias.
-const catalog=menu.filter(p=>p.available&&p.category!=='Mesa').map(p=>{
+const catalogFor=menu=>menu.filter(p=>p.available&&p.category!=='Mesa').map(p=>{
   // Alias útiles para el sonido; se omiten los que solo agregan «un/una» o repiten el nombre.
   const name=normalize(p.name),aliases=[...new Set(p.aliases.map(normalize))].filter(a=>a!==name&&!/^(un|una|unas|unos|el|la|dame) /.test(a));
   return `${p.id} | ${p.name} | ${p.category} | ${money(p.price)} | trae: ${(p.ingredients||[p.desc]).join(', ')} | ${p.feel||'-'} | quitar: ${p.options.map(o=>o.replace(/^sin /,'')).join(', ')||'-'} | alias: ${aliases.join(', ')}`;
-}).join('\n')+`\nPara la mesa, sin costo (se anotan con add): ${menu.filter(p=>p.category==='Mesa').map(p=>p.id).join(', ')}`;
+}).join('\n')+`\nPara la mesa, sin costo (se anotan con add): ${menu.filter(p=>p.category==='Mesa').map(p=>p.id).join(', ')}`+
+  (menu.some(p=>!p.available&&p.category!=='Mesa')?`\nAGOTADO HOY (no lo anotes; dilo y ofrece otro): ${menu.filter(p=>!p.available&&p.category!=='Mesa').map(p=>p.name).join(', ')}`:'');
 const categories=['Platos','Combos','Extras','Bebidas'];
 const fallbacks=['No te capté bien. Te muestro el menú: ¿platos, combos, extras o bebidas?','Se me escapó esa parte. Aquí tienes el menú, ¿por dónde empezamos?'];
 let turn=0;
 // Interpreta una frase y luego la pule: lo que el cliente dijo de cómo servir la bebida, avisar si pidió
 // quitar algo que el plato no trae y, si hay IA, decirlo con la voz de Milo (sin cambiar ningún dato).
 export async function interpret(data,options={}){
-  const result=await understand(data,options);
-  try{enrich(result,data);}catch{}
+  const menu=await getMenu();
+  const result=await soldOut(data,options,menu)||await understand(data,options,menu);
+  try{enrich(result,data,menu);}catch{}
   if(result.source==='local'&&['edit','recommend','clarify','price','keep'].includes(result.intent)&&result.reply){
-    const styled=await style.styleReply({said:data.transcript,reply:result.reply,cart:Array.isArray(data.cart)?data.cart:[],history:data.history,fetchImpl:options.fetchImpl});
+    const styled=await style.styleReply({menu,said:data.transcript,reply:result.reply,cart:Array.isArray(data.cart)?data.cart:[],history:data.history,fetchImpl:options.fetchImpl});
     if(styled){result.base=result.reply;result.reply=styled;result.styled=true;}
     else if(options.debug&&style.styleSkip)result.styleSkip=style.styleSkip;
   }
@@ -33,7 +36,28 @@ export async function interpret(data,options={}){
 }
 const beforeQuestion=(reply,sentence)=>/¿[^¿]*\?\s*$/.test(reply)?reply.replace(/\s*(¿[^¿]*\?)\s*$/,` ${sentence} $1`):`${reply.replace(/[.!]?\s*$/,'.')} ${sentence}`;
 const article=p=>(p.one||p.name).replace(/^(un|una|unas|unos) /,a=>({'un ':'el ','una ':'la ','unas ':'las ','unos ':'los '})[a]);
-function enrich(result,data){
+// Lo que caja marcó como agotado: Milo lo dice y ofrece otro de la misma categoría; si en la misma frase
+// pidió más cosas, esas sí se anotan («un cuarto y unas alitas» con alitas agotadas → solo el cuarto).
+async function soldOut(data,options,menu){
+  if(typeof data.transcript!=='string'||!data.transcript.trim())return null;
+  const heard=soundsLike(data.transcript,menu);
+  const hits=productHits(heard,menu),sold=[...new Set(hits.filter(h=>!menu.find(p=>p.id===h.id)?.available).map(h=>h.id))].map(id=>menu.find(p=>p.id===id));
+  if(!sold.length)return null;
+  const said=p=>p.category==='Bebidas'?p.name:p.name.charAt(0).toLowerCase()+p.name.slice(1);
+  const plural=sold.length>1||/^un[ao]s /.test(sold[0].one||'')||/s$/.test(sold[0].name.split(' ')[0]);
+  const notice=`Uy, hoy ya no nos ${plural?'quedan':'queda'} ${listWords(sold.map(said))}.`;
+  const rest=hits.filter(h=>menu.find(p=>p.id===h.id)?.available);
+  if(rest.length){
+    // Se quitan de la frase los productos agotados y se entiende el resto.
+    let stripped=heard;for(const h of [...hits].filter(h=>sold.some(p=>p.id===h.id)).sort((a,b)=>b.index-a.index))stripped=stripped.slice(0,h.index)+stripped.slice(h.index+h.length);
+    const r=await understand({...data,transcript:stripped.replace(/\s+/g,' ').trim()},options,menu);
+    if(r.intent==='edit'){r.reply=`${notice} ${r.reply}`;return r;}
+  }
+  const p=sold[0],alt=menu.filter(x=>x.available&&x.category===p.category&&x.id!==p.id).sort((a,b)=>Boolean(b.tag)-Boolean(a.tag))[0];
+  if(!alt)return {intent:'clarify',reply:`${notice} ¿Te muestro qué más tenemos?`,operations:[],suggest_ids:[],source:'local'};
+  return {intent:'recommend',reply:`${notice} ¿Te pongo ${alt.one||alt.name} en su lugar?`,operations:[],suggest_ids:[alt.id],proposal:[{type:'add',id:alt.id,qty:1}],source:'local'};
+}
+function enrich(result,data,menu){
   if(result.intent!=='edit')return;
   const cart=validateCart(data.cart??[],menu);
   // «Una Coca-Cola en botella»: la forma de servir queda anotada y sale en la factura.
@@ -51,7 +75,8 @@ function enrich(result,data){
     if(missing.length)result.reply=beforeQuestion(result.reply,`Ojo: ${missing.map(x=>`${article(menu.find(p=>p.id===x.id))} no lleva ${x.ingredient}`).join(' y ')}, así que va tal cual.`);
   }
 }
-async function understand(data,{effort=process.env.GROQ_REASONING||'low',fetchImpl=fetch,debug=false}={}){
+async function understand(data,{effort=process.env.GROQ_REASONING||'low',fetchImpl=fetch,debug=false}={},menu){
+  const catalog=catalogFor(menu);
   const {transcript}=data;
   const memory=readMemory(data.memory);
   if(typeof transcript!=='string'||!transcript.trim()||transcript.length>1200)throw fail('Escribe un pedido de hasta 1200 caracteres.');

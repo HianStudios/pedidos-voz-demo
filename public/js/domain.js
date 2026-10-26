@@ -175,6 +175,7 @@ export function suggestForPeople(people,menu){
   const qty={'combo-familiar':Math.floor(people/4)},rest=people%4;
   if(rest===1)qty['combo-personal']=1;if(rest===2)qty['combo-pareja']=1;if(rest===3){qty['combo-pareja']=1;qty['combo-personal']=1;}
   const operations=Object.entries(qty).filter(([id,q])=>q>0&&menu.some(p=>p.id===id&&p.available)).map(([id,q])=>({type:'add',id,qty:q}));
+  if(!operations.length)return null;
   const items=operations.map(o=>amount(menu.find(p=>p.id===o.id),o.qty));
   const units=operations.reduce((s,o)=>s+o.qty,0);
   return {operations,reply:`Para ${people===1?'ti':numberWords(people)}, te sugiero ${listWords(items)}. ¿${units>1?'Te los anoto':'Te lo anoto'}?`};
@@ -283,6 +284,17 @@ const streetTalk=[
   [/(?:\s+(?:nomas|no mas|porfis|plis|please|porfa|por favor|rapidito|ahi|pues))+\s*$/g,''],
 ];
 export function soundsLike(text,menu){let n=normalize(text);for(const [re,to] of [...streetTalk,...soundAlikes])n=n.replace(re,to);n=n.replace(/\s+/g,' ').trim();return fixWords(n,menu);}
+// Productos nombrados en una frase ya normalizada, del alias más largo al más corto (no cuenta dos veces
+// «combo de alitas» como combo y como alitas). Devuelve [{id,index,length}] en orden de aparición.
+export function productHits(n,menu){
+  const hits=[];let remaining=n;
+  const aliases=menu.filter(p=>p.category!=='Mesa'||true).flatMap(p=>[p.name,...(p.aliases||[])].map(a=>({id:p.id,a:normalize(a).replace(/^(?:un|una|unas|unos|dos|tres) /,'')}))).filter(x=>x.a).sort((a,b)=>b.a.length-a.a.length);
+  for(const {id,a} of aliases){
+    const re=new RegExp(`(^|\\s)(${a.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')})(?=\\s|$)`,'g');
+    remaining=remaining.replace(re,(full,prefix,word,offset)=>{hits.push({id,index:offset+prefix.length,length:word.length});return ' '.repeat(full.length);});
+  }
+  return hits.sort((a,b)=>a.index-b.index);
+}
 export function interpretLocal(text,cart,menu,lastId=null,context={}){
   // Cómo se sirve la bebida («una pepsi sin hielo») lo anota la app aparte; aquí no es un ingrediente.
   let n=soundsLike(text,menu).replace(/\s*\b(?:(?:en )?vaso )?(?:con|sin) hielos?\b|\s*\b(?:(?:solo |en )?(?:la |su )?botellita|(?:solo |en )?(?:la |su )?botella|sin vaso|al clima)\b/g,'').trim();
@@ -330,8 +342,10 @@ export function interpretLocal(text,cart,menu,lastId=null,context={}){
   const light=/\b(ligero|ligerito|liviano|livianito|suave|light|sano|saludable|dieta|no tan pesado|poquito|algo pequeno|no tengo mucha hambre)\b/.test(n);
   const heavy=/\b(pesado|llenarme|llenar|llenito|contundente|bastante|harto|hambre|hambriento|muerto de hambre|algo fuerte|que llene|grande)\b/.test(n)&&!/\bno tengo mucha hambre\b/.test(n);
   if((light||heavy)&&!/\b(no|sin)\b/.test(n.replace(/no tan pesado|no tengo mucha hambre/,''))){
-    const picks=light?['pechuga','cuarto']:['medio','combo-alitas'];
-    const [a,b]=picks.map(id=>menu.find(p=>p.id===id&&p.available)).filter(Boolean);
+    // Los preferidos de la casa y, si se acabaron o el dueño cambió el menú, cualquiera con ese perfil.
+    const want=light?'ligero':'contundente',preferred=(light?['pechuga','cuarto']:['medio','combo-alitas']).map(id=>menu.find(p=>p.id===id&&p.available));
+    const byFeel=menu.filter(p=>p.available&&p.feel===want&&['Platos','Combos'].includes(p.category));
+    const [a,b]=[...new Set([...preferred,...byFeel].filter(Boolean))];
     const say=p=>p.pitch||one(p);
     if(a&&b)return answer('recommend',`${light?'Para algo ligero':'Para llenarte bien'}, ${say(a)}, o ${say(b)}. ¿Cuál te anoto?`,{suggest_ids:[a.id,b.id]});
   }

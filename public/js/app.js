@@ -108,19 +108,22 @@ function openSheet(title,html,cat=null){
 // Letrerito sobre el menú: un consejo según lo que se está viendo.
 function menuSign(cat){
  const drinks=cat==='Bebidas';
+ // La promoción del día (panel) va en el letrerito de la portada del menú.
+ if(cat==='promo'&&restaurant?.promo)return `<div class="menu-sign promo" role="note"><span class="sign-pin" aria-hidden="true"></span><span class="sign-icon" aria-hidden="true">⭐</span><p><b>Hoy:</b> ${esc(restaurant.promo)}</p></div>`;
  const text=drinks?'¿La quieres en botella, con hielo o sin hielo? Solo dímelo al pedir y queda anotado.':'Recuerda: antes de pedir, pregúntame «¿qué trae?» y te muestro sus ingredientes.';
  return `<div class="menu-sign" role="note"><span class="sign-pin" aria-hidden="true"></span><span class="sign-icon" aria-hidden="true">${drinks?'🥤':'🍗'}</span><p>${text}</p></div>`;
 }
 function showCategories(){
  category=null;onScreen=[];
- openSheet('Menú',`${menuSign()}<div class="doors">${Object.keys(categories).map((c,i)=>{const items=menu.filter(p=>p.category===c&&p.available);const hero=items.find(p=>p.tag)||items[0];return hero?`<button class="door" style="--i:${i}" data-category="${c}"><span class="art">${foodArt(hero)}</span><strong>${c}</strong><span>${items.length} opciones</span></button>`:'';}).join('')}</div>`);
+ openSheet('Menú',`${menuSign(restaurant?.promo?'promo':null)}<div class="doors">${Object.keys(categories).map((c,i)=>{const items=menu.filter(p=>p.category===c&&p.available);const hero=items.find(p=>p.tag)||items[0];return hero?`<button class="door" style="--i:${i}" data-category="${c}"><span class="art">${foodArt(hero)}</span><strong>${c}</strong><span>${items.length} opciones</span></button>`:'';}).join('')}</div>`);
 }
 function showProducts(items,title,cat=null){
  category=cat;onScreen=items.map(p=>p.id);
  if(!items.length){reply('Ahora mismo no hay productos disponibles aquí.');return;}
- openSheet(title,`${menuSign(cat||(items.every(p=>p.category==='Bebidas')?'Bebidas':null))}<div class="shelf" tabindex="0" aria-label="${esc(title)}">${items.map((p,i)=>`<article class="dish" style="--i:${i}" data-product="${p.id}"><div class="art">${foodArt(p)}</div><span class="tag">${esc(p.tag||'')}</span><h3>${esc(p.name)}</h3><p>${esc(p.desc)}</p><footer><span class="price">${money(p.price)}</span>${p.ingredients?.length>1?`<button class="info" data-detail="${p.id}">Qué trae</button>`:''}<button class="add" data-add="${p.id}" aria-label="Agregar ${esc(p.name)}">Agregar</button></footer></article>`).join('')}</div>`,cat);
+ openSheet(title,`${menuSign(cat||(items.every(p=>p.category==='Bebidas')?'Bebidas':null))}<div class="shelf" tabindex="0" aria-label="${esc(title)}">${items.map((p,i)=>`<article class="dish${p.available?'':' soldout'}" style="--i:${i}" data-product="${p.id}"><div class="art">${foodArt(p)}</div><span class="tag">${esc(p.available?p.tag||'':'Agotado hoy')}</span><h3>${esc(p.name)}</h3><p>${esc(p.desc)}</p><footer><span class="price">${money(p.price)}</span>${p.ingredients?.length>1?`<button class="info" data-detail="${p.id}">Qué trae</button>`:''}${p.available?`<button class="add" data-add="${p.id}" aria-label="Agregar ${esc(p.name)}">Agregar</button>`:'<span class="soldout-note">Agotado</span>'}</footer></article>`).join('')}</div>`,cat);
 }
-function showCategory(cat){showProducts(menu.filter(p=>p.category===cat&&p.available),cat,cat);}
+// Los agotados se ven en gris al final (así el cliente sabe que hoy no hay), pero Milo no los ofrece.
+function showCategory(cat){const items=menu.filter(p=>p.category===cat);showProducts([...items.filter(p=>p.available),...items.filter(p=>!p.available)],cat,cat);}
 const spokenName=p=>p.category==='Bebidas'?p.name:p.name.charAt(0).toLowerCase()+p.name.slice(1);
 // Presentación oral de toda la categoría, en el mismo orden que las tarjetas.
 let pitchTurn=0;
@@ -215,7 +218,8 @@ function serveStep(ops,said,text){
  return text.replace(/\.(\s|$)/,` ${how}.$1`);
 }
 function addDirect(id){
- interrupt();activity();const operations=[{type:'add',id,qty:1}];
+ interrupt();activity();
+ const sold=menu.find(x=>x.id===id&&!x.available);if(sold){reply(`Uy, hoy ya no nos queda ${sold.name.toLowerCase()}. ¿Te muestro otra opción?`);return;}const operations=[{type:'add',id,qty:1}];
  try{const before=cart;setCart(applyOperations(cart,operations,menu));lastId=id;$('modalBody').querySelector(`.dish[data-product="${id}"]`)?.classList.add('added');reply(upsellStep(operations,serveStep(operations,'',`${describeOps(operations,menu)} ${followUp(before,operations,menu,drinkOffered)}`)));}
  catch(e){reply(e.message);}
 }
@@ -448,7 +452,26 @@ async function init(){
  // Sin teclado para el cliente: solo voz. «?teclado=1» lo habilita para el personal y las pruebas.
  if(/[?&]teclado=1\b/.test(location.search)){window.__miloInput=handleInput;$('keyboardOpen').hidden=false;document.querySelectorAll('.inline-chat[data-typing]').forEach(f=>f.hidden=false);}
  try{const res=await fetch('/api/menu');const data=await res.json();if(!res.ok)throw new Error(data.error);({menu,restaurant,mode}=data);voice.greeting=restaurant.greeting;voice.neural=data.voice==='neural';
- voice.preferRecorder=data.aiAvailable&&/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)&&!/[?&]voz=nativa\b/.test(location.search);const saved=readStore(storageKey,{});try{cart=validateCart(saved.cart||[],menu);pending=saved.pending||null;memory=readMemory(saved.memory);}catch{cart=[];pending=null;}customerName=saved.customer||'';setCart(cart);$('menuOpen').disabled=false;}
+ voice.preferRecorder=data.aiAvailable&&/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)&&!/[?&]voz=nativa\b/.test(location.search);const saved=readStore(storageKey,{});try{cart=validateCart((saved.cart||[]).filter(l=>menu.find(p=>p.id===l.id)?.available),menu);pending=saved.pending||null;memory=readMemory(saved.memory);}catch{cart=[];pending=null;}customerName=saved.customer||'';setCart(cart);$('menuOpen').disabled=false;}
  catch{$('reply').textContent='No pude cargar el menú. Recarga la página.';$('mascot').disabled=true;}
 }
+// Caja puede marcar agotados y el dueño cambiar el menú: la mesa lo vuelve a leer cada minuto.
+async function refreshMenu(){
+ if(busy||sending||document.hidden)return;
+ try{const res=await fetch('/api/menu');const data=await res.json();if(!res.ok)return;menu=data.menu;restaurant=data.restaurant;voice.greeting=restaurant.greeting;
+  const kept=cart.filter(l=>menu.find(p=>p.id===l.id)?.available);
+  if(kept.length!==cart.length){const gone=cart.filter(l=>!kept.includes(l)).map(l=>menu.find(p=>p.id===l.id)?.name||l.id);setCart(kept);if($('summaryModal').open)renderSummary();toast(`Se acabó ${listWords(gone)}: lo quité de tu pedido.`);}
+ }catch{}
+}
+// Aviso sin que el cliente pregunte: cuando caja marca el pedido como listo, Milo lo dice.
+async function watchReady(){
+ if(document.hidden||!tab().orders.length)return;
+ let orders;try{orders=await tabOrders();}catch{return;}
+ const t=tab(),told=new Set(t.told||[]);const ready=orders.filter(o=>o.status==='listo'&&!told.has(o.id));
+ if(!ready.length)return;
+ if(busy||sending||['listening','speaking','thinking','transcribing'].includes(voice.mode))return; // se dice en la próxima vuelta
+ saveTab({...t,told:[...told,...ready.map(o=>o.id)].slice(-20)});
+ toast('¡Tu pedido está listo!');reply(ready.length>1?'¡Tus pedidos ya están listos! En un momento te los traen.':'¡Tu pedido ya está listo! En un momento te lo traen.','wait');
+}
+setInterval(refreshMenu,60000);setInterval(watchReady,20000);
 init();

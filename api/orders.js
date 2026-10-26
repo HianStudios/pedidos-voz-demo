@@ -1,5 +1,6 @@
 import {randomUUID,createHash} from 'node:crypto';
-import {menu,restaurant} from '../server/catalog.js';
+import {restaurant} from '../server/catalog.js';
+import {getMenu} from '../server/menu-store.js';
 import {validateCart,total} from '../public/js/domain.js';
 import {endpoint,guard,json,body,rateLimit,liveOrders,staff,getSession,redis,fail} from '../server/http.js';
 const prefix=`mesero:${restaurant.id}`;
@@ -31,7 +32,11 @@ export default endpoint(async(req,res)=>{
     return json(res,200,{order:JSON.parse(result)});
   }
   const sessionId=getSession(req);if(!sessionId)throw fail('La sesión venció. Recarga antes de enviar.',401);
-  const data=await body(req);let cart;try{cart=validateCart(data.items,menu);}catch(e){throw fail(e.message);}
+  const data=await body(req);const menu=await getMenu();
+  // Si caja marcó algo como agotado mientras la mesa pedía, se dice qué y no se envía a medias.
+  const gone=(Array.isArray(data.items)?data.items:[]).map(l=>menu.find(p=>p.id===l?.id)).filter(p=>p&&!p.available);
+  if(gone.length)throw fail(`Se acabó ${gone.map(p=>p.name).join(' y ')} mientras pedías. Quítalo del pedido o cámbialo por otro.`,409);
+  let cart;try{cart=validateCart(data.items,menu);}catch(e){throw fail(e.message);}
   if(!cart.length||data.confirmed!==true)throw fail('Revisa y confirma tu pedido antes de enviarlo.');
   if(typeof data.key!=='string'||!/^[0-9a-f-]{36}$/.test(data.key))throw fail('Identificador de envío inválido.');
   // La mesa la fija quien instala el dispositivo (?mesa=N); no es una ubicación verificada criptográficamente.
