@@ -213,6 +213,27 @@ const finishRe=new RegExp(`^${lead}(?:${done.join('|')})(?: (?:${done.join('|')}
 // No cuenta si se niega o se pospone («no finalices», «todavía no termino», «espera, antes de cerrar…»).
 const finishWord=/\b(finali[zc]\w*|termin(?:a|ar|amos|emos|alo|amelo)(?: (?:el|mi|la|nuestro) (?:pedido|orden))?|ya (?:termine|terminamos|acabamos|acabe)|cerr(?:ar|amos|emos|alo|a) (?:el |mi |la )?(?:pedido|orden|cuenta)|envi\w* (?:el |mi |la )?(?:pedido|orden)|(?:manda|envia|pasa|mande|envie)(?:lo|la|le)? (?:a|para) (?:la )?cocina|eso (?:seria|es|sera) todo|seria todo|ya (?:esta|estaria|es) todo|ya pedimos todo|eso nomas|nada mas|(?:ya|si) (?:mandalo|mandala|mandale|envialo|enviala|enviale))\b/;
 const holdOn=/\b(?:no|ni) (?:lo |la |le |me |nos |se )?(?:finali|termin|cierr|cerr|envi|mand|pas)|\b(?:todavia|aun|espera|esperate|esperame|un momento|antes de|despues|luego)\b(?:\s+\w+){0,2}\s+(?:finali|termin|cerr|envi|mand|pas)|\b(?:no|todavia no|aun no) (?:es todo|seria todo)|\btodavia no\b|\baun no\b|\b(?:falta|faltan|me falta|nos falta)\b/;
+// Respuesta a «¿Algo más, o cerramos?» o a «¿Lo envío a cocina?»: 'send' si de cualquier forma dice que ya
+// no quiere nada más («ya, sí, no quiero nada más», «te dije que sí», «no, nada más», «así nomás»), 'hold' si
+// frena o quiere cambiar algo («no, espera», «sí pero quita la coca», «me falta algo»), y null si no se sabe.
+export function closingAnswer(text){
+  let n=normalize(text);if(!n)return null;
+  // Muletillas y repeticiones: «ya te dije que sí», «o sea que sí pues», «sí sí sí».
+  n=n.replace(/\b(?:ya te dije que|te dije que|dije que|te digo que|o sea|osea|pues|eh+|este|mira|ve|oe|que)\b/g,' ').replace(/\b(si|ya|no)(?: \1\b)+/g,'$1').replace(/\s+/g,' ').trim();
+  if(!n)return null;
+  const hold=/\b(espera|esperate|esperame|un momento|un rato|todavia|aun no|falta|me falta|nos falta|agrega|agregale|agregame|anade|ponme|ponle|quita|quitale|quitame|saca|sacale|cambia|cambiame|pero|aunque|tambien|otro|otra|otros|otras|mas bien|corrige|no lo envies|no lo mandes|no mandes|no envies|no finalices|no todavia)\b/;
+  if(hold.test(n))return 'hold';
+  // Solo cuenta como cierre si TODO lo dicho son palabras de cierre: «sí, muéstrame el menú» o «ya no quiero la
+  // coca» piden otra cosa. Con ruido alrededor, «finaliza el pedido» sigue contando (finishIntent).
+  const closers=new Set('si ya no dale listo ok okey claro de una simon bueno aja sale va vale perfecto correcto exacto obvio chevere bacan gracias muchas mil por favor porfa nomas mas nada quiero deseo necesito queremos necesitamos vamos a querer eso es todo seria sera asi esta bien queda con basta estamos suficiente estuvo mandalo mandala mandale envialo enviala enviale manda envia la el cocina pedido orden finaliza finalizalo finalicemos cierra cierralo cerremos y ahora entonces nop'.split(' '));
+  const words=n.split(' ');
+  if(words.every(w=>closers.has(w))){
+    if(/^(?:no|nop)$/.test(n))return null; // un «no» suelto depende de la pregunta
+    return 'send';
+  }
+  if(finishIntent(n))return 'send';
+  return null;
+}
 export function finishIntent(text){
   const n=normalize(text);if(!n)return false;
   if(isFinish(text))return true;
@@ -409,6 +430,25 @@ export function interpretLocal(text,cart,menu,lastId=null,context={}){
     // La palabra de un producto dentro de la opción («sin ensalada», «sin papas») no cuenta como otro producto.
     const inNote=h=>found.some(m=>h.index>=m.index&&h.index<m.index+m[0].length);
     const ids=[...new Set(hits.filter(h=>!inNote(h)).map(h=>h.id))];
+    // «Los combos sin ají», «todo sin cebolla», «a todos sin papas»: se aplica a cada producto de ese grupo en el
+    // pedido que lo trae, y se dice claro a cuáles no (porque no lo llevan). Sin IA: respuesta inmediata.
+    const group=/\b(?:todo|todos|todas|a todo|a todos|cada uno|los dos|los tres|los cuatro)\b/.test(n)?'all':/\bcombos?\b/.test(n)?'Combos':/\b(?:platos|los pollos)\b/.test(n)?'Platos':/\b(?:bebidas|gaseosas)\b/.test(n)?'Bebidas':null;
+    const inGroup=group?[...new Set(cart.filter(l=>group==='all'||menu.find(p=>p.id===l.id)?.category===group).map(l=>l.id))]:[];
+    if(group&&inGroup.length>1&&!ids.length){
+      const operations=[],skipped=[];
+      for(const id of inGroup){const p=menu.find(x=>x.id===id);const ok=found.map(m=>p.options.find(o=>normalize(o)===`sin ${m[1]}`)).filter(Boolean);
+        if(ok.length)ok.forEach(note=>operations.push({type:'note',id,note}));else skipped.push(p);}
+      const what=listWords([...new Set(found.map(m=>ingredientName(m[1],menu)))]);
+      // «Los dos combos personales» o «el combo pechuga», según cuántos hay en el pedido; el verbo concuerda.
+      const qtyOf=p=>cart.filter(l=>l.id===p.id).reduce((t,l)=>t+l.qty,0);
+      const the=p=>qtyOf(p)>1?`los ${numberWords(qtyOf(p))} ${many(p)}`:(p.one||p.name).replace(/^(un|una|unas|unos) /,a=>({'un ':'el ','una ':'la ','unas ':'las ','unos ':'los '})[a]);
+      const plural=list=>list.length>1||list.some(p=>qtyOf(p)>1);
+      const doneIds=[...new Set(operations.map(o=>o.id))].map(id=>menu.find(p=>p.id===id));
+      const said=doneIds.length?`Listo, ${listWords(doneIds.map(the))} ${plural(doneIds)?'van':'va'} sin ${what}.`:'';
+      const skip=skipped.length?` ${said?'Y ':'Tranquilo: '}${listWords(skipped.map(the))} no ${plural(skipped)?'llevan':'lleva'} ${what}, así que ${plural(skipped)?'van':'va'} tal cual.`:'';
+      if(!operations.length)return answer('clarify',`${skip.trim()} ${more[cart.length%3]}`);
+      return answer('edit',`${said}${skip} ${more[cart.length%3]}`,{operations});
+    }
     if(ids.length>1)return null;
     const id=ids[0]||(cart.length===1?cart[0].id:lastId);
     if(!id||(!ids.length&&!cart.some(l=>l.id===id)))return answer('clarify','¿A qué producto le hago ese cambio?');

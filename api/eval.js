@@ -7,6 +7,12 @@ export default endpoint(async(req,res)=>{
   guard(req,['GET']);
   if(process.env.VERCEL_ENV!=='preview'&&process.env.EVAL_ENABLED!=='1')throw fail('Ruta no encontrada.',404);
   const params=new URL(req.url,'http://localhost').searchParams;
+  // ?models=1: qué modelos de chat ofrece Groq a esta clave (para elegir uno con cupo propio para la voz de Milo).
+  if(params.get('models')==='1'){
+    const r=await fetch('https://api.groq.com/openai/v1/models',{headers:{Authorization:`Bearer ${process.env.GROQ_API_KEY}`},signal:AbortSignal.timeout(8000)});
+    const data=await r.json().catch(()=>({}));
+    return json(res,r.ok?200:502,{models:(data.data||[]).map(m=>m.id).sort()});
+  }
   const from=Math.max(0,Number(params.get('from'))||0),n=Math.min(12,Math.max(1,Number(params.get('n'))||2));
   const effort=['low','medium','high'].includes(params.get('effort'))?params.get('effort'):undefined;
   // Una a una: el plan gratuito de Groq permite 8.000 tokens por minuto (≈2 frases).

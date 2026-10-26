@@ -90,7 +90,8 @@ async function understand(data,{effort=process.env.GROQ_REASONING||'low',fetchIm
   const shown=Array.isArray(data.shown)?[...new Set(data.shown.filter(known))].slice(0,10):[];
   const heard=soundsLike(transcript,menu);
   const local=interpretLocal(transcript,cart,menu,lastId,{category:categories.includes(data.category)?data.category:null,drinkOffered:data.drinkOffered===true,focus,shown});
-  if(local&&!memory){try{return {...validateResult({...local,awaiting:local.intent==='edit'?null:undefined},cart,menu),source:'local'};}catch(e){return {intent:'clarify',reply:e.message,operations:[],source:'local'};}}
+  // Con una aclaración pendiente, lo que se entiende sin dudas («los combos sin ají») se resuelve ya, sin IA.
+  if(local&&(!memory||local.intent==='edit')){try{return {...validateResult({...local,awaiting:local.intent==='edit'?null:undefined},cart,menu),source:'local'};}catch(e){return {intent:'clarify',reply:e.message,operations:[],source:'local'};}}
   const history=Array.isArray(data.history)?data.history.slice(-6).filter(m=>['user','assistant'].includes(m.role)&&typeof m.content==='string').map(m=>({role:m.role,content:m.content.slice(0,600)})):[];
   const pending=history.filter(m=>m.role==='assistant').at(-1)?.content||null;
   // Respuesta a «¿Para cuántos es?»: la propuesta se arma sin IA y con cantidades exactas.
@@ -131,7 +132,8 @@ PREGUNTA PENDIENTE: ${JSON.stringify(pending)}${heard!==normalize(transcript)?`\
     if(!response.ok){
       const detail=(await response.text().catch(()=>'')).slice(0,300);
       // Límite por minuto alcanzado: se espera lo que pide el proveedor (máx. 4 s) y se reintenta.
-      if(response.status===429)throw Object.assign(new Error(`Proveedor 429: ${detail}`),{wait:Math.min(4000,1000*(Number(response.headers.get('retry-after'))||1))});
+      if(response.status===429){style.markLimited();}
+      if(response.status===429)throw Object.assign(new Error(`Proveedor 429: ${detail}`),{wait:Math.min(2500,1000*(Number(response.headers.get('retry-after'))||1))});
       throw new Error(`Proveedor ${response.status}: ${detail}`);
     }
     const raw=(await response.json()).choices?.[0]?.message?.content||'';

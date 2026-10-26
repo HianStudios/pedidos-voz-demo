@@ -1,5 +1,5 @@
 import {readMemory} from './order-memory.js';
-import {money,total,validateCart,applyOperations,isConfirmation,isFinish,finishIntent,normalize,describeOps,followUp,amount,parsePeople,suggestForPeople,soundsLike,parseRating,removalsFor,serveFor} from './domain.js';
+import {money,total,validateCart,applyOperations,isConfirmation,isFinish,finishIntent,closingAnswer,normalize,describeOps,followUp,amount,parsePeople,suggestForPeople,soundsLike,parseRating,removalsFor,serveFor} from './domain.js';
 import {navigation,plausibleName,cartSignature} from './conversation.js';
 import {foodArt} from './art.js';
 import {VoiceController} from './voice.js';
@@ -58,7 +58,7 @@ async function reply(text,next='listen'){
  const question=text.match(/¿([^¿?]*)\?\s*$/)?.[1]||'';
  if(/para cu[aá]ntos|cu[aá]ntas personas|cu[aá]ntos son/i.test(question))asked='people';
  else if(/para tomar|bebida/i.test(question)){asked='drink';drinkOffered=true;}
- else if(/algo m[aá]s|finalizamos|cerramos|lo env[ií]o a cocina/i.test(question)&&!$('summaryModal').open)asked='more';
+ else if(/algo m[aá]s|qu[eé] m[aá]s te anoto|finalizamos|cerramos|lo env[ií]o a cocina|lo env[ií]o as[ií]/i.test(question)&&!$('summaryModal').open)asked='more';
  else if(/qu[eé] trae|el precio/i.test(question))asked=/precio/.test(question)?'price':'detail';
  // Si Milo nombra un solo producto («Lo que más sale es el combo personal»), ese es «ese» para el cliente.
  const named=productsIn(text);if(named.length)mentioned=named.length===1?named[0]:null;
@@ -151,15 +151,27 @@ function renderSummary(){
  $('summaryBody').innerHTML=cart.length?`<div class="ticket">${cart.map((l,i)=>{const p=menu.find(p=>p.id===l.id);return `<div class="line" style="--i:${i}"><span class="qty">${l.qty}</span><span><b>${esc(p.name)}</b><small>${l.notes.map(esc).join(' · ')}</small></span><strong>${(p.price?money(p.price*l.qty):'Sin costo')}</strong></div>`;}).join('')}<div class="total"><span>Total</span><strong>${money(total(cart,menu))}</strong></div>${table?`<p class="where">Para la mesa ${table}${mode==='demo'?' · pedido de prueba':''}</p>`:`<label class="field">Nombre para retirar<input id="customerName" ${pending?'disabled':''} value="${esc(customerName)}" maxlength="60" autocomplete="given-name" placeholder="Tu nombre"></label><p class="where">${mode==='demo'?'Pedido de prueba · no llega a un restaurante real.':'Para retirar en el restaurante.'}</p>`}<button class="send" id="confirmButton">${pending?'Reintentar el mismo envío':'Enviar a cocina'}</button></div>`:'<p class="empty">Todavía no hay nada aquí.</p>';
 }
 let reviewTurn=0;
+// «¿Algo más, o cerramos?» → «ya, no quiero nada más»: se muestra la factura y se envía de una, diciendo qué va.
+function sendNow(){
+ if(memory){memory=null;saveDraft();}
+ if(!table&&!customerName){review();return;}
+ if($('optionsModal').open)$('optionsModal').close();
+ renderSummary();if(!$('summaryModal').open)$('summaryModal').showModal();
+ reviewed=cartSignature(cart,customerName);
+ submit(`Va así: ${summaryLines()}. Son ${money(total(cart,menu))}.`);
+}
+// Lo que se pidió, como lo diría un mesero: «dos cuartos de pollo sin cebolla y una Coca-Cola en botella».
+const summaryLines=()=>listWords(cart.map(l=>{const p=menu.find(p=>p.id===l.id);return amount(p,l.qty)+(l.notes.length?` ${l.notes.join(' y ')}`:'');}));
 function review(){
- if(memory){reply(`Antes de enviar falta aclarar una parte: ${memory.question}`);return;}
+ // Con una aclaración pendiente la factura se muestra igual (ya no se repite «falta aclarar» en bucle):
+ // Milo recuerda qué falta y que «así está bien» lo envía sin eso.
+ const pendingNote=memory?` Antes de enviarlo: ${memory.question} Si no, dime «así está bien» y lo mando a cocina.`:'';
  if($('optionsModal').open)$('optionsModal').close();
  if(!cart.length){reply('Todavía no has pedido nada. ¿Qué se te antoja?');return;}
  renderSummary();if(!$('summaryModal').open)$('summaryModal').showModal();
  reviewed=cartSignature(cart,customerName);awaitingName=!table&&!customerName;
- const lines=cart.map(l=>{const p=menu.find(p=>p.id===l.id);return amount(p,l.qty)+(l.notes.length?` ${l.notes.join(' y ')}`:'');});
  const open=['Tienes','Te repaso: llevas','Va así: tienes'][reviewTurn++%3];
- reply(`${open} ${listWords(lines)}. Son ${money(total(cart,menu))}. ${table?'¿Lo envío a cocina?':customerName?'¿Lo envío?':'¿A nombre de quién va?'}`);
+ reply(`${open} ${summaryLines()}. Son ${money(total(cart,menu))}.${pendingNote||` ${table?'¿Lo envío a cocina?':customerName?'¿Lo envío?':'¿A nombre de quién va?'}`}`);
 }
 // ---------- Servicio de mesa: llamar al personal, la cuenta y cómo va el pedido ----------
 const tabKey=`${storageKey}:mesa`;
@@ -231,6 +243,19 @@ async function handleInput(raw){
  activity();interrupt();const turn=epoch;voice.state('thinking');$('transcript').textContent=`«${said}»`;$('voiceHelp').textContent='';history.push({role:'user',content:said});const n=raw;
  if(pending){if(isConfirmation(raw))return submit();reply('Hay un envío pendiente de comprobar. Reintenta el mismo pedido desde el resumen.');return;}
  if(awaitingCancel){awaitingCancel=false;if(isConfirmation(raw)){memory=null;history=[];setCart([]);drinkOffered=false;closeModals();reply('Listo, empezamos de cero. ¿Qué se te antoja?');return;}if(/^(no|no gracias)$/.test(n)){reply('Perfecto, lo dejo como está.');return;}}
+ // Cerrar va antes que cualquier aclaración pendiente: «ya, sí, no quiero nada más» envía aunque la IA haya
+ // dejado una pregunta abierta. Frente a la factura o a «¿Algo más, o cerramos?» se envía directo.
+ // Con una pregunta pendiente, un «sí» suelto la contesta; solo «no quiero nada más», «así está bien»… cierran.
+ const declines=/\b(?:no|nada|asi esta bien|asi nomas|eso es todo|seria todo|ya esta|con eso|suficiente)\b/.test(n);
+ const closing=cart.length&&!productsIn(said).length&&(!memory||declines)?closingAnswer(said):null;
+ if(closing==='send'&&$('summaryModal').open){if(customerName&&reviewed===cartSignature(cart,customerName))return submit();if(table)return sendNow();}
+ // A «¿Algo más, o cerramos?» un «sí» o «dale» solos son ambiguos (¿sí, algo más?): se pregunta. «Ya», «listo»,
+ // «no quiero nada más» o «mándalo» sí cierran.
+ if(closing==='send'&&asked==='more'&&!$('summaryModal').open){
+  if(/^(?:si|claro|dale|bueno|ok|okey|aja|si si|claro que si|va|vale)$/.test(n)){reply('¿Qué más te anoto, o lo envío así?');return;}
+  asked=null;return sendNow();
+ }
+ if(memory&&declines&&cart.length&&!productsIn(said).length&&(isFinish(raw)||finishIntent(said))){review();return;}
  if(memory)return matchInput(said,turn);
  // Ficha abierta: quitar/poner ingredientes por voz, «agrégalo» para anotarlo, cualquier otra cosa la cierra.
  if(detail&&$('detailSheet').open){
@@ -355,9 +380,9 @@ async function matchInput(said,turn){
  }catch(e){if(turn===epoch){memory=readMemory(memory)||{turns:[said],question:'No pude procesar tu última petición. ¿La retomamos?'};saveDraft();}if(turn===epoch)reply(e.name==='TimeoutError'?'Me tardé demasiado. Tu pedido sigue igual; dímelo otra vez, por favor.':e.message);}
  finally{if(turn===epoch){busy=false;$('sendText').disabled=false;}}
 }
-async function submit(){
+async function submit(intro=''){
  if(sending||!cart.length||!customerName)return;
- if(memory){review();return;}
+ if(memory){memory=null;saveDraft();}
  if(!pending&&reviewed!==cartSignature(cart,customerName)){review();return;}
  closeModals();voice.pause();sending=true;voice.state('sending');
  pending=pending||{key:crypto.randomUUID(),items:structuredClone(cart),customer:customerName,...(table?{table}:{}),confirmed:true};saveDraft();
@@ -371,7 +396,7 @@ async function submit(){
   pending=null;memory=null;customerName='';setCart([]);lastId=null;mentioned=null;awaitingName=false;drinkOffered=false;upsold=false;roundNote=false;history=[];
   toast(`Pedido ${mode==='demo'?'de prueba ':''}#${order.number} registrado`);
   const done=mode==='demo'?'Listo, tu pedido de prueba quedó registrado.':order.table?'¡Listo! Tu pedido ya está en cocina. ¡Buen provecho!':`¡Listo, ${order.customer}! Tu pedido es el número ${order.number}.`;
-  startRating(order);await reply(`${done} ¿Qué te pareció mi atención? Dime de una a cinco estrellas.`,'listen');
+  startRating(order);await reply(`${intro?`${intro} `:''}${done} ¿Qué te pareció mi atención? Dime de una a cinco estrellas.`,'listen');
  }catch(e){reply(`No pude confirmar el envío. Guardé el mismo pedido para reintentar. ${e.message}`);}
  finally{sending=false;}
 }

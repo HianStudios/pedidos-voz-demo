@@ -33,3 +33,21 @@ test('terminar el pedido con amigos hablando alrededor: no se va al menú',async
     assert.equal(r.intent,'clarify');assert.equal(r.source,'fallback');assert.match(r.reply,/cerramos el pedido/);}
   finally{if(old)process.env.GROQ_API_KEY=old;else delete process.env.GROQ_API_KEY;}
 });
+import {closingAnswer,interpretLocal} from '../public/js/domain.js';
+test('«ya, sí, no quiero nada más» cierra; «no, espera» o «sí pero…» no',()=>{
+  const send=['ya','sí','ya sí','ya que sí','sí ya no quiero nada más','no quiero nada más','nada más','no, nada más','ya no','no gracias, así está bien','sí mándalo','dale','simón','listo','ok','ya pues','así nomás','no ya está','sí sí sí','ajá','claro que sí','sí, eso es todo','que sí','dije que sí','ya te dije que sí','ya pues mándalo','no, ya no quiero más','no, gracias','ya está todo','ya, que sí, que no quiero nada más','eso sería todo, gracias','con eso estamos','no, así está bien, mándalo'];
+  const hold=['no, espera','todavía no','no, quiero agregar algo','sí pero agrega papas','no, quita la coca','no, falta algo','espera','un momento','sí, y también una sprite','agrégale una coca','cámbiame el cuarto por un medio','no lo envíes'];
+  for(const t of send)assert.equal(closingAnswer(soundsLike(t,menu)),'send',t);
+  for(const t of hold)assert.notEqual(closingAnswer(soundsLike(t,menu)),'send',t);
+  assert.equal(closingAnswer('no'),null,'un «no» suelto depende de la pregunta');
+});
+test('«los combos sin ají» con varios combos: se aplica a los que lo llevan y se dice cuáles no',()=>{
+  const cart=[{id:'combo-alitas',qty:4,notes:[]},{id:'combo-pechuga',qty:4,notes:[]},{id:'combo-personal',qty:2,notes:[]}];
+  const r=interpretLocal('los combos sin ají',cart,menu,'combo-personal',{});
+  assert.equal(r.intent,'edit');assert.deepEqual(r.operations,[{type:'note',id:'combo-personal',note:'sin ají'}]);
+  assert.match(r.reply,/los dos combos personales van sin ají/);assert.match(r.reply,/combos de alitas y los cuatro combos pechuga no llevan ají/);
+  assert.deepEqual(interpretLocal('a los combos de pechuga quítale el ají',cart,menu,'combo-personal',{}).operations,[],'si nombra uno, solo ese');
+});
+test('pedir otra cosa justo después de «¿algo más?» no cierra el pedido',()=>{
+  for(const t of ['sí, muéstrame el menú','ya no quiero la coca','sí una coca','nada de picante','sí quiero ver los combos','qué hay de postre'])assert.equal(closingAnswer(soundsLike(t,menu)),null,t);
+});

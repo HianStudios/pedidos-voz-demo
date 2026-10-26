@@ -15,7 +15,8 @@ const assert=require('node:assert/strict');
  await page.goto('http://localhost:3000/?mesa=7&teclado=1');await page.waitForFunction(()=>!document.getElementById('menuOpen').disabled);
  await page.evaluate(text=>window.__miloInput(text),original);
  assert.equal(await page.locator('#cartCount').textContent(),'5');
- await page.locator('#cartOpen').click();assert.equal(await page.locator('#summaryModal').evaluate(e=>e.open),false);
+ // Con la aclaración pendiente la factura se ve, pero Milo recuerda lo que falta y no envía.
+ await page.locator('#cartOpen').click();assert.match(await page.locator('#reply').textContent(),/restantes de alitas/);await page.locator('[data-close="summaryModal"]').click();
  await page.reload();await page.waitForFunction(()=>!document.getElementById('menuOpen').disabled);
  await page.evaluate(()=>window.__miloInput('sí'));
  assert.equal(await page.locator('#cartCount').textContent(),'9');
