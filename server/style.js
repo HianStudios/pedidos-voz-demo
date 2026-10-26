@@ -7,8 +7,9 @@ import {normalize} from '../public/js/domain.js';
 const persona=`Eres Milo, el mesero virtual de Brasa, una pollería de barrio en Ecuador. Eres una IA y lo sabes, pero hablas como el mejor mesero del local: cálido, con chispa, atento a todo lo que pasa en la mesa, nunca de memoria ni como menú leído.
 Te paso lo que dijo el cliente y la RESPUESTA BASE (lo que ya se hizo). Reescríbela con tu voz:
 - Reacciona a lo que dijo y a cómo lo dijo: si tiene hambre, si viene apurado, si habla de calle («oe ñaño»), si es para un grupo, si se corrige.
-- Di con claridad lo que ya quedó hecho (anotado, quitado, cambiado) y conserva EXACTOS los productos, cantidades, ingredientes, precios y lo que se pregunta al final (puedes decir la pregunta con otras palabras, ofreciendo lo mismo).
-- No inventes productos, precios, tiempos ni promociones. No agregues preguntas nuevas.
+- Di con claridad lo que ya quedó hecho (anotado, quitado, cambiado) y conserva EXACTOS los productos, cantidades, ingredientes y precios.
+- NO escribas ninguna pregunta: la app agrega la pregunta final después de tu frase.
+- No inventes productos, precios, tiempos ni promociones. Escribe con buena gramática.
 - Español de Ecuador, de tú, natural y breve: una o dos frases cortas. Toques como «¡De una!», «¡Buenazo!», «Tranquilo», «Ya mismo» con moderación. Sin emojis, listas ni comillas.
 - No empieces siempre igual; evita «Claro», «Perfecto» y «Excelente elección».
 Responde solo con la frase final.`;
@@ -42,18 +43,25 @@ export async function styleReply({said,reply,cart=[],history=[],fetchImpl,menu=b
   if(Date.now()<limitedUntil){styleSkip='cupo de Groq lleno: voz en pausa';return null;}
   const order=cart.map(l=>{const p=menu.find(x=>x.id===l.id);return p?`${l.qty} ${p.name}${l.notes?.length?` (${l.notes.join(', ')})`:''}`:'';}).filter(Boolean).join('; ')||'vacío';
   const recent=(Array.isArray(history)?history:[]).slice(-3).filter(m=>typeof m?.content==='string').map(m=>`${m.role==='user'?'Cliente':'Milo'}: ${m.content.slice(0,160)}`).join('\n');
+  // La pregunta final queda tal cual: la app la usa para saber qué significa el siguiente «ya» o «no»
+  // («¿Algo más, o cerramos el pedido?»), y así el modelo no la cambia por otra («¿cerramos la cuenta?»).
+  const ask=reply.match(/\s*(¿[^¿]*\?)\s*$/);const statement=ask?reply.slice(0,ask.index).trim():reply;
+  if(!statement){styleSkip='solo pregunta';return null;}
   // Modelo con cupo propio en Groq (no el de respaldo que entiende pedidos) y sin razonamiento: solo redacta.
   const model=process.env.GROQ_STYLE_MODEL||'qwen/qwen3.8-27b';
   const thinking=/^qwen\//.test(model)?{reasoning_effort:'none'}:/gpt-oss/.test(model)?{reasoning_effort:'low'}:{};
   try{
     const response=await fetch('https://api.groq.com/openai/v1/chat/completions',{method:'POST',headers:{Authorization:`Bearer ${process.env.GROQ_API_KEY}`,'Content-Type':'application/json'},
-      body:JSON.stringify({model,...thinking,temperature:.8,max_completion_tokens:400,messages:[{role:'system',content:persona},{role:'user',content:`${recent?`Conversación reciente:\n${recent}\n`:''}Pedido actual: ${order}\nEl cliente dijo: "${String(said).slice(0,300)}"\nRESPUESTA BASE: "${reply}"`}]}),
+      body:JSON.stringify({model,...thinking,temperature:.8,max_completion_tokens:400,messages:[{role:'system',content:persona},{role:'user',content:`${recent?`Conversación reciente:\n${recent}\n`:''}Pedido actual: ${order}\nEl cliente dijo: "${String(said).slice(0,300)}"\nRESPUESTA BASE (solo esta parte, sin preguntas; la pregunta la agrega la app): "${statement}"`}]}),
       signal:AbortSignal.timeout(Number(process.env.GROQ_STYLE_TIMEOUT)||1500)});
     if(response.status===429)markLimited();
     if(!response.ok){styleSkip=`proveedor ${response.status}: ${(await response.text().catch(()=>'')).slice(0,160)}`;return null;}
     // Qwen puede devolver su razonamiento entre <think>…</think>: nunca se dice en voz alta.
     const text=String((await response.json()).choices?.[0]?.message?.content||'').replace(/<think>[\s\S]*?<\/think>/g,'').trim().replace(/^["“]|["”]$/g,'').replace(/\s+/g,' ');
-    if(keepsFacts(reply,text,menu))return text;
+    // Si el modelo igual metió una pregunta, se descarta esa parte: la pregunta es siempre la original.
+    const said2=text.replace(/\s*¿[^¿]*\?\s*$/,'').trim().replace(/[^.!]$/,m=>`${m}.`);
+    const full=ask?`${said2} ${ask[1]}`:said2;
+    if(said2&&!/\?/.test(said2)&&keepsFacts(reply,full,menu))return full;
     styleSkip=`descartada: ${text.slice(0,200)}`;return null;
   }catch(e){styleSkip=`error: ${e.name}`;return null;}
 }
