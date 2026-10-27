@@ -35,7 +35,7 @@ test('JSON malformado y audio vacío devuelven errores de cliente',async()=>{
 });
 test('errores y operaciones inseguras de IA se convierten en aclaración',async()=>{
   const originalFetch=globalThis.fetch,old=process.env.GROQ_API_KEY;process.env.GROQ_API_KEY='test';
-  try{globalThis.fetch=async()=>new Response(JSON.stringify({choices:[{message:{content:JSON.stringify({intent:'edit',reply:'pedido',operations:[{id:'cuarto',qty:-1,type:'add'}]})}}]}));const res=response();await match(req({transcript:'sorpréndeme con un platillo',cart:[]}),res);assert.equal(res.code,200);assert.equal(res.data.intent,'menu','ofrece el menú en vez de pedir que repita');assert.equal(res.data.source,'fallback');assert.deepEqual(res.data.operations,[]);}
+  try{globalThis.fetch=async()=>new Response(JSON.stringify({choices:[{message:{content:JSON.stringify({intent:'edit',reply:'pedido',operations:[{id:'cuarto',qty:-1,type:'add'}]})}}]}));const res=response();await match(req({transcript:'sorpréndeme con un platillo',cart:[]}),res);assert.equal(res.code,200);assert.equal(res.data.intent,'clarify','rechaza el cambio inseguro sin mostrar un pedido inventado');assert.equal(res.data.source,'ai');assert.deepEqual(res.data.operations,[]);}
   finally{globalThis.fetch=originalFetch;if(old===undefined)delete process.env.GROQ_API_KEY;else process.env.GROQ_API_KEY=old;}
 });
 test('voz neural sin credenciales no llama al proveedor',async()=>{
