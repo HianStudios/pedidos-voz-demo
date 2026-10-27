@@ -45,6 +45,13 @@ export async function redis(command){
   if(!response.ok)throw fail('No se pudo conectar con caja. Intenta de nuevo.',503);
   const data=await response.json();if(data.error)throw fail('El almacenamiento no está disponible.',503);return data.result;
 }
+// Tests de integración: liberar el socket Redis para que Node pueda terminar.
+export async function closeRedis(){
+  const pending=tcp;tcp=null;
+  if(!pending)return;
+  try{const client=await pending;if(client?.isOpen)await client.quit();}
+  catch{}
+}
 export const hasRedis=()=>rest()||Boolean(process.env.REDIS_URL);
 export const liveOrders=()=>hasRedis()&&(process.env.STAFF_TOKEN?.length>=24)&&(process.env.SESSION_SECRET?.length>=32);
 export async function rateLimit(req,bucket,max=30){
