@@ -191,7 +191,7 @@ export class VoiceController{
       const floor=hadVoice?Math.max(threshold,peak*.33):threshold;
       if(rms>floor){if(++loud>=2){if(!hadVoice)voiceStart=now;hadVoice=true;lastVoice=now;}}else loud=0;
       if(hadVoice)peak=Math.max(peak*.997,rms);
-      if((hadVoice&&(now-lastVoice>900||now-voiceStart>9000))||(!hadVoice&&age>8000&&this.analyser)){if(recorder.state==='recording')recorder.stop();}
+      if((hadVoice&&(now-lastVoice>1300||now-voiceStart>9000))||(!hadVoice&&age>8000&&this.analyser)){if(recorder.state==='recording')recorder.stop();}
     },100);
     this.timer=setTimeout(()=>{if(token===this.generation&&recorder.state==='recording')recorder.stop();},25000);
   }
