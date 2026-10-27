@@ -1,4 +1,5 @@
 import {restaurant} from '../server/catalog.js';
+import {createHash} from 'node:crypto';
 import {endpoint,guard,body,json,rateLimit,liveOrders,getSession,staff,redis,fail} from '../server/http.js';
 // Calificación del servicio al terminar el pedido: una sola vez por pedido, en el registro de calificaciones.
 export default endpoint(async(req,res)=>{
@@ -16,12 +17,13 @@ export default endpoint(async(req,res)=>{
   const data=await body(req,2000);const stars=Number(data.stars);
   if(typeof data.id!=='string'||!/^[0-9a-f-]{36}$/.test(data.id)||!(stars>=1&&stars<=5&&Number.isInteger(stars*2)))throw fail('Calificación inválida.');
   if(!liveOrders())return json(res,200,{demo:true});
-  if(!getSession(req))throw fail('La sesión venció.',401);
+  const sessionId=getSession(req);if(!sessionId)throw fail('La sesión venció.',401);
   const prefix=`mesero:${restaurant.id}`;
   const rating=JSON.stringify({stars,comment:String(data.comment||'').slice(0,200),at:new Date().toISOString()});
   // Registro aparte (no se reescribe el pedido): una sola calificación por pedido existente.
-  const script="if redis.call('EXISTS',KEYS[1])==0 then return false end; if redis.call('HSETNX',KEYS[2],ARGV[1],ARGV[2])==0 then return 'rated' end; redis.call('EXPIRE',KEYS[2],2592000); return 'ok'";
-  const result=await redis(['EVAL',script,2,`${prefix}:order:${data.id}`,`${prefix}:ratings`,data.id,rating]);
-  if(!result)throw fail('Pedido no encontrado.',404);if(result==='rated')throw fail('Este pedido ya fue calificado.',409);
+  const script="local raw=redis.call('GET',KEYS[1]); if not raw then return 'missing' end; local order=cjson.decode(raw); if order.owner~=ARGV[3] then return 'forbidden' end; if redis.call('HSETNX',KEYS[2],ARGV[1],ARGV[2])==0 then return 'rated' end; redis.call('EXPIRE',KEYS[2],2592000); return 'ok'";
+  const owner=createHash('sha256').update(sessionId).digest('hex');
+  const result=await redis(['EVAL',script,2,`${prefix}:order:${data.id}`,`${prefix}:ratings`,data.id,rating,owner]);
+  if(result==='missing')throw fail('Pedido no encontrado.',404);if(result==='forbidden')throw fail('No puedes calificar otro pedido.',403);if(result==='rated')throw fail('Este pedido ya fue calificado.',409);
   json(res,200,{ok:true});
 });

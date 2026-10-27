@@ -22,9 +22,9 @@ function table(rows,format,unit){return `<details class="chart-table"><summary>V
 function inRange(o){return Date.now()-Date.parse(o.createdAt)<days*86400000&&(days!==1||new Date(o.createdAt).toDateString()===new Date().toDateString());}
 function render(){
   const list=orders.filter(o=>o.status!=='cancelado'&&inRange(o));
-  const sales=list.reduce((s,o)=>s+o.total,0);
+  const delivered=list.filter(o=>o.status==='entregado');const sales=delivered.reduce((s,o)=>s+o.total,0);
   $('kpiSales').textContent=money(sales);$('kpiOrders').textContent=compact(list.length);
-  $('kpiTicket').textContent=money(list.length?Math.round(sales/list.length):0);
+  $('kpiTicket').textContent=money(delivered.length?Math.round(sales/delivered.length):0);
   $('kpiSalesNote').textContent=days===1?'hoy':`últimos ${days} días`;
   const cancelled=orders.filter(o=>o.status==='cancelado'&&inRange(o)).length;$('kpiOrdersNote').textContent=cancelled?`${cancelled} cancelados aparte`:'sin cancelados';
   const rated=list.map(o=>({order:o,rating:ratings[o.id]||o.rating})).filter(r=>r.rating);

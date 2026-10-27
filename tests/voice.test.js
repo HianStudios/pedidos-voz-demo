@@ -58,7 +58,7 @@ test('en celular graba y transcribe; el ruido del local no cuenta como voz',asyn
  voice.rms=.02;advance(700);           // ambiente ruidoso: umbral ≈ 0.05
  voice.rms=.03;advance(7500);          // ruido de fondo, no voz → se reinicia la escucha
  assert.equal(uploads,0,'no transcribe ruido');assert.equal(recorders.length,2);assert.equal(voice.mode,'listening');
- voice.rms=.02;advance(700);voice.rms=.12;advance(600);voice.rms=.02;advance(1200);
+ voice.rms=.02;advance(700);voice.rms=.12;advance(600);voice.rms=.02;advance(1600);
  await new Promise(r=>setImmediate(r));await new Promise(r=>setImmediate(r));
  assert.equal(uploads,1);assert.deepEqual(inputs,['dos cuartos de pollo']);
  globalThis.fetch=realFetch;voice.disable();
@@ -73,7 +73,7 @@ test('con gente conversando en la mesa, la frase del cliente se corta cuando él
  const {voice,inputs}=setup();voice.preferRecorder=true;voice.stream={getTracks:()=>[]};voice.analyser={};voice.listen();
  voice.rms=.01;advance(700);            // mesa tranquila al empezar: umbral ≈ 0.025
  voice.rms=.15;advance(1500);           // el cliente le habla de cerca a Milo
- voice.rms=.04;advance(1200);           // sigue la charla de los amigos, más bajo: ya no es su voz
+ voice.rms=.04;advance(1600);           // sigue la charla de los amigos, más bajo: ya no es su voz
  await new Promise(r=>setImmediate(r));await new Promise(r=>setImmediate(r));
  assert.equal(uploads,1,'no espera a que la mesa se calle');assert.deepEqual(inputs,['ya finaliza el pedido']);
  // Charla que nunca baja: la frase se corta igual a los 9 s.

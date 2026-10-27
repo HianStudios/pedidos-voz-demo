@@ -19,7 +19,7 @@ export async function getState(){
     try{
       const [m,s]=await Promise.all([redis(['GET',keys.menu]),redis(['GET',keys.settings])]);
       if(m)menu=JSON.parse(m);if(s)settings=JSON.parse(s);
-    }catch{/* sin almacenamiento: menú base */}
+    }catch{throw fail('No se pudo consultar el menú compartido. Intenta de nuevo.',503);}
   }
   const value={menu,settings};cache={at:Date.now(),value};return value;
 }
