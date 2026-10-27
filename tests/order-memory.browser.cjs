@@ -22,7 +22,7 @@ const assert=require('node:assert/strict');
  assert.equal(await page.locator('#cartCount').textContent(),'9');
  assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('mesero-brasa-v2-orders')||'[]').length),0);
  await page.locator('#cartOpen').click();assert.equal(await page.locator('#summaryModal').evaluate(e=>e.open),true);
- await page.locator('#confirmButton').click();await page.waitForFunction(()=>JSON.parse(localStorage.getItem('mesero-brasa-v2-orders')||'[]').length===1);
+ await page.locator('#customerName').fill('Pérez');await page.locator('#confirmButton').click();await page.waitForFunction(()=>JSON.parse(localStorage.getItem('mesero-brasa-v2-orders')||'[]').length===1);
  // La clave se toma del módulo para comprobar el borrado del contexto tras enviar.
  const draft=await page.evaluate(async()=>{const {storageKey}=await import('/public/js/order-store.js');return JSON.parse(localStorage.getItem(storageKey));});
  assert.equal(draft.memory,null);assert.deepEqual(draft.cart,[]);assert.deepEqual(errors,[]);
