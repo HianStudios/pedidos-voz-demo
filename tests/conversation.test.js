@@ -18,6 +18,14 @@ test('no se registran comandos o alergias como nombres',()=>{for(const s of ['es
 test('muletillas al inicio no ocultan la navegación',()=>{
  assert.equal(navigation('Sí, muéstrame el menú'),'all');assert.equal(navigation('ya, los combos'),'Combos');assert.equal(navigation('sí'),null);
 });
+test('«me olvidé las bebidas» navega a Bebidas',()=>{
+ assert.equal(navigation('me olvidé las bebidas'),'Bebidas');
+ assert.equal(navigation('uy me olvidé las bebidas muéstrame'),'Bebidas');
+ assert.equal(navigation('falta una bebida'),'Bebidas');
+ assert.equal(navigation('faltan los extras'),'Extras');
+ assert.equal(navigation('necesito una bebida'),'Bebidas');
+ assert.equal(navigation('me olvidé los combos'),'Combos');
+});
 test('«¿Para cuántos es?» se responde con un número y propone sin agregar',async()=>{
  const {parsePeople,suggestForPeople}=await import('../public/js/domain.js');
  assert.equal(parsePeople('cinco',true),5);assert.equal(parsePeople('para cinco',true),5);assert.equal(parsePeople('cinco',false),null,'sin pregunta, un número suelto no es un grupo');

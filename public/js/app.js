@@ -338,6 +338,10 @@ async function handleInput(raw){
  // Con ruido alrededor («jajaja ya finaliza el pedido») también cuenta, si no nombra productos nuevos.
  // Frente a la factura, un «sí» que llega con charla detrás («sí sí, oye pásame…») también envía; nunca si
  // pone condiciones («sí, pero quita la cola») o nombra productos.
+ if(awaitingName){
+  const nameMatch=said.match(/(?:a nombre de|me llamo|mi nombre es)\s+(.{2,60})$/i);
+  if(nameMatch&&plausibleName(nameMatch[1])){customerName=nameMatch[1].trim();awaitingName=false;saveDraft();review();return;}
+ }
  const summaryYes=$('summaryModal').open&&/^(?:si|ya|dale|listo|ok|okey|claro|de una|simon|bueno)\b/.test(n)&&!/\b(pero|no|quita|quitale|cambia|agrega|agregale|sin|otro|otra|falta|espera|aunque)\b/.test(n)&&!productsIn(said).length;
  if(isConfirmation(raw)||summaryYes||(cart.length&&(isFinish(raw)||(finishIntent(said)&&!productsIn(said).length)))){
   if(cart.length&&customerName&&reviewed===cartSignature(cart,customerName))return submit();
@@ -345,7 +349,7 @@ async function handleInput(raw){
  }
  const nav=navigation(raw);
  if(nav){awaitingName=false;reviewed=null;if(nav==='all'){showCategories();reply('Este es el menú: platos, combos, extras y bebidas. ¿Por dónde empezamos?');}else{showCategory(nav);reply(categoryPitch(nav));}return;}
- const explicit=said.match(/^(?:me llamo|mi nombre es|a nombre de)\s+(.{2,60})$/i);
+ const explicit=said.match(/(?:me llamo|mi nombre es|a nombre de)\s+(.{2,60})$/i);
  if((explicit&&plausibleName(explicit[1]))||(awaitingName&&plausibleName(said))){customerName=(explicit?explicit[1]:said).trim();awaitingName=false;saveDraft();review();return;}
  if(/^(no quiero bebida|sin bebida|no deseo bebida|no gracias)$/.test(n)){reviewed=null;awaitingName=false;drinkOffered=true;reply('Sin bebida, entonces. ¿Algo más, o cerramos el pedido?');return;}
  return matchInput(said,turn);
