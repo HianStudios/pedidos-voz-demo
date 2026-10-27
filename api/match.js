@@ -150,6 +150,16 @@ PREGUNTA PENDIENTE: ${JSON.stringify(pending)}${heard!==normalize(transcript)?`\
     const parsed=JSON.parse(raw);
     if(memory&&(!Object.hasOwn(parsed,'awaiting')||(parsed.awaiting!==null&&typeof parsed.awaiting!=='string')))throw new Error('Falta el estado de la aclaración pendiente.');
     const repaired=repairResult(parsed,menu);
+    // Guard: the AI sometimes hallucinates add operations for products the user never mentioned.
+    if(repaired.intent==='edit'){
+      const mentionedIds=new Set(productHits(heard,menu).map(h=>h.id));
+      if(focus)mentionedIds.add(focus);
+      const distinctAdds=new Set(repaired.operations.filter(op=>op.type==='add').map(op=>op.id));
+      if(distinctAdds.size>mentionedIds.size+1){
+        repaired.operations=repaired.operations.filter(op=>op.type!=='add'||mentionedIds.has(op.id));
+        if(!repaired.operations.some(op=>op.type==='add')){repaired.intent='clarify';repaired.reply='¿Cuál exactamente te anoto?';}
+      }
+    }
     let result;
     try{result=validateResult(repaired,cart,menu);}
     catch(e){
