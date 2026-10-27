@@ -54,6 +54,7 @@ test('pedidos de mesa con REDIS_URL: crear, idempotencia, caja y estados',{skip:
         if(createdAlert)await redis(['LREM',`${prefix}:alerts`,0,JSON.stringify(createdAlert)]);
       }
     }catch{}
+    try{const {closeRedis}=await import('../server/http.js');await closeRedis();}catch{}
     for(const k of keys)if(old[k]===undefined)delete process.env[k];else process.env[k]=old[k];
   }
 });
