@@ -185,7 +185,8 @@ const payWords={efectivo:'en efectivo',tarjeta:'con tarjeta',transferencia:'por 
 async function serveTable(req){
  if(req.type==='waiter'){
   if(!table){reply('Para eso acércate a caja, por favor. ¿Te ayudo con algo del menú?');return;}
-  kiosk?.notify('waiter',req.need?{need:req.need}:{});
+  const sent=await kiosk?.notify('waiter',req.need?{need:req.need}:{});
+  if(!sent){reply('No pude avisar al personal. Por favor, llama a un mesero directamente.');return;}
   reply(req.need?`Listo, ya le avisé al personal que necesitas ${req.need}. En un momento te lo traen.`:'Listo, ya le avisé al personal. En un momento se acerca alguien.');return;
  }
  if(req.type==='bill'){
@@ -194,7 +195,8 @@ async function serveTable(req){
   if(cart.length){review();return;}
   let orders=[];try{orders=(await tabOrders()).filter(o=>o.status!=='cancelado');}catch{}
   const due=orders.reduce((a,o)=>a+o.total,0);
-  kiosk?.notify('bill',{...(req.pay?{pay:req.pay}:{}),...(orders.length?{total:due}:{})});
+  const sent=await kiosk?.notify('bill',{...(req.pay?{pay:req.pay}:{}),...(orders.length?{total:due}:{})});
+  if(!sent){reply('No pude enviar el aviso de la cuenta. Por favor, pide ayuda al personal.');return;}
   saveTab({...tab(),billed:true});
   reply(orders.length?`Listo, ya pedí tu cuenta: son ${money(due)}. ${req.pay?`Le avisé que pagas ${payWords[req.pay]}.`:'Puedes pagar en efectivo, con tarjeta o por transferencia.'} En un momento se acerca alguien.`:'Listo, ya le avisé al personal que quieres la cuenta. En un momento se acerca alguien.');return;
  }
@@ -254,7 +256,7 @@ async function handleInput(raw){
   if(/^(?:si|claro|dale|bueno|ok|okey|aja|si si|claro que si|va|vale)$/.test(n)){reply('¿Qué más te anoto, o lo envío así?');return;}
   asked=null;return sendNow();
  }
- if(memory&&declines&&cart.length&&!productsIn(said).length&&(isFinish(raw)||finishIntent(said))){review();return;}
+ if(memory&&declines&&cart.length&&!productsIn(said).length&&(isFinish(raw)||finishIntent(said))){memory=null;saveDraft();review();return;}
  // El nombre tiene prioridad sobre la IA; no borra aclaraciones de productos.
  const captured=cart.length&&!isConfirmation(raw)&&!isFinish(raw)&&!declines
    ?extractCustomerName(said,{awaiting:awaitingName}):null;
