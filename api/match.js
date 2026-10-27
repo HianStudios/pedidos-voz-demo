@@ -1,8 +1,9 @@
 import {readMemory,nextMemory} from '../public/js/order-memory.js';
 import {getMenu} from '../server/menu-store.js';
-import {validateCart,validateResult,repairResult,interpretLocal,isConfirmation,followUp,parsePeople,suggestForPeople,applyOperations,describeOps,soundsLike,normalize,serveFor,unavailableRemovals,productHits} from '../public/js/domain.js';
+import {validateCart,validateResult,repairResult,interpretLocal,isConfirmation,followUp,parsePeople,suggestForPeople,applyOperations,describeOps,soundsLike,normalize,serveFor,unavailableRemovals,productHits,answerFromMenu,isQuestion} from '../public/js/domain.js';
 import {listWords} from '../public/js/speech-text.js';
 import * as style from '../server/style.js';
+import {askBrain} from '../server/brain.js';
 import {readFileSync} from 'node:fs';
 import {endpoint,guard,json,body,rateLimit,fail} from '../server/http.js';
 // Instrucciones compactas (resumen de la PARTE I del prompt maestro): deben caber en el límite de
@@ -92,6 +93,15 @@ async function understand(data,{effort=process.env.GROQ_REASONING||'low',fetchIm
   const local=interpretLocal(transcript,cart,menu,lastId,{category:categories.includes(data.category)?data.category:null,drinkOffered:data.drinkOffered===true,focus,shown});
   // Con una aclaración pendiente, lo que se entiende sin dudas («los combos sin ají») se resuelve ya, sin IA.
   if(local&&(!memory||local.intent==='edit')){try{return {...validateResult({...local,awaiting:local.intent==='edit'?null:undefined},cart,menu),source:'local'};}catch(e){return {intent:'clarify',reply:e.message,operations:[],source:'local'};}}
+  // Preguntas sobre la comida: primero con datos del menú (gratis), luego con el cerebro (qwen, cupo propio).
+  if(!memory){
+    const qa=answerFromMenu(transcript,menu,{focus,shown:Array.isArray(data.shown)?data.shown:[]});
+    if(qa)return {...qa,source:'local'};
+    if(isQuestion(transcript)){
+      const brain=await askBrain({said:transcript,menu,cart,history:Array.isArray(data.history)?data.history:[],focus,shown:Array.isArray(data.shown)?data.shown:[]});
+      if(brain)return {intent:'clarify',reply:brain.reply,operations:[],suggest_ids:brain.suggest_ids||[],source:'brain'};
+    }
+  }
   const history=Array.isArray(data.history)?data.history.slice(-6).filter(m=>['user','assistant'].includes(m.role)&&typeof m.content==='string').map(m=>({role:m.role,content:m.content.slice(0,600)})):[];
   const pending=history.filter(m=>m.role==='assistant').at(-1)?.content||null;
   // Respuesta a «¿Para cuántos es?»: la propuesta se arma sin IA y con cantidades exactas.

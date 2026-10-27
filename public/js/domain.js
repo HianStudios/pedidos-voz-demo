@@ -504,3 +504,70 @@ export function interpretLocal(text,cart,menu,lastId=null,context={}){
   });
   return answer('edit',`${describeOps(operations,menu)} ${remove?'¿Algo más?':followUp(cart,operations,menu,context.drinkOffered)}`.trim(),{operations});
 }
+// Preguntas que se responden con los datos del menú, sin gastar IA.
+// Devuelve {intent,reply,suggest_ids} o null si no puede. La respuesta pasa por el estilo de Milo.
+export function answerFromMenu(text,menu,context={}){
+  const n=normalize(soundsLike(text,menu));const {focus,shown}=context;
+  const p=findAskedProduct(n,menu,focus,shown);
+  // «¿Es picante?»
+  if(/\b(picante|pica|pique|picoso)\b/.test(n)&&!/\bsin\b/.test(n)){
+    if(!p)return null;
+    const hasAji=(p.ingredients||[]).some(i=>/aj[ií]/i.test(i));const canRemove=(p.options||[]).includes('sin ají');
+    if(hasAji&&canRemove)return {intent:'clarify',reply:`${p.name} viene con ají de la casa, pero te lo puedo anotar sin ají si prefieres.`,operations:[],suggest_ids:[p.id]};
+    if(hasAji)return {intent:'clarify',reply:`Sí, ${p.name} viene con ají de la casa.`,operations:[],suggest_ids:[p.id]};
+    return {intent:'clarify',reply:`No, ${p.name} no es picante.`,operations:[],suggest_ids:[p.id]};
+  }
+  // «¿Viene con bebida?» / «¿Incluye gaseosa?»
+  if(/\b(viene con bebida|incluye bebida|trae bebida|tiene bebida|incluye gaseosa|trae gaseosa|viene con gaseosa|trae algo de tomar|incluye algo de tomar)\b/.test(n)){
+    if(!p)return null;
+    const hasDrink=(p.ingredients||[]).some(i=>/gaseosa|bebida/i.test(i));
+    if(hasDrink)return {intent:'clarify',reply:`Sí, ${p.name} ya trae gaseosa incluida.`,operations:[],suggest_ids:[p.id]};
+    return {intent:'clarify',reply:`${p.name} no incluye bebida, pero te puedo anotar una aparte.`,operations:[],suggest_ids:[p.id]};
+  }
+  // «¿Para cuántos alcanza?» / «¿Es para compartir?»
+  if(/\b(alcanza|para cuantos (?:es|alcanza|da|sirve|rinde)|cuantas personas|es para compartir|da para compartir|rinde para|sirve para cuantos)\b/.test(n)){
+    if(!p)return null;
+    const serves=/entero|familiar/.test(p.id)?'para 3 a 4 personas':/medio|pareja/.test(p.id)?'para 2 personas':'para una persona';
+    return {intent:'clarify',reply:`${p.name} es ${serves}.`,operations:[],suggest_ids:[p.id]};
+  }
+  // «¿Qué le puedo quitar?» / «¿Se puede personalizar?»
+  if(/\b(que (?:le )?puedo quita(?:r|rle)?|que se (?:le )?puede quita(?:r|rle)?|se puede (?:sin|personalizar|cambiar)|opciones|que se puede sacar|le puedo quita(?:r|rle)?)\b/.test(n)){
+    if(!p)return null;
+    const opts=(p.options||[]).map(o=>o.replace(/^sin /,''));
+    if(opts.length)return {intent:'clarify',reply:`A ${p.name.toLowerCase()} le puedes quitar: ${listWords(opts)}.`,operations:[],suggest_ids:[p.id]};
+    return {intent:'clarify',reply:`${p.name} viene tal cual, no tiene opciones para quitar.`,operations:[],suggest_ids:[p.id]};
+  }
+  // «¿Cuál es la diferencia?» entre dos productos nombrados.
+  if(/\b(diferencia|que cambia|en que se diferencia|cual (?:es )?mejor|que es mejor)\b/.test(n)){
+    const ps=menu.filter(x=>x.category!=='Mesa'&&x.available&&[x.name,...(x.aliases||[])].some(a=>a.length>2&&n.includes(normalize(a).replace(/^(un|una) /,''))));
+    if(ps.length===2){const [a,b]=ps;return {intent:'clarify',reply:`${a.name} (${money(a.price)}) trae ${(a.ingredients||[]).slice(0,3).join(', ')}. ${b.name} (${money(b.price)}) trae ${(b.ingredients||[]).slice(0,3).join(', ')}.`,operations:[],suggest_ids:[a.id,b.id]};}
+  }
+  // «¿Tiene ensalada?» / «¿Viene con papas?»
+  const hasIngredient=n.match(/\b(?:tiene|trae|viene con|lleva|incluye) (papas|ensalada|arroz|pollo|aji|salsa|limon|cebolla|tomate|lechuga|gaseosa)\b/);
+  if(hasIngredient&&p){
+    const word=hasIngredient[1];const has=(p.ingredients||[]).some(i=>normalize(i).includes(word));
+    if(has)return {intent:'clarify',reply:`Sí, ${p.name} trae ${word}.`,operations:[],suggest_ids:[p.id]};
+    return {intent:'clarify',reply:`No, ${p.name} no trae ${word}.`,operations:[],suggest_ids:[p.id]};
+  }
+  // «¿Quién eres?» / «¿Eres real?» / «¿Cómo te llamas?»
+  if(/\b(quien eres|que eres|como te llamas|eres real|eres una persona|eres humano|eres un robot|eres una maquina|eres inteligencia artificial|eres ia)\b/.test(n))
+    return {intent:'clarify',reply:'Soy Milo, el mesero virtual de Brasa. Soy una inteligencia artificial que te ayuda a pedir. ¿Qué se te antoja?',operations:[],suggest_ids:[]};
+  return null;
+}
+function findAskedProduct(n,menu,focus,shown){
+  const named=menu.filter(p=>p.category!=='Mesa'&&[p.name,...(p.aliases||[])].some(a=>a.length>2&&n.includes(normalize(a).replace(/^(un|una|unas|unos) /,''))));
+  if(named.length)return named[0];
+  if(focus){const p=menu.find(x=>x.id===focus);if(p)return p;}
+  if(shown?.length===1){const p=menu.find(x=>x.id===shown[0]);if(p)return p;}
+  return null;
+}
+// ¿La frase es una pregunta y no un pedido? Se usa para enviar al cerebro en vez del modelo caro.
+export function isQuestion(text){
+  const n=normalize(text);
+  const orderVerbs=/\b(dame|deme|quiero|quisiera|ponme|pongame|agrega|agregame|anade|traeme|traenos|regalame|mandame|sirv[ae]me|pasame|necesito|pido|pedimos|queremos)\b/;
+  if(orderVerbs.test(n))return false;
+  if(/[?¿]/.test(text))return true;
+  if(/^(?:que|cual|como|cuando|donde|por que|cuanto|cuanta|cuantos|cuantas|es|son|tiene|tienen|hay|viene|vienen|se puede|puedo|puedes|pueden|quien|sabes)\b/.test(n))return true;
+  if(/\b(que (?:es|son|tiene|trae|lleva|incluye|contiene|diferencia|significa)|como (?:es|viene|se|esta)|cual (?:es|me|son)|hay|se puede|tienen|es picante|alcanza|para cuantos|quien eres|que eres)\b/.test(n))return true;
+  return false;
+}
