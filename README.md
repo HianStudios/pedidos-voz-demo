@@ -17,7 +17,7 @@ Abrir http://localhost:3000. **No abrir index.html directamente:** las rutas `/a
 ## Experiencia actual
 
 - **Pantalla de mesa = solo Milo.** Sin titulares, sin marca, sin enlace a caja. Abajo, un dock discreto: menú, teclado, micrófono y pedido.
-- **Mesa por dispositivo.** Abrir una vez `/?mesa=7` en la tablet de la mesa 7; queda guardado en ese navegador (`/?mesa=` lo quita). Con mesa, Milo no pide nombre y el pedido llega a caja como «Mesa 7». Sin mesa se mantiene el flujo de retiro con nombre. La mesa no está verificada: quien tenga el dispositivo puede cambiar la URL.
+- **Mesa por dispositivo.** Abrir una vez `/?mesa=7` en la tablet de la mesa 7; queda guardado en ese navegador (`/?mesa=` lo quita). Con mesa, Milo pide el nombre del cliente antes de enviar y caja muestra el nombre y «Mesa 7». Sin mesa solicita el nombre para retiro. La mesa no está verificada: quien tenga el dispositivo puede cambiar la URL.
 - **Menú animado y minimalista** en hoja de pantalla completa: cuatro «puertas» (Platos, Combos, Extras, Bebidas), pestañas con subrayado animado y una repisa horizontal de tarjetas que entran escalonadas y flotan. **Mientras Milo nombra un producto, su tarjeta se ilumina y se centra.** «Agregar» suma al instante sin cerrar el menú.
 - Tocar a Milo inicia la sesión de voz. Tras cada respuesta suena un tono corto y vuelve a escuchar. Si el navegador cierra el micrófono sin captar una frase, lo reabre solo durante 40 s; si el reconocimiento de Chrome falla, pasa solo a grabar y transcribir. Tocarlo mientras habla lo interrumpe.
 - Tras 2 minutos sin uso, la pantalla vuelve a Milo y apaga el micrófono (el pedido en curso se conserva).
@@ -27,7 +27,7 @@ Abrir http://localhost:3000. **No abrir index.html directamente:** las rutas `/a
 
 - **`/` mesa (cliente):** solo Milo y la voz. Sin teclado: `?teclado=1` lo muestra para el personal y las pruebas.
 - **`/caja.html` caja:** pedidos en vivo, estados y **avisos de las mesas** (modo kiosco activado o desactivado, salida de pantalla completa, app oculta, clave incorrecta), con un tono cuando llega un aviso nuevo.
-- **`/admin.html` panel:** ventas, pedidos, ticket promedio y experiencia (estrellas promedio); lo que más sale, bebidas más vendidas, pedidos por hora, calificaciones, pedidos por mesa y lo que dijeron los clientes. Filtros: hoy, 7 días y 30 días. Cada gráfica tiene vista de tabla. Usa la misma clave del personal que la caja y lee los últimos 1.000 pedidos, que se guardan 30 días.
+- **`/admin.html` panel:** importe de pedidos entregados (no cobros confirmados), pedidos, ticket promedio de entregados y experiencia (estrellas promedio); lo que más sale, bebidas más vendidas, pedidos por hora, calificaciones, pedidos por mesa y lo que dijeron los clientes. Filtros: hoy, 7 días y 30 días. Cada gráfica tiene vista de tabla. Usa la misma clave del personal que la caja y lee los últimos 1.000 pedidos, que se guardan 30 días.
 
 ## Modo kiosco
 
@@ -87,7 +87,7 @@ Milo atiende lo que un mesero resuelve aparte de la comida, sin pasar por la IA:
 - Al mostrar una categoría, Milo nombra **todos** los productos y cada tarjeta se ilumina cuando la menciona.
 - Después de cada cambio, Milo pregunta si quieres algo más o cerrar el pedido. «Finalizar», «confírmalo», «ya, envíalo» o «cerramos» muestran el resumen, y un «sí» sobre ese resumen lo envía.
 - **Celulares (Android/iPhone):** no se usa el reconocedor del sistema (en Android pita en cada intento y no oye mientras la app tiene el micrófono abierto). Se graba y se transcribe con Whisper en `/api/transcribe` (requiere `GROQ_API_KEY`), con detección de voz que mide el ruido del ambiente y descarta frases fantasma de Whisper. `?voz=nativa` fuerza el reconocedor del sistema. Prueba: `node tests/mobile.cjs` con `npm run dev` en marcha.
-- Se requiere permiso de micrófono y HTTPS (o localhost). Si no hay SpeechRecognition se graba y transcribe con Groq Whisper; el corte por silencio (900 ms) debe calibrarse con el ruido real del local. No hay interrupción por voz mientras Milo habla; se interrumpe tocándolo.
+- Se requiere permiso de micrófono y HTTPS (o localhost). Si no hay SpeechRecognition se graba y transcribe con Groq Whisper; el corte por silencio (1300 ms) debe calibrarse con el ruido real del local. No hay interrupción por voz mientras Milo habla; se interrumpe tocándolo.
 
 ## IA
 
@@ -122,7 +122,7 @@ Con las cuatro variables configuradas, `/api/menu` anuncia modo conectado y emit
 
 El backend valida catálogo/cantidades, calcula centavos y crea pedidos e identificadores de reintento atómicamente con Redis Lua. Un timeout conserva el mismo envío para reintentar sin duplicarlo, bloqueando ediciones hasta resolverlo. Solo se muestra éxito tras la respuesta del servidor. Caja está en `/caja.html`. Recibe un canal SSE autenticado en `/api/order-events`: snapshot al conectar, actualizaciones cuando cambian pedidos y latidos. El servidor consulta Redis cada 1.5 s; por tanto, la actualización no es instantánea ni usa Redis Pub/Sub. Cada conexión dura hasta 20 s y se renueva automáticamente. Tras cortes se reconecta con espera progresiva de hasta 15 s y recupera el snapshot completo. La pestaña oculta pausa la conexión. No requiere servicios adicionales a Redis existente; cada caja activa genera aproximadamente 40 lecturas de snapshot por minuto, además de autenticación/límites y acciones de estado. Revisar el consumo del plan antes de escalar. Los pedidos y claves de idempotencia se retienen 30 días; la lista muestra hasta los 200 pedidos más recientes.
 
-**Alcance:** un restaurante por despliegue, mesa (por URL) o retiro. No hay mesas verificadas, pagos, inventario con reserva, impresora, panel de edición de catálogo ni cuentas individuales de personal. Para operar varios restaurantes, usar despliegues y credenciales separados o implementar multitenencia autenticada antes de compartir una base. Cambiar el catálogo es un cambio de código.
+**Alcance:** un restaurante por despliegue, mesa (por URL) o retiro. No hay mesas verificadas, pagos confirmados, inventario con reserva, impresora ni cuentas individuales de personal. La edición del catálogo sí está disponible en modo Redis. Para operar varios restaurantes, usar despliegues y credenciales separados o implementar multitenencia autenticada antes de compartir una base. El menú se edita desde el panel en modo conectado; en demo se modifica en código.
 
 El modo conectado significa configuración presente, no que las credenciales hayan sido validadas al iniciar: los fallos del servicio se muestran al operar. No se incluye aprovisionamiento automático de Upstash ni acceso a las variables de Vercel desde este repositorio.
 
