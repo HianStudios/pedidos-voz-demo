@@ -19,8 +19,19 @@ export function navigation(text){
   if(/^(?:(?:quiero |puedo |dejame )?(?:ver|mirar) |(?:muestrame|ensename|abre) )?(?:el )?(menu|carta)$/.test(n)||/^(que tienes|que hay|que venden|que ofrecen)$/.test(n))return 'all';
   return null;
 }
-export function plausibleName(text){
-  const n=normalize(text);
-  return /^[\p{L}][\p{L} '\-]{1,59}$/u.test(text.trim())&&!/\b(no|si|espera|quita|agrega|quiero|menu|pollo|cola|agua|cuanto|alergico|alergia|confirmar|confirma|cancelar|cancela|dame|deme|ver|mejor|todavia|bebida|soy|somos|sin|gracias)\b/.test(n);
+// Whisper suele añadir comas o puntos finales a los nombres. Limpiar solo los bordes:
+ // nunca quitar caracteres dentro de un apellido ni interpretar pedidos como nombres.
+export function cleanCustomerName(value){
+  return String(value||'').trim().replace(/^[\s.,;:¡!¿?«»"'“”]+|[\s.,;:¡!¿?«»"'“”]+$/gu,'').replace(/\s+/g,' ').trim();
+}
+export function plausibleName(value){
+  const text=cleanCustomerName(value),n=normalize(text);
+  return /^[\p{L}][\p{L} '\-]{1,59}$/u.test(text)&&!/\b(no|si|espera|quita|agrega|quiero|menu|pollo|cola|agua|cuanto|alergico|alergia|confirmar|confirma|cancelar|cancela|dame|deme|ver|mejor|todavia|bebida|soy|somos|sin|gracias|listo|enviar|enviame|pedido)\b/.test(n);
+}
+export function extractCustomerName(phrase,{awaiting=false}={}){
+  const spoken=String(phrase||'').trim();
+  const explicit=spoken.match(/(?:^|\b)(?:a nombre de|me llamo|mi nombre es|yo soy|soy)\s+(.{2,90})$/i);
+  const candidate=cleanCustomerName(explicit?explicit[1]:awaiting?spoken:'');
+  return plausibleName(candidate)?candidate:null;
 }
 export function cartSignature(cart,name){return JSON.stringify({cart,name});}
