@@ -18,7 +18,8 @@ export default endpoint(async(req,res)=>{
   if(!liveOrders())return json(res,200,{demo:true});
   if(!getSession(req))throw fail('La sesión venció.',401);
   const prefix=`mesero:${restaurant.id}`;
-  const rating=JSON.stringify({stars,comment:String(data.comment||'').slice(0,200),at:new Date().toISOString()});
+  const comment=String(data.comment||'').replace(/[^\p{L}\p{N}\s.,!?;:'\-()]/gu,'').slice(0,200);
+  const rating=JSON.stringify({stars,comment,at:new Date().toISOString()});
   // Registro aparte (no se reescribe el pedido): una sola calificación por pedido existente.
   const script="if redis.call('EXISTS',KEYS[1])==0 then return false end; if redis.call('HSETNX',KEYS[2],ARGV[1],ARGV[2])==0 then return 'rated' end; redis.call('EXPIRE',KEYS[2],2592000); return 'ok'";
   const result=await redis(['EVAL',script,2,`${prefix}:order:${data.id}`,`${prefix}:ratings`,data.id,rating]);

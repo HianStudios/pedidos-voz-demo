@@ -343,10 +343,6 @@ async function handleInput(raw){
  // Con ruido alrededor («jajaja ya finaliza el pedido») también cuenta, si no nombra productos nuevos.
  // Frente a la factura, un «sí» que llega con charla detrás («sí sí, oye pásame…») también envía; nunca si
  // pone condiciones («sí, pero quita la cola») o nombra productos.
- if(awaitingName){
-  const nameMatch=said.match(/(?:a nombre de|me llamo|mi nombre es)\s+(.{2,60})$/i);
-  if(nameMatch&&plausibleName(nameMatch[1])){customerName=nameMatch[1].trim();awaitingName=false;saveDraft();review();return;}
- }
  const summaryYes=$('summaryModal').open&&/^(?:si|ya|dale|listo|ok|okey|claro|de una|simon|bueno)\b/.test(n)&&!/\b(pero|no|quita|quitale|cambia|agrega|agregale|sin|otro|otra|falta|espera|aunque)\b/.test(n)&&!productsIn(said).length;
  if(isConfirmation(raw)||summaryYes||(cart.length&&(isFinish(raw)||(finishIntent(said)&&!productsIn(said).length)))){
   if(cart.length&&customerName&&reviewed===cartSignature(cart,customerName))return submit();
@@ -386,7 +382,7 @@ async function matchInput(said,turn){
   else if(result.intent==='cancel'){awaitingCancel=true;reply('¿Borro todo el pedido y empezamos de cero?');}
   else if(result.intent==='goodbye'&&!cart.length){await reply(result.reply||'¡Gracias! Aquí estaré.','wait');sessionActive=false;voice.disable();}
   else reply(result.reply||'¿Qué te provoca?');
- }catch(e){if(turn===epoch){memory=readMemory(memory)||{turns:[said],question:'No pude procesar tu última petición. ¿La retomamos?'};saveDraft();}if(turn===epoch)reply(e.name==='TimeoutError'?'Me tardé demasiado. Tu pedido sigue igual; dímelo otra vez, por favor.':e.message);}
+ }catch(e){if(turn===epoch){if(memory)memory=readMemory(memory);saveDraft();}if(turn===epoch)reply(e.name==='TimeoutError'?'Me tardé demasiado. Tu pedido sigue igual; dímelo otra vez, por favor.':e.message);}
  finally{if(turn===epoch){busy=false;$('sendText').disabled=false;}}
 }
 async function submit(intro=''){

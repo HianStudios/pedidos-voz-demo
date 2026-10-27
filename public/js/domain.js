@@ -2,7 +2,7 @@ import {navigation} from './conversation.js';
 import {numberWords,listWords} from './speech-text.js';
 import {fixWords} from './fuzzy.js';
 export const normalize = s => String(s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[¿?¡!.,;:]/g,' ').replace(/\s+/g,' ').trim();
-export const money = cents => new Intl.NumberFormat('es-EC',{style:'currency',currency:'USD'}).format(cents/100);
+export const money = cents => new Intl.NumberFormat('es-EC',{style:'currency',currency:'USD'}).format(Math.max(0,cents)/100);
 export function validateCart(cart, menu) {
   if(!Array.isArray(cart) || cart.length>30) throw new Error('Pedido inválido.');
   // Un mismo plato puede ir en varias líneas si cambia la preparación: «dos cuartos, uno sin cebolla».
@@ -25,7 +25,7 @@ function merge(lines){
   for(const l of lines){const same=out.find(o=>lineKey(o)===lineKey(l));if(same)same.qty+=l.qty;else out.push(l);}
   return out;
 }
-export const total = (cart,menu)=>cart.reduce((sum,l)=>sum+menu.find(p=>p.id===l.id).price*l.qty,0);
+export const total = (cart,menu)=>cart.reduce((sum,l)=>{const p=menu.find(m=>m.id===l.id);return sum+(p?p.price:0)*l.qty;},0);
 export function applyOperations(cart, ops, menu) {
   const next=structuredClone(validateCart(cart,menu));
   if(!Array.isArray(ops)||ops.length>20) throw new Error('Cambios inválidos.');
@@ -127,8 +127,10 @@ export function parseRating(text){
   const n=normalize(text).replace(/\bun(?:a)? (?=(?:dos|tres|cuatro|cinco|[1-5])\b)/,'').replace(/\bestrellitas?\b/,'estrellas');
   if(/\b(no se|ahora no|despues|luego|no gracias|paso)\b/.test(n))return null;
   const half=/\by (media|medio)\b|\bpunto cinco\b|\bcon cinco\b/.test(n)?.5:0;
-  const decimal=String(text).match(/\b([1-4])[.,]5\b/);if(decimal)return Number(decimal[1])+.5;
-  const digits=n.match(/\b([1-5])\b/);
+  const decimal=String(text).match(/\b([0-5])[.,]5\b/);if(decimal){const v=Number(decimal[1])+.5;if(v>=1&&v<=5)return v;return null;}
+  if(/\b\d+[.,]\d+\b/.test(String(text)))return null;
+  const digits=n.match(/(?<!\d[-.,])(?<!\S)\b([1-5])\b(?![-.,]\d)/);
+  if(digits&&/[-]/.test(n.slice(Math.max(0,digits.index-1),digits.index)))return null;
   if(digits)return Math.min(5,Number(digits[1])+half);
   const word=n.match(/\b(una|uno|un|dos|tres|cuatro|cinco)\b/);
   if(word&&(/\b(estrellas?|puntos?|de cinco|sobre cinco|te doy|le doy|le pongo|te pongo)\b/.test(n)||half||n.split(' ').length<=2))return Math.min(5,count(word[1])+half);
@@ -309,7 +311,7 @@ export function soundsLike(text,menu){let n=normalize(text);for(const [re,to] of
 // «combo de alitas» como combo y como alitas). Devuelve [{id,index,length}] en orden de aparición.
 export function productHits(n,menu){
   const hits=[];let remaining=n;
-  const aliases=menu.filter(p=>p.category!=='Mesa'||true).flatMap(p=>[p.name,...(p.aliases||[])].map(a=>({id:p.id,a:normalize(a).replace(/^(?:un|una|unas|unos|dos|tres) /,'')}))).filter(x=>x.a).sort((a,b)=>b.a.length-a.a.length);
+  const aliases=menu.filter(p=>p.category!=='Mesa').flatMap(p=>[p.name,...(p.aliases||[])].map(a=>({id:p.id,a:normalize(a).replace(/^(?:un|una|unas|unos|dos|tres) /,'')}))).filter(x=>x.a).sort((a,b)=>b.a.length-a.a.length);
   for(const {id,a} of aliases){
     const re=new RegExp(`(^|\\s)(${a.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')})(?=\\s|$)`,'g');
     remaining=remaining.replace(re,(full,prefix,word,offset)=>{hits.push({id,index:offset+prefix.length,length:word.length});return ' '.repeat(full.length);});
@@ -320,7 +322,7 @@ export function interpretLocal(text,cart,menu,lastId=null,context={}){
   // Cómo se sirve la bebida («una pepsi sin hielo») lo anota la app aparte; aquí no es un ingrediente.
   let n=soundsLike(text,menu).replace(/\s*\b(?:(?:en )?vaso )?(?:con|sin) hielos?\b|\s*\b(?:(?:solo |en )?(?:la |su )?botellita|(?:solo |en )?(?:la |su )?botella|sin vaso|al clima)\b/g,'').trim();
   // Solo el nombre de un producto («medio pollo», «combo familiar»), como se lo dice a un mesero: es un pedido.
-  if(!context.nested&&menu.some(p=>p.available!==false&&[p.name,...(p.aliases||[])].some(x=>normalize(x)===n)))n=`quiero ${n}`;
+  if(!context.nested&&menu.some(p=>p.available&&[p.name,...(p.aliases||[])].some(x=>normalize(x)===n)))n=`quiero ${n}`;
   // Ingredientes que se pueden quitar (todas las opciones «sin X» del catálogo), más largos primero.
   const removable=[...new Set(menu.flatMap(p=>p.options.map(o=>normalize(o).replace(/^sin /,''))))].sort((a,b)=>b.length-a.length);
   const alt=removable.map(x=>x.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')).join('|');
@@ -500,8 +502,11 @@ export function interpretLocal(text,cart,menu,lastId=null,context={}){
   const operations=hits.map((h,i)=>{
     const before=n.slice(i?hits[i-1].index+hits[i-1].length:0,h.index).trim();
     const token=before.split(' ').at(-1); const qty=count(token);
-    return {type:remove?'remove':replace?'set':'add',id:h.id,qty:Number.isInteger(qty)&&token!==''?qty:remove?(cart.find(l=>l.id===h.id)?.qty||1):1};
-  });
+    const raw=Number.isInteger(qty)&&token!==''?qty:remove?(cart.find(l=>l.id===h.id)?.qty||1):1;
+    if(raw<0||raw>20)return null;
+    return {type:remove?'remove':replace?'set':'add',id:h.id,qty:raw||1};
+  }).filter(Boolean);
+  if(!operations.length)return null;
   return answer('edit',`${describeOps(operations,menu)} ${remove?'¿Algo más?':followUp(cart,operations,menu,context.drinkOffered)}`.trim(),{operations});
 }
 // Preguntas que se responden con los datos del menú, sin gastar IA.

@@ -1,11 +1,12 @@
 import {interpret} from './match.js';
 import {cases} from '../server/eval-cases.js';
-import {endpoint,guard,json,fail} from '../server/http.js';
+import {endpoint,guard,json,rateLimit,fail} from '../server/http.js';
 // Evaluación de comprensión con el modelo real. Solo en vistas previas de Vercel (protegidas por login
 // del equipo) o con EVAL_ENABLED=1; en producción responde 404.
 export default endpoint(async(req,res)=>{
   guard(req,['GET']);
   if(process.env.VERCEL_ENV!=='preview'&&process.env.EVAL_ENABLED!=='1')throw fail('Ruta no encontrada.',404);
+  await rateLimit(req,'eval',10);
   const params=new URL(req.url,'http://localhost').searchParams;
   // ?models=1: qué modelos de chat ofrece Groq a esta clave (para elegir uno con cupo propio para la voz de Milo).
   if(params.get('models')==='1'){
