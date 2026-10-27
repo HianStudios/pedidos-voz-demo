@@ -255,6 +255,11 @@ async function handleInput(raw){
   asked=null;return sendNow();
  }
  if(memory&&declines&&cart.length&&!productsIn(said).length&&(isFinish(raw)||finishIntent(said))){review();return;}
+ if(awaitingName){
+  const nm=said.match(/(?:a nombre de|me llamo|mi nombre es)\s+(.{2,60})$/i);
+  if(nm&&plausibleName(nm[1])){customerName=nm[1].trim();awaitingName=false;memory=null;saveDraft();review();return;}
+  if(!isConfirmation(raw)&&!isFinish(raw)&&!declines&&plausibleName(said)&&said.trim().length>=3){customerName=said.trim();awaitingName=false;memory=null;saveDraft();review();return;}
+ }
  if(memory)return matchInput(said,turn);
  // Ficha abierta: quitar/poner ingredientes por voz, «agrégalo» para anotarlo, cualquier otra cosa la cierra.
  if(detail&&$('detailSheet').open){
