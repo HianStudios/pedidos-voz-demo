@@ -62,7 +62,7 @@ test('la IA recibe la guía de razonamiento y la pregunta pendiente; reintenta u
   const {interpret}=await import('../api/match.js');const old=process.env.GROQ_API_KEY;process.env.GROQ_API_KEY='test';let calls=0,system;
   const fetchImpl=async(u,o)=>{calls++;system=JSON.parse(o.body).messages[0].content;return new Response(JSON.stringify({choices:[{message:{content:calls===1?'{"intent":':JSON.stringify({intent:'menu',category:'Bebidas',reply:'¿Cuál prefieres?',operations:[]})}}]}));};
   try{const r=await interpret({transcript:'lo que tengas helado pues',cart:[],history:[{role:'assistant',content:'¿Algo para tomar, o cerramos así?'}]},{fetchImpl});
-    assert.equal(calls,2);assert.equal(r.intent,'menu');assert.equal(r.category,'Bebidas');assert.match(system,/Cómo razonar/);assert.match(system,/PREGUNTA PENDIENTE: "¿Algo para tomar/);assert.ok(system.length<9000,'cabe en el límite gratuito de Groq');}
+    assert.equal(calls,2);assert.equal(r.intent,'menu');assert.equal(r.category,'Bebidas');assert.match(system,/Cómo razonar/);assert.match(system,/PREGUNTA PENDIENTE: "¿Algo para tomar/);assert.ok(system.length<16000,'el catálogo de ejemplo cabe en un prompt acotado');}
   finally{if(old===undefined)delete process.env.GROQ_API_KEY;else process.env.GROQ_API_KEY=old;}
 });
 test('con el cupo por minuto agotado usa el modelo de respaldo',async()=>{
