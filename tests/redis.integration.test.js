@@ -15,6 +15,12 @@ test('pedidos de mesa con REDIS_URL: crear, idempotencia, caja y estados',{skip:
     const key=crypto.randomUUID();idemKey=key;const order={key,items:[{id:'cuarto',qty:2,notes:['sin cebolla']}],table:7,confirmed:true};
     const a=response();await orders(req(order,'POST',{cookie}),a);assert.equal(a.code,200,JSON.stringify(a.data));createdId=a.data.order.id;assert.equal(a.data.order.customer,'Mesa 7');assert.equal(a.data.order.table,7);assert.equal(a.data.order.total,900);
     const b=response();await orders(req(order,'POST',{cookie}),b);assert.equal(b.data.order.id,a.data.order.id,'el reintento no duplica');
+    const other=response();await menu(req(undefined,'GET'),other);
+    const otherCookie=other.headers['Set-Cookie'].split(';')[0];
+    const foreign=response();await orders({...req(undefined,'GET',{cookie:otherCookie}),url:`/api/orders?ids=${createdId}`},foreign);
+    assert.deepEqual(foreign.data.orders,[],'otra sesión no puede consultar este pedido');
+    const mine=response();await orders({...req(undefined,'GET',{cookie}),url:`/api/orders?ids=${createdId}`},mine);
+    assert.equal(mine.data.orders[0].id,createdId,'sesión propietaria sí puede ver el estado');
     const auth={authorization:`Bearer ${process.env.STAFF_TOKEN}`};
     const list=response();await orders(req(undefined,'GET',auth),list);assert.ok(list.data.orders.some(o=>o.id===a.data.order.id));
     const patch=response();await orders(req({id:a.data.order.id,status:'aceptado'},'PATCH',auth),patch);assert.equal(patch.data.order.status,'aceptado');
@@ -24,6 +30,10 @@ test('pedidos de mesa con REDIS_URL: crear, idempotencia, caja y estados',{skip:
     const {default:alerts}=await import('../api/alerts.js');const {default:ratings}=await import('../api/ratings.js');const {feedSnapshot}=await import('../server/order-feed.js');
     const al=response();await alerts(req({table:7,type:'fullscreen-exit'},'POST',{cookie}),al);assert.equal(al.code,200,JSON.stringify(al.data));createdAlert=al.data.alert;
     const feed=await feedSnapshot();assert.equal(feed.alerts[0].type,'fullscreen-exit');assert.equal(feed.alerts[0].table,7);
+    const bill=response();await alerts(req({table:7,type:'bill',total:1},'POST',{cookie}),bill);
+    assert.equal(bill.data.alert.total,900,'el servidor ignora el total falsificado');
+    const stolen=response();await ratings(req({id:createdId,stars:5},'POST',{cookie:otherCookie}),stolen);
+    assert.equal(stolen.code,403,'una sesión ajena no puede calificar el pedido');
     const r1=response();await ratings(req({id:a.data.order.id,stars:4.5,comment:'cuatro y media'},'POST',{cookie}),r1);assert.equal(r1.code,200,JSON.stringify(r1.data));
     const r2=response();await ratings(req({id:a.data.order.id,stars:1},'POST',{cookie}),r2);assert.equal(r2.code,409,'no se califica dos veces');
     const rl=response();await ratings(req(undefined,'GET',auth),rl);assert.equal(rl.data.ratings[a.data.order.id].stars,4.5);
