@@ -14,8 +14,8 @@ const money=c=>`$${(c/100).toFixed(2).replace('.',',')}`;
 // Catálogo en líneas cortas: id | nombre | categoría | precio | descripción | opciones | alias.
 const catalogFor=menu=>menu.filter(p=>p.available&&p.category!=='Mesa').map(p=>{
   // Alias útiles para el sonido; se omiten los que solo agregan «un/una» o repiten el nombre.
-  const name=normalize(p.name),aliases=[...new Set(p.aliases.map(normalize))].filter(a=>a!==name&&!/^(un|una|unas|unos|el|la|dame) /.test(a));
-  return `${p.id} | ${p.name} | ${p.category} | ${money(p.price)} | trae: ${(p.ingredients||[p.desc]).join(', ')} | ${p.feel||'-'} | quitar: ${p.options.map(o=>o.replace(/^sin /,'')).join(', ')||'-'} | alias: ${aliases.join(', ')}`;
+  const name=normalize(p.name),aliases=[...new Set(p.aliases.map(normalize))].filter(a=>a!==name&&!/^(un|una|unas|unos|el|la|dame) /.test(a)).slice(0,4);
+  return `${p.id} | ${p.name} | ${p.category} | ${money(p.price)} | trae: ${(p.ingredients||[p.desc]).slice(0,5).join(', ')} | ${p.feel||'-'} | quitar: ${p.options.slice(0,6).map(o=>o.replace(/^sin /,'')).join(', ')||'-'} | alias: ${aliases.join(', ')}`;
 }).join('\n')+`\nPara la mesa, sin costo (se anotan con add): ${menu.filter(p=>p.category==='Mesa').map(p=>p.id).join(', ')}`+
   (menu.some(p=>!p.available&&p.category!=='Mesa')?`\nAGOTADO HOY (no lo anotes; dilo y ofrece otro): ${menu.filter(p=>!p.available&&p.category!=='Mesa').map(p=>p.name).join(', ')}`:'');
 const categories=['Platos','Combos','Extras','Bebidas'];
@@ -156,7 +156,7 @@ PREGUNTA PENDIENTE: ${JSON.stringify(pending)}${heard!==normalize(transcript)?`\
     if(repaired.intent==='edit'){
       const allowed=new Set(productHits(heard,menu).map(h=>h.id));
       if(focus)allowed.add(focus);
-      if(memory)for(const h of productHits(soundsLike(memory.turns.join(' '),menu),menu))allowed.add(h.id);
+      if(memory)for(const h of productHits(soundsLike([...memory.turns,memory.question].join(' '),menu),menu))allowed.add(h.id);
       const additions=repaired.operations.filter(op=>op.type==='add');
       const forbidden=additions.filter(op=>!allowed.has(op.id));
       if(forbidden.length){
