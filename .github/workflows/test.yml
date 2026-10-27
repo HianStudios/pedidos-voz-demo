@@ -7,6 +7,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: milo-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -32,3 +36,16 @@ jobs:
         env:
           REDIS_TEST_URL: redis://127.0.0.1:6379
       - run: npm run build
+      - name: Instalar navegador de pruebas
+        run: |
+          npm install --no-save playwright@1.56.1
+          npx playwright install chromium --with-deps
+      - name: Probar flujo de pedidos en Chrome
+        run: |
+          npm run dev >/tmp/milo-dev.log 2>&1 &
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:3000/api/menu >/dev/null; then break; fi
+            sleep 1
+          done
+          node tests/order-memory.browser.cjs
+          node tests/browser.cjs
