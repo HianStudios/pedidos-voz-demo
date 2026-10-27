@@ -91,8 +91,9 @@ async function understand(data,{effort=process.env.GROQ_REASONING||'low',fetchIm
   const shown=Array.isArray(data.shown)?[...new Set(data.shown.filter(known))].slice(0,10):[];
   const heard=soundsLike(transcript,menu);
   const local=interpretLocal(transcript,cart,menu,lastId,{category:categories.includes(data.category)?data.category:null,drinkOffered:data.drinkOffered===true,focus,shown});
-  // Con una aclaración pendiente, lo que se entiende sin dudas («los combos sin ají») se resuelve ya, sin IA.
-  if(local&&(!memory||local.intent==='edit')){try{return {...validateResult({...local,awaiting:local.intent==='edit'?null:undefined},cart,menu),source:'local'};}catch(e){return {intent:'clarify',reply:e.message,operations:[],source:'local'};}}
+  // Una aclaración en curso requiere el contexto original: nunca darla por resuelta con
+  // una operación local ajena, porque las cantidades pendientes se perderían.
+  if(local&&!memory){try{return {...validateResult({...local,awaiting:local.intent==='edit'?null:undefined},cart,menu),source:'local'};}catch(e){return {intent:'clarify',reply:e.message,operations:[],source:'local'};}}
   // Preguntas sobre la comida: primero con datos del menú (gratis), luego con el cerebro (qwen, cupo propio).
   if(!memory){
     const qa=answerFromMenu(transcript,menu,{focus,shown:Array.isArray(data.shown)?data.shown:[]});
@@ -150,14 +151,23 @@ PREGUNTA PENDIENTE: ${JSON.stringify(pending)}${heard!==normalize(transcript)?`\
     const parsed=JSON.parse(raw);
     if(memory&&(!Object.hasOwn(parsed,'awaiting')||(parsed.awaiting!==null&&typeof parsed.awaiting!=='string')))throw new Error('Falta el estado de la aclaración pendiente.');
     const repaired=repairResult(parsed,menu);
-    // Guard: the AI sometimes hallucinates add operations for products the user never mentioned.
+    // Autorizar cada producto añadido, sin la tolerancia «+1» que dejaba colar
+    // bebidas y extras fantasma. Una aclaración puede referirse al pedido anterior.
     if(repaired.intent==='edit'){
-      const mentionedIds=new Set(productHits(heard,menu).map(h=>h.id));
-      if(focus)mentionedIds.add(focus);
-      const distinctAdds=new Set(repaired.operations.filter(op=>op.type==='add').map(op=>op.id));
-      if(distinctAdds.size>mentionedIds.size+1){
-        repaired.operations=repaired.operations.filter(op=>op.type!=='add'||mentionedIds.has(op.id));
-        if(!repaired.operations.some(op=>op.type==='add')){repaired.intent='clarify';repaired.reply='¿Cuál exactamente te anoto?';}
+      const allowed=new Set(productHits(heard,menu).map(h=>h.id));
+      if(focus)allowed.add(focus);
+      if(memory)for(const h of productHits(soundsLike(memory.turns.join(' '),menu),menu))allowed.add(h.id);
+      const additions=repaired.operations.filter(op=>op.type==='add');
+      const forbidden=additions.filter(op=>!allowed.has(op.id));
+      if(forbidden.length){
+        repaired.operations=repaired.operations.filter(op=>op.type!=='add'||allowed.has(op.id));
+        if(!repaired.operations.length){
+          repaired.intent='clarify';repaired.reply='¿Cuál producto exactamente quieres que te anote?';
+          repaired.awaiting=repaired.reply;
+        }else{
+          repaired.reply=`${describeOps(repaired.operations,menu)} ¿Algo más, o cerramos el pedido?`;
+          if(memory)repaired.awaiting=memory.question;
+        }
       }
     }
     let result;
