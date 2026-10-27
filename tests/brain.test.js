@@ -65,4 +65,19 @@ describe('answerFromMenu',()=>{
     const r=answerFromMenu('¿a qué hora cierran?',available,{});
     assert.equal(r,null);
   });
+  it('responde cuánto cuesta un producto',()=>{
+    const r=answerFromMenu('¿cuánto cuesta el cuarto?',available,{});
+    assert.ok(r);
+    assert.ok(/\$/.test(r.reply));
+  });
+  it('responde qué hay de comer',()=>{
+    const r=answerFromMenu('¿qué tienen?',available,{});
+    assert.ok(r);
+    assert.equal(r.intent,'menu');
+  });
+  it('responde cuál es el más barato',()=>{
+    const r=answerFromMenu('¿cuál es el más barato?',available,{});
+    assert.ok(r);
+    assert.ok(/económico|barato|\$/i.test(r.reply));
+  });
 });

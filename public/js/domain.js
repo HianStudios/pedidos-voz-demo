@@ -552,6 +552,19 @@ export function answerFromMenu(text,menu,context={}){
   // «¿Quién eres?» / «¿Eres real?» / «¿Cómo te llamas?»
   if(/\b(quien eres|que eres|como te llamas|eres real|eres una persona|eres humano|eres un robot|eres una maquina|eres inteligencia artificial|eres ia)\b/.test(n))
     return {intent:'clarify',reply:'Soy Milo, el mesero virtual de Brasa. Soy una inteligencia artificial que te ayuda a pedir. ¿Qué se te antoja?',operations:[],suggest_ids:[]};
+  // «¿Cuánto cuesta el cuarto?» — cuando se nombra un producto.
+  if(/\b(cuanto (?:cuesta|vale|es|sale)|precio|que precio)\b/.test(n)&&p)
+    return {intent:'clarify',reply:`${p.name} cuesta ${money(p.price)}.`,operations:[],suggest_ids:[p.id]};
+  // «¿Qué hay de comer?» / «¿Qué tienen?»
+  if(/\b(que (?:hay|tienen|ofrecen|venden|sirven)|que hay de (?:comer|beber|tomar))\b/.test(n)){
+    const cats=[...new Set(menu.filter(x=>x.available&&x.category!=='Mesa').map(x=>x.category))];
+    return {intent:'menu',reply:`Tenemos ${listWords(cats.map(c=>c.toLowerCase()))}. ¿Qué te llama la atención?`,operations:[],suggest_ids:[]};
+  }
+  // «¿Cuál es el más barato?» / «¿Qué es lo más económico?»
+  if(/\b(mas barato|mas economico|mas baratos|mas economicos|mas caro|menos cuesta)\b/.test(n)){
+    const cheap=menu.filter(x=>x.available&&x.category!=='Mesa'&&x.price>0).sort((a,b)=>a.price-b.price);
+    if(cheap.length){const c=cheap[0];return {intent:'clarify',reply:`Lo más económico es ${c.name} a ${money(c.price)}.`,operations:[],suggest_ids:[c.id]};}
+  }
   return null;
 }
 function findAskedProduct(n,menu,focus,shown){
@@ -568,6 +581,6 @@ export function isQuestion(text){
   if(orderVerbs.test(n))return false;
   if(/[?¿]/.test(text))return true;
   if(/^(?:que|cual|como|cuando|donde|por que|cuanto|cuanta|cuantos|cuantas|es|son|tiene|tienen|hay|viene|vienen|se puede|puedo|puedes|pueden|quien|sabes)\b/.test(n))return true;
-  if(/\b(que (?:es|son|tiene|trae|lleva|incluye|contiene|diferencia|significa)|como (?:es|viene|se|esta)|cual (?:es|me|son)|hay|se puede|tienen|es picante|alcanza|para cuantos|quien eres|que eres)\b/.test(n))return true;
+  if(/\b(que (?:es|son|tiene|trae|lleva|incluye|contiene|diferencia|significa|recomiendas|me recomiendas|me sugieres)|como (?:es|viene|se|esta)|cual (?:es|me|son)|hay|se puede|tienen|es picante|alcanza|para cuantos|quien eres|que eres|que tal|que opinan|es rico|esta bueno|esta rico|sabe bien|sabe rico|lo recomiendan)\b/.test(n))return true;
   return false;
 }
