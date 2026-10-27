@@ -147,14 +147,13 @@ function spotlight(sentence,durationMs){
 }
 // ---------- Resumen ----------
 function renderSummary(){
- if(table)customerName=`Mesa ${table}`;
- $('summaryBody').innerHTML=cart.length?`<div class="ticket">${cart.map((l,i)=>{const p=menu.find(p=>p.id===l.id);return `<div class="line" style="--i:${i}"><span class="qty">${l.qty}</span><span><b>${esc(p.name)}</b><small>${l.notes.map(esc).join(' · ')}</small></span><strong>${(p.price?money(p.price*l.qty):'Sin costo')}</strong></div>`;}).join('')}<div class="total"><span>Total</span><strong>${money(total(cart,menu))}</strong></div>${table?`<p class="where">Para la mesa ${table}${mode==='demo'?' · pedido de prueba':''}</p>`:`<label class="field">Nombre para retirar<input id="customerName" ${pending?'disabled':''} value="${esc(customerName)}" maxlength="60" autocomplete="given-name" placeholder="Tu nombre"></label><p class="where">${mode==='demo'?'Pedido de prueba · no llega a un restaurante real.':'Para retirar en el restaurante.'}</p>`}<button class="send" id="confirmButton">${pending?'Reintentar el mismo envío':'Enviar a cocina'}</button></div>`:'<p class="empty">Todavía no hay nada aquí.</p>';
+ $('summaryBody').innerHTML=cart.length?`<div class="ticket">${cart.map((l,i)=>{const p=menu.find(p=>p.id===l.id);return `<div class="line" style="--i:${i}"><span class="qty">${l.qty}</span><span><b>${esc(p.name)}</b><small>${l.notes.map(esc).join(' · ')}</small></span><strong>${(p.price?money(p.price*l.qty):'Sin costo')}</strong></div>`;}).join('')}<div class="total"><span>Total</span><strong>${money(total(cart,menu))}</strong></div><label class="field">${table?'¿A nombre de quién va?':'Nombre para retirar'}<input id="customerName" ${pending?'disabled':''} value="${esc(customerName)}" maxlength="60" autocomplete="given-name" placeholder="Tu nombre"></label>${table?`<p class="where">Mesa ${table}${mode==='demo'?' · pedido de prueba':''}</p>`:`<p class="where">${mode==='demo'?'Pedido de prueba · no llega a un restaurante real.':'Para retirar en el restaurante.'}</p>`}<button class="send" id="confirmButton">${pending?'Reintentar el mismo envío':'Enviar a cocina'}</button></div>`:'<p class="empty">Todavía no hay nada aquí.</p>';
 }
 let reviewTurn=0;
 // «¿Algo más, o cerramos?» → «ya, no quiero nada más»: se muestra la factura y se envía de una, diciendo qué va.
 function sendNow(){
  if(memory){memory=null;saveDraft();}
- if(!table&&!customerName){review();return;}
+ if(!customerName){review();return;}
  if($('optionsModal').open)$('optionsModal').close();
  renderSummary();if(!$('summaryModal').open)$('summaryModal').showModal();
  reviewed=cartSignature(cart,customerName);
@@ -169,9 +168,9 @@ function review(){
  if($('optionsModal').open)$('optionsModal').close();
  if(!cart.length){reply('Todavía no has pedido nada. ¿Qué se te antoja?');return;}
  renderSummary();if(!$('summaryModal').open)$('summaryModal').showModal();
- reviewed=cartSignature(cart,customerName);awaitingName=!table&&!customerName;
+ reviewed=cartSignature(cart,customerName);awaitingName=!customerName;
  const open=['Tienes','Te repaso: llevas','Va así: tienes'][reviewTurn++%3];
- reply(`${open} ${summaryLines()}. Son ${money(total(cart,menu))}.${pendingNote||` ${table?'¿Lo envío a cocina?':customerName?'¿Lo envío?':'¿A nombre de quién va?'}`}`);
+ reply(`${open} ${summaryLines()}. Son ${money(total(cart,menu))}.${pendingNote||` ${customerName?'¿Lo envío a cocina?':'¿A nombre de quién va el pedido?'}`}`);
 }
 // ---------- Servicio de mesa: llamar al personal, la cuenta y cómo va el pedido ----------
 const tabKey=`${storageKey}:mesa`;
@@ -248,7 +247,7 @@ async function handleInput(raw){
  // Con una pregunta pendiente, un «sí» suelto la contesta; solo «no quiero nada más», «así está bien»… cierran.
  const declines=/\b(?:no|nada|asi esta bien|asi nomas|eso es todo|seria todo|ya esta|con eso|suficiente)\b/.test(n);
  const closing=cart.length&&!productsIn(said).length&&(!memory||declines)?closingAnswer(said):null;
- if(closing==='send'&&$('summaryModal').open){if(customerName&&reviewed===cartSignature(cart,customerName))return submit();if(table)return sendNow();}
+ if(closing==='send'&&$('summaryModal').open){if(customerName&&reviewed===cartSignature(cart,customerName))return submit();}
  // A «¿Algo más, o cerramos?» un «sí» o «dale» solos son ambiguos (¿sí, algo más?): se pregunta. «Ya», «listo»,
  // «no quiero nada más» o «mándalo» sí cierran.
  if(closing==='send'&&asked==='more'&&!$('summaryModal').open){
@@ -347,7 +346,7 @@ async function handleInput(raw){
  const nav=navigation(raw);
  if(nav){awaitingName=false;reviewed=null;if(nav==='all'){showCategories();reply('Este es el menú: platos, combos, extras y bebidas. ¿Por dónde empezamos?');}else{showCategory(nav);reply(categoryPitch(nav));}return;}
  const explicit=said.match(/^(?:me llamo|mi nombre es|a nombre de)\s+(.{2,60})$/i);
- if(!table&&((explicit&&plausibleName(explicit[1]))||(awaitingName&&plausibleName(said)))){customerName=(explicit?explicit[1]:said).trim();awaitingName=false;saveDraft();review();return;}
+ if((explicit&&plausibleName(explicit[1]))||(awaitingName&&plausibleName(said))){customerName=(explicit?explicit[1]:said).trim();awaitingName=false;saveDraft();review();return;}
  if(/^(no quiero bebida|sin bebida|no deseo bebida|no gracias)$/.test(n)){reviewed=null;awaitingName=false;drinkOffered=true;reply('Sin bebida, entonces. ¿Algo más, o cerramos el pedido?');return;}
  return matchInput(said,turn);
 }
@@ -357,6 +356,7 @@ async function matchInput(said,turn){
   const res=await fetch('/api/match',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({transcript:said,cart,memory,lastId,category,table,drinkOffered,focus:focusId(),shown:$('optionsModal').open?onScreen:[],history:history.slice(0,-1).slice(-6)}),signal:AbortSignal.any([request.signal,AbortSignal.timeout(22000)])});
   const result=await res.json();if(turn!==epoch)return;if(!res.ok)throw new Error(result.error||'No pude entender.');
   memory=readMemory(result.memory);saveDraft();
+  if(detail&&$('detailSheet').open&&result.intent!=='detail'){detail=null;$('detailSheet').close();}
   if(result.intent==='edit'){
    setCart(applyOperations(cart,result.operations,menu));lastId=result.operations.at(-1)?.id;
    if($('summaryModal').open)renderSummary();
@@ -457,7 +457,7 @@ $('cartOpen').addEventListener('click',()=>{interrupt();activity();review();});
 $('keyboardOpen').addEventListener('click',()=>{const c=$('composer');c.hidden=!c.hidden;$('keyboardOpen').setAttribute('aria-expanded',String(!c.hidden));if(!c.hidden)$('chatText').focus();});
 for(const form of document.querySelectorAll('[data-chat]'))form.addEventListener('submit',e=>{e.preventDefault();const input=form.querySelector('input');const text=input.value;input.value='';handleInput(text);});
 $('optionsModal').addEventListener('click',e=>{const info=e.target.closest('[data-detail]');if(info){interrupt();activity();openDetail(info.dataset.detail);return;}const cat=e.target.closest('[data-category]');const add=e.target.closest('[data-add]');if(cat)handleInput(`ver ${cat.dataset.category}`);if(add)addDirect(add.dataset.add);});
-$('summaryBody').addEventListener('click',e=>{if(e.target.id!=='confirmButton')return;if(!table){const value=$('customerName').value.trim();if(value.length<2){$('customerName').focus();toast('Escribe un nombre para retirar.');return;}customerName=value;}reviewed=cartSignature(cart,customerName);saveDraft();submit();});
+$('summaryBody').addEventListener('click',e=>{if(e.target.id!=='confirmButton')return;const value=$('customerName').value.trim();if(value.length<2){$('customerName').focus();toast('Escribe tu nombre para enviar el pedido.');return;}customerName=value;reviewed=cartSignature(cart,customerName);saveDraft();submit();});
 $('summaryBody').addEventListener('input',()=>{reviewed=null;});
 $('stars').addEventListener('click',e=>{const b=e.target.closest('[data-star]');if(!b||!rating)return;const r=b.getBoundingClientRect();const half=(e.clientX||r.right)-r.left<r.width/2;finishRating(Math.max(1,Number(b.dataset.star)-(half?.5:0)));});
 $('rateSkip').addEventListener('click',()=>finishRating(null));
