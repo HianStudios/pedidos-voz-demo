@@ -156,7 +156,16 @@ PREGUNTA PENDIENTE: ${JSON.stringify(pending)}${heard!==normalize(transcript)?`\
     if(repaired.intent==='edit'){
       const allowed=new Set(productHits(heard,menu).map(h=>h.id));
       if(focus)allowed.add(focus);
-      if(memory)for(const h of productHits(soundsLike([...memory.turns,memory.question].join(' '),menu),menu))allowed.add(h.id);
+      if(memory){
+        for(const h of productHits(soundsLike([...memory.turns,memory.question].join(' '),menu),menu))allowed.add(h.id);
+        // «de alitas» responde a «¿qué tipo de combo?», aunque el alias completo sea «combo de alitas».
+        if(/\bcombos?\b/.test(normalize(memory.turns.join(' ')))){
+          for(const p of menu.filter(p=>p.category==='Combos')){
+            const distinctive=normalize(p.name).replace(/^combo (?:de |en )?/,'');
+            if(distinctive.length>=4&&heard.includes(distinctive))allowed.add(p.id);
+          }
+        }
+      }
       const additions=repaired.operations.filter(op=>op.type==='add');
       const forbidden=additions.filter(op=>!allowed.has(op.id));
       if(forbidden.length){
