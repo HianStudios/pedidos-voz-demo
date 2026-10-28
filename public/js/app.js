@@ -1,6 +1,6 @@
 import {readMemory} from './order-memory.js';
 import {money,total,validateCart,applyOperations,isConfirmation,isFinish,finishIntent,closingAnswer,normalize,describeOps,followUp,amount,parsePeople,suggestForPeople,soundsLike,parseRating,removalsFor,serveFor} from './domain.js';
-import {navigation,plausibleName,cartSignature} from './conversation.js';
+import {navigation,extractCustomerName,cleanCustomerName,cartSignature} from './conversation.js';
 import {foodArt} from './art.js';
 import {VoiceController} from './voice.js';
 import {initKiosk} from './kiosk.js';
@@ -168,7 +168,7 @@ function review(){
  if($('optionsModal').open)$('optionsModal').close();
  if(!cart.length){reply('Todavía no has pedido nada. ¿Qué se te antoja?');return;}
  renderSummary();if(!$('summaryModal').open)$('summaryModal').showModal();
- reviewed=cartSignature(cart,customerName);awaitingName=!customerName;
+ reviewed=cartSignature(cart,customerName);awaitingName=!customerName&&!memory;
  const open=['Tienes','Te repaso: llevas','Va así: tienes'][reviewTurn++%3];
  reply(`${open} ${summaryLines()}. Son ${money(total(cart,menu))}.${pendingNote||` ${customerName?'¿Lo envío a cocina?':'¿A nombre de quién va el pedido?'}`}`);
 }
@@ -189,7 +189,8 @@ async function serveTable(req){
 async function _serveTable(req){
  if(req.type==='waiter'){
   if(!table){reply('Para eso acércate a caja, por favor. ¿Te ayudo con algo del menú?');return;}
-  kiosk?.notify('waiter',req.need?{need:req.need}:{});
+  const sent=await kiosk?.notify('waiter',req.need?{need:req.need}:{});
+  if(!sent){reply('No pude avisar al personal. Por favor, llama a un mesero directamente.');return;}
   reply(req.need?`Listo, ya le avisé al personal que necesitas ${req.need}. En un momento te lo traen.`:'Listo, ya le avisé al personal. En un momento se acerca alguien.');return;
  }
  if(req.type==='bill'){
@@ -198,7 +199,8 @@ async function _serveTable(req){
   if(cart.length){review();return;}
   let orders=[];try{orders=(await tabOrders()).filter(o=>o.status!=='cancelado');}catch{}
   const due=orders.reduce((a,o)=>a+o.total,0);
-  kiosk?.notify('bill',{...(req.pay?{pay:req.pay}:{}),...(orders.length?{total:due}:{})});
+  const sent=await kiosk?.notify('bill',{...(req.pay?{pay:req.pay}:{}),...(orders.length?{total:due}:{})});
+  if(!sent){reply('No pude enviar el aviso de la cuenta. Por favor, pide ayuda al personal.');return;}
   saveTab({...tab(),billed:true});
   reply(orders.length?`Listo, ya pedí tu cuenta: son ${money(due)}. ${req.pay?`Le avisé que pagas ${payWords[req.pay]}.`:'Puedes pagar en efectivo, con tarjeta o por transferencia.'} En un momento se acerca alguien.`:'Listo, ya le avisé al personal que quieres la cuenta. En un momento se acerca alguien.');return;
  }
@@ -259,11 +261,13 @@ async function handleInput(raw){
   if(/^(?:si|claro|dale|bueno|ok|okey|aja|si si|claro que si|va|vale)$/.test(n)){reply('¿Qué más te anoto, o lo envío así?');return;}
   asked=null;return sendNow();
  }
- if(memory&&declines&&cart.length&&!productsIn(said).length&&(isFinish(raw)||finishIntent(said))){review();return;}
- if(awaitingName){
-  const nm=said.match(/(?:a nombre de|me llamo|mi nombre es)\s+(.{2,60})$/i);
-  if(nm&&plausibleName(nm[1])){customerName=nm[1].trim();awaitingName=false;memory=null;saveDraft();review();return;}
-  if(!isConfirmation(raw)&&!isFinish(raw)&&!declines&&plausibleName(said)&&said.trim().length>=3){customerName=said.trim();awaitingName=false;memory=null;saveDraft();review();return;}
+ if(memory&&declines&&cart.length&&!productsIn(said).length&&(isFinish(raw)||finishIntent(said))){memory=null;saveDraft();review();return;}
+ // El nombre tiene prioridad sobre la IA; no borra aclaraciones de productos.
+ const captured=cart.length&&!isConfirmation(raw)&&!isFinish(raw)&&!declines
+   ?extractCustomerName(said,{awaiting:awaitingName}):null;
+ if(captured){customerName=captured;awaitingName=false;saveDraft();review();return;}
+ if(memory&&cart.length&&/^(?:asi esta bien|asi nomas|eso es todo|no agregues eso|ignora esa parte|descarta esa parte|sin eso)$/.test(n)){
+   memory=null;saveDraft();review();return;
  }
  if(memory)return matchInput(said,turn);
  // Ficha abierta: quitar/poner ingredientes por voz, «agrégalo» para anotarlo, cualquier otra cosa la cierra.
@@ -356,8 +360,6 @@ async function handleInput(raw){
  }
  const nav=navigation(raw);
  if(nav){awaitingName=false;reviewed=null;if(nav==='all'){showCategories();reply('Este es el menú: platos, combos, extras y bebidas. ¿Por dónde empezamos?');}else{showCategory(nav);reply(categoryPitch(nav));}return;}
- const explicit=said.match(/(?:me llamo|mi nombre es|a nombre de)\s+(.{2,60})$/i);
- if((explicit&&plausibleName(explicit[1]))||(awaitingName&&plausibleName(said)&&said.trim().length>=3)){customerName=(explicit?explicit[1]:said).trim();awaitingName=false;saveDraft();review();return;}
  if(/^(no quiero bebida|sin bebida|no deseo bebida|no gracias)$/.test(n)){reviewed=null;awaitingName=false;drinkOffered=true;reply('Sin bebida, entonces. ¿Algo más, o cerramos el pedido?');return;}
  return matchInput(said,turn);
 }
@@ -393,7 +395,7 @@ async function matchInput(said,turn){
 }
 async function submit(intro=''){
  if(sending||!cart.length||!customerName)return;
- if(memory){memory=null;saveDraft();}
+ if(memory){reply(`Todavía falta aclarar esta parte: ${memory.question} Puedes contestar o decir «así está bien» para dejarla fuera.`);return;}
  if(!pending&&reviewed!==cartSignature(cart,customerName)){review();return;}
  closeModals();voice.pause();sending=true;voice.state('sending');
  pending=pending||{key:crypto.randomUUID(),items:structuredClone(cart),customer:customerName,...(table?{table}:{}),confirmed:true};saveDraft();
@@ -402,13 +404,26 @@ async function submit(intro=''){
   if(mode==='demo'){
    const orders=readStore(ordersKey,[]);order=orders.find(o=>o.id===pending.key);
    if(!order){order={id:pending.key,number:pending.key.slice(0,6).toUpperCase(),items:pending.items.map(l=>({...l,name:menu.find(p=>p.id===l.id).name,price:menu.find(p=>p.id===l.id).price})),total:total(pending.items,menu),customer:pending.customer,...(pending.table?{table:pending.table}:{}),fulfillment:pending.table?'mesa':'retiro',status:'nuevo',createdAt:new Date().toISOString()};saveOrders([order,...orders].slice(0,200));}
-  }else{const res=await fetch('/api/orders',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(pending),signal:AbortSignal.timeout(15000)});const data=await res.json();if(!res.ok)throw new Error(data.error);order=data.order;}
+  }else{const res=await fetch('/api/orders',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(pending),signal:AbortSignal.timeout(15000)});const data=await res.json();if(!res.ok)throw Object.assign(new Error(data.error||'No pude enviar el pedido.'),{status:res.status});order=data.order;}
   const t=tab();saveTab({orders:[...(t.billed?[]:t.orders),order.id].slice(-10),billed:false});
   pending=null;memory=null;customerName='';setCart([]);lastId=null;mentioned=null;awaitingName=false;drinkOffered=false;upsold=false;roundNote=false;history=[];
   toast(`Pedido ${mode==='demo'?'de prueba ':''}#${order.number} registrado`);
   const done=mode==='demo'?'Listo, tu pedido de prueba quedó registrado.':order.table?'¡Listo! Tu pedido ya está en cocina. ¡Buen provecho!':`¡Listo, ${order.customer}! Tu pedido es el número ${order.number}.`;
   startRating(order);await reply(`${intro?`${intro} `:''}${done} ¿Qué te pareció mi atención? Dime de una a cinco estrellas.`,'listen');
- }catch(e){reply(`No pude confirmar el envío. Guardé el mismo pedido para reintentar. ${e.message}`);}
+ }catch(e){
+  if([400,409].includes(e.status)){
+   pending=null;reviewed=null;saveDraft();
+   try{
+    const response=await fetch('/api/menu');if(response.ok){
+     const data=await response.json();menu=data.menu;
+     const available=cart.filter(l=>menu.some(p=>p.id===l.id&&p.available));
+     if(available.length!==cart.length)setCart(available);
+    }
+   }catch{}
+   if(cart.length){renderSummary();if(!$('summaryModal').open)$('summaryModal').showModal();}
+   reply(`No pude enviar el pedido: ${e.message} Puedes corregirlo y volver a confirmar.`);
+  }else reply(`No pude confirmar el envío. Guardé el mismo pedido para reintentar. ${e.message}`);
+ }
  finally{sending=false;}
 }
 
@@ -468,8 +483,11 @@ $('cartOpen').addEventListener('click',()=>{interrupt();activity();review();});
 $('keyboardOpen').addEventListener('click',()=>{const c=$('composer');c.hidden=!c.hidden;$('keyboardOpen').setAttribute('aria-expanded',String(!c.hidden));if(!c.hidden)$('chatText').focus();});
 for(const form of document.querySelectorAll('[data-chat]'))form.addEventListener('submit',e=>{e.preventDefault();const input=form.querySelector('input');const text=input.value;input.value='';handleInput(text);});
 $('optionsModal').addEventListener('click',e=>{const info=e.target.closest('[data-detail]');if(info){interrupt();activity();openDetail(info.dataset.detail);return;}const cat=e.target.closest('[data-category]');const add=e.target.closest('[data-add]');if(cat)handleInput(`ver ${cat.dataset.category}`);if(add)addDirect(add.dataset.add);});
-$('summaryBody').addEventListener('click',e=>{if(e.target.id!=='confirmButton')return;const value=$('customerName').value.trim();if(value.length<2){$('customerName').focus();toast('Escribe tu nombre para enviar el pedido.');return;}customerName=value;reviewed=cartSignature(cart,customerName);saveDraft();submit();});
-$('summaryBody').addEventListener('input',()=>{reviewed=null;});
+$('summaryBody').addEventListener('click',e=>{if(e.target.id!=='confirmButton')return;const value=cleanCustomerName($('customerName').value);if(!extractCustomerName(value,{awaiting:true})){$('customerName').focus();toast('Escribe tu nombre para enviar el pedido.');return;}customerName=value;reviewed=cartSignature(cart,customerName);saveDraft();submit();});
+$('summaryBody').addEventListener('input',e=>{
+ if(e.target.id==='customerName'){customerName=cleanCustomerName(e.target.value);saveDraft();}
+ reviewed=null;
+});
 $('stars').addEventListener('click',e=>{const b=e.target.closest('[data-star]');if(!b||!rating)return;const r=b.getBoundingClientRect();const half=(e.clientX||r.right)-r.left<r.width/2;finishRating(Math.max(1,Number(b.dataset.star)-(half?.5:0)));});
 $('rateSkip').addEventListener('click',()=>finishRating(null));
 $('detailChips').addEventListener('click',e=>{const b=e.target.closest('[data-note]');if(!b||!detail)return;const o=b.dataset.note;detail.notes.has(o)?detail.notes.delete(o):detail.notes.add(o);renderDetail();});

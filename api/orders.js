@@ -1,9 +1,9 @@
 import {randomUUID,createHash} from 'node:crypto';
-import {restaurant} from '../server/catalog.js';
-import {getMenu} from '../server/menu-store.js';
+import {restaurant,menu as baseMenu} from '../server/catalog.js';
 import {validateCart,total} from '../public/js/domain.js';
 import {endpoint,guard,json,body,rateLimit,liveOrders,staff,getSession,redis,fail} from '../server/http.js';
 const prefix=`mesero:${restaurant.id}`;
+const ownerOf=id=>createHash('sha256').update(id).digest('hex');
 export default endpoint(async(req,res)=>{
   guard(req,['GET','POST','PATCH']);
   if(!liveOrders())throw fail('Caja compartida no configurada. Está activo el modo demo.',503);
@@ -12,10 +12,10 @@ export default endpoint(async(req,res)=>{
     // La mesa consulta el estado de sus propios pedidos («¿ya viene mi pedido?»): solo por id, sin datos del personal.
     const own=new URL(req.url||'/','http://x').searchParams.get('ids');
     if(own!==null){
-      if(!getSession(req))throw fail('La sesión venció. Recarga la página.',401);
+      const sessionId=getSession(req);if(!sessionId)throw fail('La sesión venció. Recarga la página.',401);
       const wanted=own.split(',').filter(id=>/^[0-9a-f-]{36}$/.test(id)).slice(0,10);
       const values=wanted.length?await redis(['MGET',...wanted.map(id=>`${prefix}:order:${id}`)]):[];
-      return json(res,200,{orders:values.filter(Boolean).map(v=>{const o=JSON.parse(v);return {id:o.id,number:o.number,status:o.status,total:o.total,createdAt:o.createdAt};})});
+      return json(res,200,{orders:values.filter(Boolean).map(v=>JSON.parse(v)).filter(o=>o.owner===ownerOf(sessionId)).map(o=>({id:o.id,number:o.number,status:o.status,total:o.total,createdAt:o.createdAt}))});
     }
     // ?limit=1000 para el panel de administración (los pedidos se guardan 30 días).
     staff(req);const limit=Math.min(1000,Math.max(1,Number(new URL(req.url||'/','http://x').searchParams.get('limit'))||200));
@@ -32,7 +32,10 @@ export default endpoint(async(req,res)=>{
     return json(res,200,{order:JSON.parse(result)});
   }
   const sessionId=getSession(req);if(!sessionId)throw fail('La sesión venció. Recarga antes de enviar.',401);
-  const data=await body(req);const menu=await getMenu();
+  const data=await body(req);
+  // Sin caché: la validación y el precio usan el menú vigente de Redis.
+  const menuRaw=await redis(['GET',`${prefix}:menu`]);
+  const menu=menuRaw?JSON.parse(menuRaw):baseMenu;
   // Si caja marcó algo como agotado mientras la mesa pedía, se dice qué y no se envía a medias.
   const gone=(Array.isArray(data.items)?data.items:[]).map(l=>menu.find(p=>p.id===l?.id)).filter(p=>p&&!p.available);
   if(gone.length)throw fail(`Se acabó ${gone.map(p=>p.name).join(' y ')} mientras pedías. Quítalo del pedido o cámbialo por otro.`,409);
@@ -44,9 +47,10 @@ export default endpoint(async(req,res)=>{
   if(table!==null&&!(Number.isInteger(table)&&table>0&&table<1000))throw fail('Número de mesa inválido.');
   const customer=String(data.customer||(table?`Mesa ${table}`:'')).trim();if(customer.length<2||customer.length>60)throw fail('Escribe un nombre para retirar el pedido (2–60 caracteres).');
   const payloadHash=createHash('sha256').update(JSON.stringify({cart,customer,table})).digest('hex');
-  const order={id:randomUUID(),number:randomUUID().slice(0,6).toUpperCase(),items:cart.map(l=>({...l,name:menu.find(p=>p.id===l.id).name,price:menu.find(p=>p.id===l.id).price})),total:total(cart,menu),customer,...(table?{table}:{}),fulfillment:table?'mesa':'retiro',status:'nuevo',createdAt:new Date().toISOString()};
-  const script="local old=redis.call('GET',KEYS[1]); if old then local memo=cjson.decode(old); if memo.hash~=ARGV[4] then return 'conflict' end; return memo.order end; redis.call('SET',KEYS[2],ARGV[1],'EX',2592000); redis.call('ZADD',KEYS[3],ARGV[2],ARGV[3]); redis.call('ZREMRANGEBYSCORE',KEYS[3],'-inf',tonumber(ARGV[2])-2592000000); redis.call('SET',KEYS[1],cjson.encode({hash=ARGV[4],order=ARGV[1]}),'EX',2592000); return ARGV[1]";
-  const saved=await redis(['EVAL',script,3,`${prefix}:idem:${sessionId}:${data.key}`,`${prefix}:order:${order.id}`,`${prefix}:orders`,JSON.stringify(order),Date.now(),order.id,payloadHash]);
+  const order={id:randomUUID(),number:randomUUID().slice(0,6).toUpperCase(),items:cart.map(l=>({...l,name:menu.find(p=>p.id===l.id).name,price:menu.find(p=>p.id===l.id).price})),total:total(cart,menu),customer,...(table?{table}:{}),fulfillment:table?'mesa':'retiro',status:'nuevo',createdAt:new Date().toISOString(),owner:ownerOf(sessionId)};
+  const script="local old=redis.call('GET',KEYS[1]); if old then local memo=cjson.decode(old); if memo.hash~=ARGV[4] then return 'conflict' end; return memo.order end; if (redis.call('GET',KEYS[4]) or '')~=ARGV[5] then return 'menu_changed' end; redis.call('SET',KEYS[2],ARGV[1],'EX',2592000); redis.call('ZADD',KEYS[3],ARGV[2],ARGV[3]); redis.call('ZREMRANGEBYSCORE',KEYS[3],'-inf',tonumber(ARGV[2])-2592000000); redis.call('SET',KEYS[1],cjson.encode({hash=ARGV[4],order=ARGV[1]}),'EX',2592000); return ARGV[1]";
+  const saved=await redis(['EVAL',script,4,`${prefix}:idem:${sessionId}:${data.key}`,`${prefix}:order:${order.id}`,`${prefix}:orders`,`${prefix}:menu`,JSON.stringify(order),Date.now(),order.id,payloadHash,menuRaw||'']);
   if(saved==='conflict')throw fail('Este envío ya se usó con otro pedido. Revisa el borrador.',409);
+  if(saved==='menu_changed')throw fail('El menú cambió durante el envío. Revisa los precios y vuelve a confirmar.',409);
   json(res,200,{order:JSON.parse(saved)});
 });

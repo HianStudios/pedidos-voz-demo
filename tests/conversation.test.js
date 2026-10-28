@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {menu} from '../server/catalog.js';
 import {interpretLocal} from '../public/js/domain.js';
-import {navigation,plausibleName} from '../public/js/conversation.js';
+import {navigation,plausibleName,extractCustomerName} from '../public/js/conversation.js';
 test('Solo, categorías y consultas no se convierten en pedidos',()=>{
  for(const t of ['Solo','Quiero ver los platos solos','muéstrame los platos'])assert.equal(navigation(t),'Platos',t);
  assert.equal(navigation('quiero ver los combos'),'Combos');assert.equal(navigation('muéstrame las bebidas'),'Bebidas');
@@ -31,4 +31,12 @@ test('«¿Para cuántos es?» se responde con un número y propone sin agregar',
  assert.equal(parsePeople('cinco',true),5);assert.equal(parsePeople('para cinco',true),5);assert.equal(parsePeople('cinco',false),null,'sin pregunta, un número suelto no es un grupo');
  assert.equal(parsePeople('somos seis'),6);assert.equal(parsePeople('dame cinco',true),null);
  const plan=suggestForPeople(5,menu);assert.deepEqual(plan.operations,[{type:'add',id:'combo-familiar',qty:1},{type:'add',id:'combo-personal',qty:1}]);assert.match(plan.reply,/¿Te los anoto\?/);
+});
+
+test('Whisper: nombres con puntuación, apellidos y presentación explícita',()=>{
+ for(const [spoken,expected] of [['Juan Pérez.','Juan Pérez'],['A nombre de Pérez.','Pérez'],['Mi nombre es María López.','María López'],['Yo soy Ana María,','Ana María'],['Juan,','Juan']])
+   assert.equal(extractCustomerName(spoken,{awaiting:true}),expected,spoken);
+ for(const command of ['sí','gracias','quiero un pollo','agrega una coca','envía pedido'])
+   assert.equal(extractCustomerName(command,{awaiting:true}),null,command);
+ assert.equal(extractCustomerName('Pérez.'),null,'nombre aislado solo durante captura');
 });

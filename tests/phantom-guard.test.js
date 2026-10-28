@@ -71,4 +71,11 @@ describe('phantom item guard',()=>{
     assert.equal(result.intent,'edit');
     assert.equal(result.operations.length,2);
   });
+  it('rechaza una bebida adicional aunque solo haya un producto fantasma',async()=>{
+    const ai={intent:'edit',reply:'Un cuarto y una Coca-Cola.',operations:[{type:'add',id:'cuarto',qty:1},{type:'add',id:'cocacola',qty:1}],suggest_ids:[]};
+    const result=await interpret({transcript:'dame un cuarto',cart:[],history:[],shown:[],focus:null},{fetchImpl:mockFetch(ai)});
+    assert.equal(result.intent,'edit');
+    assert.deepEqual(result.operations,[{type:'add',id:'cuarto',qty:1}]);
+    assert.doesNotMatch(result.reply,/Coca-Cola/i);
+  });
 });

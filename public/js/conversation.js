@@ -19,10 +19,20 @@ export function navigation(text){
   if(/^(?:(?:quiero |puedo |dejame )?(?:ver|mirar) |(?:muestrame|ensename|abre) )?(?:el )?(menu|carta)$/.test(n)||/^(que tienes|que hay|que venden|que ofrecen)$/.test(n))return 'all';
   return null;
 }
-export function plausibleName(text){
-  const n=normalize(text);
-  if(!/^[\p{L}][\p{L} '\-]{1,59}$/u.test(text.trim()))return false;
-  if(/\b(no|si|ya|dale|listo|bueno|ok|okey|claro|perfecto|vale|espera|quita|agrega|quiero|menu|pollo|cola|agua|cuanto|alergico|alergia|confirmar|confirma|cancelar|cancela|dame|deme|ver|mejor|todavia|bebida|soy|somos|sin|gracias|combo|plato|arroz|papas|ensalada|extra|pedido|cocina|enviar|mandar|eso|todo|asi|esta|bien|con|aja|simon|de una|correcto|exacto|nada|mas|mesero|cuenta|pagar|precio|comer|tomar)\b/.test(n))return false;
-  return true;
+// Whisper suele añadir comas o puntos finales a los nombres. Limpiar solo los bordes:
+ // nunca quitar caracteres dentro de un apellido ni interpretar pedidos como nombres.
+export function cleanCustomerName(value){
+  return String(value||'').trim().replace(/^[\s.,;:¡!¿?«»”'””]+|[\s.,;:¡!¿?«»”'””]+$/gu,'').replace(/\s+/g,' ').trim();
+}
+export function plausibleName(value){
+  const text=cleanCustomerName(value),n=normalize(text);
+  return /^[\p{L}][\p{L} '\-]{1,59}$/u.test(text)&&!/\b(no|si|ya|dale|listo|bueno|ok|okey|claro|perfecto|vale|espera|quita|agrega|quiero|menu|pollo|cola|agua|cuanto|alergico|alergia|confirmar|confirma|cancelar|cancela|dame|deme|ver|mejor|todavia|bebida|soy|somos|sin|gracias|combo|plato|arroz|papas|ensalada|extra|pedido|cocina|enviar|enviame|mandar|eso|todo|asi|esta|bien|con|aja|simon|de una|correcto|exacto|nada|mas|mesero|mesera|cuenta|pagar|precio|comer|tomar|hola|buenas|buenos|milo|otro|otra|pechuga|cuarto|alitas|medio|primero|segundo|ultimo|favor|gaseosa|adios|chao|cerveza)\b/.test(n);
+}
+export function extractCustomerName(phrase,{awaiting=false}={}){
+  const spoken=String(phrase||'').trim();
+  const explicit=spoken.match(/(?:^|\b)(?:a nombre de|me llamo|mi nombre es|yo soy|soy)\s+(.{2,90})$/i);
+  const candidate=cleanCustomerName(explicit?explicit[1]:awaiting?spoken:'');
+  if(!explicit&&candidate.length<3)return null;
+  return plausibleName(candidate)?candidate:null;
 }
 export function cartSignature(cart,name){return JSON.stringify({cart,name});}
