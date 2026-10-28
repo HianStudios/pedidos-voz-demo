@@ -18,7 +18,7 @@ const numbers=['uno','una','dos','tres','cuatro','cinco','seis','siete','ocho','
 const products=(text,menu=baseMenu)=>{const n=` ${normalize(text)} `;return new Set(menu.filter(p=>[p.name,...(p.aliases||[])].some(a=>a.length>3&&n.includes(` ${normalize(a)} `))).map(p=>p.id));};
 // Los datos de la respuesta base deben seguir ahí: precios, cantidades, productos, lo que se quita y la pregunta.
 export function keepsFacts(base,styled,menu=baseMenu){
-  if(!styled||styled.length>320||/[«»*#\[\]{}]/.test(styled))return false;
+  if(!styled||styled.length>320||/[«»*#\[\]{}<>]/.test(styled))return false;
   const b=normalize(base),s=normalize(styled);
   const money=t=>(t.match(/\$\s?\d+(?:[.,]\d{2})?/g)||[]).map(x=>x.replace(/\s/g,'').replace('.',','));
   if(!money(base).every(m=>money(styled).includes(m)))return false;
@@ -57,7 +57,7 @@ export async function styleReply({said,reply,cart=[],history=[],fetchImpl,menu=b
     if(response.status===429)markLimited();
     if(!response.ok){styleSkip=`proveedor ${response.status}: ${(await response.text().catch(()=>'')).slice(0,160)}`;return null;}
     // Qwen puede devolver su razonamiento entre <think>…</think>: nunca se dice en voz alta.
-    const text=String((await response.json()).choices?.[0]?.message?.content||'').replace(/<think>[\s\S]*?<\/think>/g,'').trim().replace(/^["“]|["”]$/g,'').replace(/\s+/g,' ');
+    const text=String((await response.json()).choices?.[0]?.message?.content||'').replace(/<think>[\s\S]*?<\/think>/g,'').replace(/<think>[\s\S]*/g,'').trim().replace(/^["“]|["”]$/g,'').replace(/\s+/g,' ');
     // Si el modelo igual metió una pregunta, se descarta esa parte: la pregunta es siempre la original.
     const said2=text.replace(/\s*¿[^¿]*\?\s*$/,'').trim().replace(/[^.!]$/,m=>`${m}.`);
     const full=ask?`${said2} ${ask[1]}`:said2;

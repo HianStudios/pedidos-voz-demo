@@ -183,6 +183,10 @@ async function tabOrders(){
 }
 const payWords={efectivo:'en efectivo',tarjeta:'con tarjeta',transferencia:'por transferencia'};
 async function serveTable(req){
+ busy=true;
+ try{return await _serveTable(req);}finally{busy=false;}
+}
+async function _serveTable(req){
  if(req.type==='waiter'){
   if(!table){reply('Para eso acércate a caja, por favor. ¿Te ayudo con algo del menú?');return;}
   const sent=await kiosk?.notify('waiter',req.need?{need:req.need}:{});
@@ -231,6 +235,7 @@ function serveStep(ops,said,text){
  return text.replace(/\.(\s|$)/,` ${how}.$1`);
 }
 function addDirect(id){
+ if(busy)return;
  interrupt();activity();
  const sold=menu.find(x=>x.id===id&&!x.available);if(sold){reply(`Uy, hoy ya no nos queda ${sold.name.toLowerCase()}. ¿Te muestro otra opción?`);return;}const operations=[{type:'add',id,qty:1}];
  try{const before=cart;setCart(applyOperations(cart,operations,menu));lastId=id;$('modalBody').querySelector(`.dish[data-product="${id}"]`)?.classList.add('added');reply(upsellStep(operations,serveStep(operations,'',`${describeOps(operations,menu)} ${followUp(before,operations,menu,drinkOffered)}`)));}
@@ -350,6 +355,7 @@ async function handleInput(raw){
  const summaryYes=$('summaryModal').open&&/^(?:si|ya|dale|listo|ok|okey|claro|de una|simon|bueno)\b/.test(n)&&!/\b(pero|no|quita|quitale|cambia|agrega|agregale|sin|otro|otra|falta|espera|aunque)\b/.test(n)&&!productsIn(said).length;
  if(isConfirmation(raw)||summaryYes||(cart.length&&(isFinish(raw)||(finishIntent(said)&&!productsIn(said).length)))){
   if(cart.length&&customerName&&reviewed===cartSignature(cart,customerName))return submit();
+  if(awaitingName&&!customerName){reply('Primero dime tu nombre. Por ejemplo: «a nombre de Pérez».');return;}
   review();return;
  }
  const nav=navigation(raw);
@@ -384,7 +390,7 @@ async function matchInput(said,turn){
   else if(result.intent==='cancel'){awaitingCancel=true;reply('¿Borro todo el pedido y empezamos de cero?');}
   else if(result.intent==='goodbye'&&!cart.length){await reply(result.reply||'¡Gracias! Aquí estaré.','wait');sessionActive=false;voice.disable();}
   else reply(result.reply||'¿Qué te provoca?');
- }catch(e){if(turn===epoch){memory=readMemory(memory)||{turns:[said],question:'No pude procesar tu última petición. ¿La retomamos?'};saveDraft();}if(turn===epoch)reply(e.name==='TimeoutError'?'Me tardé demasiado. Tu pedido sigue igual; dímelo otra vez, por favor.':e.message);}
+ }catch(e){if(turn===epoch){if(memory)memory=readMemory(memory);saveDraft();}if(turn===epoch)reply(e.name==='TimeoutError'?'Me tardé demasiado. Tu pedido sigue igual; dímelo otra vez, por favor.':e.message);}
  finally{if(turn===epoch){busy=false;$('sendText').disabled=false;}}
 }
 async function submit(intro=''){
@@ -489,7 +495,7 @@ $('detailAdd').addEventListener('click',()=>{interrupt();commitDetail();});
 $('detailSheet').addEventListener('close',()=>{detail=null;});
 for(const b of document.querySelectorAll('[data-close]'))b.addEventListener('click',()=>$(b.dataset.close).close());
 $('optionsModal').addEventListener('close',()=>{clearSpot();category=null;onScreen=[];});
-$('summaryModal').addEventListener('close',()=>{reviewed=null;awaitingName=false;});
+$('summaryModal').addEventListener('close',()=>{reviewed=null;if(customerName)awaitingName=false;});
 addEventListener('resize',()=>{if($('optionsModal').open)setTab(category);});
 addEventListener('pointerdown',activity);addEventListener('keydown',activity);
 document.addEventListener('visibilitychange',()=>{if(document.hidden){interrupt();voice.disable();sessionActive=false;}else keepAwake();});
