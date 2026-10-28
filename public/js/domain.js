@@ -324,7 +324,7 @@ export function interpretLocal(text,cart,menu,lastId=null,context={}){
   // Solo el nombre de un producto («medio pollo», «combo familiar»), como se lo dice a un mesero: es un pedido.
   if(!context.nested&&menu.some(p=>p.available&&[p.name,...(p.aliases||[])].some(x=>normalize(x)===n)))n=`quiero ${n}`;
   // Ingredientes que se pueden quitar (todas las opciones «sin X» del catálogo), más largos primero.
-  const removable=[...new Set(menu.flatMap(p=>p.options.map(o=>normalize(o).replace(/^sin /,''))))].sort((a,b)=>b.length-a.length);
+  const removable=[...new Set(menu.flatMap(p=>(p.options||[]).map(o=>normalize(o).replace(/^sin /,''))))].sort((a,b)=>b.length-a.length);
   const alt=removable.map(x=>x.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')).join('|');
   if(alt){
     // «Quítale la cebolla», «que no tenga lechuga», «no le pongas ají» → «sin …». «Quítale las papas» con
@@ -378,10 +378,10 @@ export function interpretLocal(text,cart,menu,lastId=null,context={}){
     if(star)return answer('recommend',`Lo que más sale es el ${star.name.toLowerCase()}. ¿Te lo anoto?`,{suggest_ids:[star.id],proposal:[{type:'add',id:star.id,qty:1}]});
   }
   if(/\b(recomienda|recomiendas|recomendacion|que hay|que tienes)\b/.test(n)) return answer('recommend','Si es para ti solo, el combo personal va bien. Para compartir, el combo familiar. ¿Para cuántos es?',{suggest_ids:['combo-personal','combo-familiar']});
-  const single=menu.find(p=>p.available&&[p.name,...p.aliases].some(a=>normalize(a).replace(/^(un|una) /,'')===n));
+  const single=menu.find(p=>p.available&&[p.name,...(p.aliases||[])].some(a=>normalize(a).replace(/^(un|una) /,'')===n));
   if(single&&context.category===single.category){const operations=[{type:'add',id:single.id,qty:1}];return answer('edit',`${describeOps(operations,menu)} ${followUp(cart,operations,menu,context.drinkOffered)}`,{operations});}
   const hits=[]; let remaining=n;
-  const aliases=menu.flatMap(p=>[p.name,...p.aliases].map(a=>({id:p.id,a:normalize(a).replace(/^(?:un|una|unas|unos|dos|tres) /,'')}))).sort((a,b)=>b.a.length-a.a.length);
+  const aliases=menu.flatMap(p=>[p.name,...(p.aliases||[])].map(a=>({id:p.id,a:normalize(a).replace(/^(?:un|una|unas|unos|dos|tres) /,'')}))).sort((a,b)=>b.a.length-a.a.length);
   // Buscar primero la coincidencia más larga y no contar de nuevo sus subcadenas.
   for(const {id,a} of aliases){
     const re=new RegExp(`(^|\\s)(${a})(?=\\s|$)`,'g');
@@ -574,6 +574,7 @@ export function answerFromMenu(text,menu,context={}){
 }
 function findAskedProduct(n,menu,focus,shown){
   const named=menu.filter(p=>p.category!=='Mesa'&&[p.name,...(p.aliases||[])].some(a=>a.length>2&&n.includes(normalize(a).replace(/^(un|una|unas|unos) /,''))));
+  if(named.length>1){named.sort((a,b)=>{const best=p=>[p.name,...(p.aliases||[])].filter(x=>n.includes(normalize(x).replace(/^(un|una|unas|unos) /,''))).reduce((m,x)=>Math.max(m,x.length),0);return best(b)-best(a);});}
   if(named.length)return named[0];
   if(focus){const p=menu.find(x=>x.id===focus);if(p)return p;}
   if(shown?.length===1){const p=menu.find(x=>x.id===shown[0]);if(p)return p;}
