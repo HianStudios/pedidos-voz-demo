@@ -185,8 +185,8 @@ export function suggestForPeople(people,menu){
 const count=s=>numbers[s]??Number(s);
 // Aceptación completa («sí», «ya, envíalo», «finaliza el pedido»). Nunca enviada por sí sola:
 // la app solo envía si además hay un resumen vigente; si no, muestra el resumen.
-const yes='(?:si|ya|listo|dale|ok|okey|perfecto|correcto|de una|claro|claro que si|esta bien|asi esta bien|todo bien|exacto|obvio|sale|va|vale|fresco|chevere|bacan|hagale|por supuesto|de ley)';
-const act='(?:confirm(?:a|o|ar|alo)|envia(?:lo|r)?|enviamelo|manda(?:lo|r)?|finaliz(?:a|ar|amos|alo)|cierr(?:a|alo)|cerrar|cerramos|procede|hazlo)(?: (?:el |la |mi )?(?:pedido|orden))?';
+const yes='(?:si|ya|listo|dale|ok|okey|perfecto|correcto|de una|claro|claro que si|esta bien|asi esta bien|todo bien|exacto|obvio|sale|va|vale|fresco|chevere|bacan|hagale|por supuesto|de ley|hecho|asi mero|simon|ajam|aja|venga|vaya)';
+const act='(?:confirm(?:a|o|ar|alo)|envia(?:lo|r)?|enviamelo|manda(?:lo|r)?|finaliz(?:a|ar|amos|alo)|cierr(?:a|alo)|cerrar|cerramos|procede|hazlo|lanzalo|despachalo|metelo)(?: (?:el |la |mi )?(?:pedido|orden))?';
 const confirmRe=new RegExp(`^(?:${yes}(?: ${yes})*(?: ${act})?|${act})(?: por favor)?$`);
 export function isConfirmation(text){return confirmRe.test(normalize(text).replace(/^si si\b/,'si'));}
 // Frases con las que la gente cierra un pedido sin decir «envíalo»: «gracias», «eso es todo»,
@@ -201,11 +201,12 @@ const done=[
   '(?:ya )?no quiero nada mas','(?:ya )?no deseo nada mas','(?:ya )?no necesito nada mas','no gracias eso es todo',
   'ya esta','ya estaria','ya estamos','ya estuvo','ya quedo','ya queda','asi esta bien','asi esta perfecto','asi nomas','asi no mas','asi queda','asi dejalo','dejalo asi','asi',
   'con eso','con eso basta','con eso estamos','con eso esta bien','con eso es suficiente','con eso nomas','suficiente','es suficiente','estamos','estamos bien','todo bien','todo listo','todo perfecto','esta todo bien','esta perfecto','esta bien',
+  'hasta ahi','hasta ahi nomas','solo eso','solo eso nomas','solamente eso','no mas','asi mero','hecho','listo asi','listo listo','dale pues','va pues','ya pues',
   '(?:ya )?termine(?: (?:de pedir|mi pedido))?','he terminado','ya pedi','ya pedimos','eso pedimos','eso pido','eso quiero','eso queremos',
   'listo','ya','perfecto','de una','vale','hagale','chevere','bacan','excelente','genial','super',
   '(?:ya )?(?:lo |la )?(?:puedes|pueden|puede|podes|podrias) (?:ya )?(?:enviar|mandar|pasar|pedir|llevar|confirmar)(?:lo|la)?(?: (?:a (?:la )?cocina|el pedido|la orden))?',
   '(?:si )?(?:por favor )?(?:envia|manda|pasa|mande|envie)(?:lo|la|le|selo)?(?: ya)?(?: (?:a|para) (?:la )?cocina)?','lo puedes mandar','envialo nomas','mandalo nomas','si mandalo','si envialo','ya mandalo','ya envialo','asi mandalo',
-  '(?:manda|mandalo|mandala|mandame|envia|envialo|enviala|pasa|pasalo|pasala|lleva|llevalo|llevala|pidelo|pide|ordena|ordenalo|despacha|despachalo|mete|metelo|sube|subelo)(?: (?:el pedido|la orden|eso|todo))?(?: (?:a|para) (?:la )?cocina)?',
+  '(?:manda|mandalo|mandala|mandame|envia|envialo|enviala|pasa|pasalo|pasala|lleva|llevalo|llevala|pidelo|pide|ordena|ordenalo|despacha|despachalo|mete|metelo|sube|subelo|lanza|lanzalo|registra|registralo)(?: (?:el pedido|la orden|eso|todo))?(?: (?:a|para) (?:la )?cocina)?',
   '(?:a|para) (?:la )?cocina','(?:que|ya) (?:lo |la |los )?(?:preparen|hagan|cocinen|traigan|saquen)','(?:que|ya) (?:empiecen|arranquen)','pueden (?:prepararlo|empezar|traerlo)',
   'adelante','proceda','procede','vamos','dale nomas','listo para cocina','ya cierra','cierra nomas','finaliza(?:r)?(?: (?:el pedido|la orden))?','(?:ya )?(?:sale|salio)',
 ];
@@ -227,7 +228,7 @@ export function closingAnswer(text){
   if(hold.test(n))return 'hold';
   // Solo cuenta como cierre si TODO lo dicho son palabras de cierre: «sí, muéstrame el menú» o «ya no quiero la
   // coca» piden otra cosa. Con ruido alrededor, «finaliza el pedido» sigue contando (finishIntent).
-  const closers=new Set('si ya no dale listo ok okey claro de una simon bueno aja sale va vale perfecto correcto exacto obvio chevere bacan gracias muchas mil por favor porfa nomas mas nada quiero deseo necesito queremos necesitamos vamos a querer eso es todo seria sera asi esta bien queda con basta estamos suficiente estuvo mandalo mandala mandale envialo enviala enviale manda envia la el cocina pedido orden finaliza finalizalo finalicemos cierra cierralo cerremos y ahora entonces nop'.split(' '));
+  const closers=new Set('si ya no dale listo ok okey claro de una simon bueno aja sale va vale perfecto correcto exacto obvio chevere bacan gracias muchas mil por favor porfa nomas mas nada quiero deseo necesito queremos necesitamos vamos a querer eso es todo seria sera asi esta bien queda con basta estamos suficiente estuvo mandalo mandala mandale envialo enviala enviale manda envia la el cocina pedido orden finaliza finalizalo finalicemos cierra cierralo cerremos y ahora entonces nop hecho mero solo solamente hasta ahi pues venga vaya lanzalo despachalo metelo registralo'.split(' '));
   const words=n.split(' ');
   if(words.every(w=>closers.has(w))){
     if(/^(?:no|nop)$/.test(n))return null; // un «no» suelto depende de la pregunta
