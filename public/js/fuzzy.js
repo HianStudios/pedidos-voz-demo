@@ -22,7 +22,7 @@ function distance(a,b){
 }
 const cache=new Map();
 function vocabulary(menu){
-  const key=menu?menu.length:0;if(cache.has(key))return cache.get(key);
+  const key=menu?(menu.map(p=>p.id+'/'+p.name).join(',')):0;if(cache.has(key))return cache.get(key);
   const words=new Set(base);
   // Nombres, alias e ingredientes: «lechuga» debe ser conocida para no «corregirse» a «pechuga».
   for(const p of menu||[])for(const phrase of [p.name,...(p.aliases||[]),...(p.options||[]),...(p.serve||[]),...(p.ingredients||[])])for(const w of phrase.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').split(/[^a-z]+/))if(w.length>=4)words.add(w);

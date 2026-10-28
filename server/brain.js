@@ -29,7 +29,7 @@ export async function askBrain({said,menu,cart=[],history=[],focus,shown}){
       signal:AbortSignal.timeout(Number(process.env.GROQ_BRAIN_TIMEOUT)||3500)});
     if(response.status===429){markLimited();return null;}
     if(!response.ok)return null;
-    const text=String((await response.json()).choices?.[0]?.message?.content||'').replace(/<think>[\s\S]*?<\/think>/g,'').trim().replace(/^[""]|[""]$/g,'').replace(/\s+/g,' ');
+    const text=String((await response.json()).choices?.[0]?.message?.content||'').replace(/<think>[\s\S]*?<\/think>/g,'').replace(/<think>[\s\S]*/g,'').trim().replace(/^[""]|[""]$/g,'').replace(/\s+/g,' ');
     if(!text||text.length>500)return null;
     const ids=[...new Set(relevant.filter(p=>normalize(text).includes(normalize(p.name).split(' ')[0])).map(p=>p.id))].slice(0,3);
     return {reply:text,suggest_ids:ids};
