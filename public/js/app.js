@@ -310,7 +310,7 @@ async function handleInput(raw){
  const lastAsked=asked,offer=proposal,options=choices;asked=null;proposal=null;choices=null;
  // «¿Algo más, o cerramos el pedido?»: «no», «nada», «así está bien» → sale la factura para enviar a cocina.
  if(lastAsked==='more'&&cart.length&&/^(?:no|nada|nada mas|no gracias|ya no|asi esta bien|asi nomas|eso|eso nomas|no nada mas|no ya esta|no eso es todo|cerremos|cerramos|finalizamos|finalizar|ya|con eso|suficiente|hasta ahi|solo eso|ya estuvo|ya quedo|hecho|asi mero|dale nomas|seria todo)$/.test(n)){review();return;}
- if(lastAsked==='more'&&/^(?:si|claro|bueno|dale|ok|si quiero|si algo mas|si mas)$/.test(n)){reply('¡Dale! ¿Qué más te anoto?');return;}
+ if(lastAsked==='more'&&/^(?:si|claro|bueno|dale|ok|si quiero|si algo mas|si mas|va|sale|venga|simon|de una|ajam)$/.test(n)){reply('¡Dale! ¿Qué más te anoto?');return;}
  // «¿De cuál quieres saber qué trae?» → «el familiar», «el segundo»: se abre su ficha, no se agrega.
  if(lastAsked==='detail'){
   const named=productsIn(raw);const pick=named.length===1?named[0]:onScreen[ordinal(n,named.length)];
