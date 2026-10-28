@@ -183,6 +183,10 @@ async function tabOrders(){
 }
 const payWords={efectivo:'en efectivo',tarjeta:'con tarjeta',transferencia:'por transferencia'};
 async function serveTable(req){
+ busy=true;
+ try{return await _serveTable(req);}finally{busy=false;}
+}
+async function _serveTable(req){
  if(req.type==='waiter'){
   if(!table){reply('Para eso acércate a caja, por favor. ¿Te ayudo con algo del menú?');return;}
   kiosk?.notify('waiter',req.need?{need:req.need}:{});
@@ -229,6 +233,7 @@ function serveStep(ops,said,text){
  return text.replace(/\.(\s|$)/,` ${how}.$1`);
 }
 function addDirect(id){
+ if(busy)return;
  interrupt();activity();
  const sold=menu.find(x=>x.id===id&&!x.available);if(sold){reply(`Uy, hoy ya no nos queda ${sold.name.toLowerCase()}. ¿Te muestro otra opción?`);return;}const operations=[{type:'add',id,qty:1}];
  try{const before=cart;setCart(applyOperations(cart,operations,menu));lastId=id;$('modalBody').querySelector(`.dish[data-product="${id}"]`)?.classList.add('added');reply(upsellStep(operations,serveStep(operations,'',`${describeOps(operations,menu)} ${followUp(before,operations,menu,drinkOffered)}`)));}
@@ -346,12 +351,13 @@ async function handleInput(raw){
  const summaryYes=$('summaryModal').open&&/^(?:si|ya|dale|listo|ok|okey|claro|de una|simon|bueno)\b/.test(n)&&!/\b(pero|no|quita|quitale|cambia|agrega|agregale|sin|otro|otra|falta|espera|aunque)\b/.test(n)&&!productsIn(said).length;
  if(isConfirmation(raw)||summaryYes||(cart.length&&(isFinish(raw)||(finishIntent(said)&&!productsIn(said).length)))){
   if(cart.length&&customerName&&reviewed===cartSignature(cart,customerName))return submit();
+  if(awaitingName&&!customerName){reply('Primero dime tu nombre. Por ejemplo: «a nombre de Pérez».');return;}
   review();return;
  }
  const nav=navigation(raw);
  if(nav){awaitingName=false;reviewed=null;if(nav==='all'){showCategories();reply('Este es el menú: platos, combos, extras y bebidas. ¿Por dónde empezamos?');}else{showCategory(nav);reply(categoryPitch(nav));}return;}
  const explicit=said.match(/(?:me llamo|mi nombre es|a nombre de)\s+(.{2,60})$/i);
- if((explicit&&plausibleName(explicit[1]))||(awaitingName&&plausibleName(said))){customerName=(explicit?explicit[1]:said).trim();awaitingName=false;saveDraft();review();return;}
+ if((explicit&&plausibleName(explicit[1]))||(awaitingName&&plausibleName(said)&&said.trim().length>=3)){customerName=(explicit?explicit[1]:said).trim();awaitingName=false;saveDraft();review();return;}
  if(/^(no quiero bebida|sin bebida|no deseo bebida|no gracias)$/.test(n)){reviewed=null;awaitingName=false;drinkOffered=true;reply('Sin bebida, entonces. ¿Algo más, o cerramos el pedido?');return;}
  return matchInput(said,turn);
 }
@@ -471,7 +477,7 @@ $('detailAdd').addEventListener('click',()=>{interrupt();commitDetail();});
 $('detailSheet').addEventListener('close',()=>{detail=null;});
 for(const b of document.querySelectorAll('[data-close]'))b.addEventListener('click',()=>$(b.dataset.close).close());
 $('optionsModal').addEventListener('close',()=>{clearSpot();category=null;onScreen=[];});
-$('summaryModal').addEventListener('close',()=>{reviewed=null;awaitingName=false;});
+$('summaryModal').addEventListener('close',()=>{reviewed=null;if(customerName)awaitingName=false;});
 addEventListener('resize',()=>{if($('optionsModal').open)setTab(category);});
 addEventListener('pointerdown',activity);addEventListener('keydown',activity);
 document.addEventListener('visibilitychange',()=>{if(document.hidden){interrupt();voice.disable();sessionActive=false;}else keepAwake();});
