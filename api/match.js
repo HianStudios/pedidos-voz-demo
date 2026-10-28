@@ -19,7 +19,24 @@ const catalogFor=menu=>menu.filter(p=>p.available&&p.category!=='Mesa').map(p=>{
 }).join('\n')+`\nPara la mesa, sin costo (se anotan con add): ${menu.filter(p=>p.category==='Mesa').map(p=>p.id).join(', ')}`+
   (menu.some(p=>!p.available&&p.category!=='Mesa')?`\nAGOTADO HOY (no lo anotes; dilo y ofrece otro): ${menu.filter(p=>!p.available&&p.category!=='Mesa').map(p=>p.name).join(', ')}`:'');
 const categories=['Platos','Combos','Extras','Bebidas'];
-const fallbacks=['No te capté bien. Te muestro el menú: ¿platos, combos, extras o bebidas?','Se me escapó esa parte. Aquí tienes el menú, ¿por dónde empezamos?'];
+const fallbacks=[
+  'No te capté bien. Te muestro el menú: ¿platos, combos, extras o bebidas?',
+  'Se me escapó esa parte. Aquí tienes el menú, ¿por dónde empezamos?',
+  'Perdona, no logré entenderte. ¿Qué te gustaría ordenar?',
+  'Disculpa, no te escuché bien. ¿Me lo repites?',
+  'No pude captar tu pedido. ¿Quieres ver los platos, combos o bebidas?',
+  'Perdón, se me fue. ¿Qué te sirvo?',
+  'No logré entender. ¿Te muestro el menú para que elijas?',
+  'Disculpa, el ruido no me dejó escucharte. ¿Qué deseas ordenar?',
+];
+const cartFallbacks=[
+  'Perdona, no te escuché bien. ¿Quieres algo más o cerramos el pedido?',
+  'Se me fue esa parte. ¿Sumamos algo o cerramos?',
+  'Disculpa, no capté eso. ¿Agregamos algo más o enviamos a cocina?',
+  'No logré entenderte. ¿Algo más para tu pedido?',
+  'Perdón, no te pillé. ¿Seguimos con algo más o ya cerramos?',
+  'No escuché bien. ¿Necesitas algo más o listo?',
+];
 let turn=0;
 // Interpreta una frase y luego la pule: lo que el cliente dijo de cómo servir la bebida, avisar si pidió
 // quitar algo que el plato no trae y, si hay IA, decirlo con la voz de Milo (sin cambiar ningún dato).
@@ -217,7 +234,7 @@ PREGUNTA PENDIENTE: ${JSON.stringify(pending)}${heard!==normalize(transcript)?`\
       // Visible en los logs de Vercel para afinar el prompt con casos reales.
       console.warn('match: respuesta descartada:',first.message,'/',e.message,JSON.stringify(transcript).slice(0,200));
       // Con un pedido en curso nunca se manda al menú: se pregunta si sigue o cierra (así no se pierde el final).
-      if(cart.length)return {intent:'clarify',operations:[],suggest_ids:[],reply:['Perdona, con el ruido no te escuché bien. ¿Quieres algo más o cerramos el pedido?','Se me fue esa parte. ¿Sumamos algo o ya cerramos el pedido?'][turn++%2],source:'fallback',...(debug?{error:errors.map(m=>m.slice(0,160)).join(' | ')}:{})};
+      if(cart.length)return {intent:'clarify',operations:[],suggest_ids:[],reply:cartFallbacks[turn++%cartFallbacks.length],source:'fallback',...(debug?{error:errors.map(m=>m.slice(0,160)).join(' | ')}:{})};
       return {intent:'menu',category:'all',operations:[],suggest_ids:[],reply:fallbacks[turn++%fallbacks.length],source:'fallback',...(debug?{error:errors.map(m=>m.slice(0,160)).join(' | ')}:{})};
     }
   }

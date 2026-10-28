@@ -26,7 +26,7 @@ export function cleanCustomerName(value){
 }
 export function plausibleName(value){
   const text=cleanCustomerName(value),n=normalize(text);
-  return /^[\p{L}][\p{L} '\-]{1,59}$/u.test(text)&&!/\b(no|si|ya|dale|listo|bueno|ok|okey|claro|perfecto|vale|espera|quita|agrega|quiero|menu|pollo|cola|agua|cuanto|alergico|alergia|confirmar|confirma|cancelar|cancela|dame|deme|ver|mejor|todavia|bebida|soy|somos|sin|gracias|combo|plato|arroz|papas|ensalada|extra|pedido|cocina|enviar|enviame|mandar|eso|todo|asi|esta|bien|con|aja|simon|de una|correcto|exacto|nada|mas|mesero|mesera|cuenta|pagar|precio|comer|tomar|hola|buenas|buenos|milo|otro|otra|pechuga|cuarto|alitas|medio|primero|segundo|ultimo|favor|gaseosa|adios|chao|cerveza)\b/.test(n);
+  return /^[\p{L}][\p{L} '\-]{1,59}$/u.test(text)&&!/\b(no|si|ya|dale|listo|bueno|ok|okey|claro|perfecto|vale|espera|quita|agrega|quiero|menu|pollo|cola|agua|cuanto|alergico|alergia|confirmar|confirma|cancelar|cancela|dame|deme|ver|mejor|todavia|bebida|soy|somos|sin|gracias|combo|plato|arroz|papas|ensalada|extra|pedido|cocina|enviar|enviame|mandar|eso|todo|asi|esta|bien|con|aja|ajam|simon|de una|correcto|exacto|nada|mas|mesero|mesera|cuenta|pagar|precio|comer|tomar|hola|buenas|buenos|milo|otro|otra|pechuga|cuarto|alitas|medio|primero|segundo|ultimo|favor|gaseosa|adios|chao|cerveza|hecho|venga|vaya|sale)\b/.test(n);
 }
 export function extractCustomerName(phrase,{awaiting=false}={}){
   const spoken=String(phrase||'').trim();

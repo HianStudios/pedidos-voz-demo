@@ -169,8 +169,12 @@ function review(){
  if(!cart.length){reply('Todavía no has pedido nada. ¿Qué se te antoja?');return;}
  renderSummary();if(!$('summaryModal').open)$('summaryModal').showModal();
  reviewed=cartSignature(cart,customerName);awaitingName=!customerName&&!memory;
- const open=['Tienes','Te repaso: llevas','Va así: tienes'][reviewTurn++%3];
- reply(`${open} ${summaryLines()}. Son ${money(total(cart,menu))}.${pendingNote||` ${customerName?'¿Lo envío a cocina?':'¿A nombre de quién va el pedido?'}`}`);
+ if(!customerName&&!pendingNote){
+  reply(`Son ${money(total(cart,menu))}. ¿A nombre de quién va el pedido?`);
+ }else{
+  const open=['Llevas','Te confirmo:','Va así:'][reviewTurn++%3];
+  reply(`${open} ${summaryLines()}. Son ${money(total(cart,menu))}.${pendingNote||' ¿Lo envío a cocina?'}`);
+ }
 }
 // ---------- Servicio de mesa: llamar al personal, la cuenta y cómo va el pedido ----------
 const tabKey=`${storageKey}:mesa`;
@@ -252,7 +256,7 @@ async function handleInput(raw){
  // Cerrar va antes que cualquier aclaración pendiente: «ya, sí, no quiero nada más» envía aunque la IA haya
  // dejado una pregunta abierta. Frente a la factura o a «¿Algo más, o cerramos?» se envía directo.
  // Con una pregunta pendiente, un «sí» suelto la contesta; solo «no quiero nada más», «así está bien»… cierran.
- const declines=/\b(?:no|nada|asi esta bien|asi nomas|eso es todo|seria todo|ya esta|con eso|suficiente)\b/.test(n);
+ const declines=/\b(?:no|nada|asi esta bien|asi nomas|eso es todo|seria todo|ya esta|con eso|suficiente|hasta ahi|solo eso|no mas|ya estuvo|ya quedo|hecho)\b/.test(n);
  const closing=cart.length&&!productsIn(said).length&&(!memory||declines)?closingAnswer(said):null;
  if(closing==='send'&&$('summaryModal').open){if(customerName&&reviewed===cartSignature(cart,customerName))return submit();}
  // A «¿Algo más, o cerramos?» un «sí» o «dale» solos son ambiguos (¿sí, algo más?): se pregunta. «Ya», «listo»,
@@ -265,7 +269,10 @@ async function handleInput(raw){
  // El nombre tiene prioridad sobre la IA; no borra aclaraciones de productos.
  const captured=cart.length&&!isConfirmation(raw)&&!isFinish(raw)&&!declines
    ?extractCustomerName(said,{awaiting:awaitingName}):null;
- if(captured){customerName=captured;awaitingName=false;saveDraft();review();return;}
+ if(captured){customerName=captured;awaitingName=false;saveDraft();
+  if(cart.length&&!memory){renderSummary();if(!$('summaryModal').open)$('summaryModal').showModal();reviewed=cartSignature(cart,customerName);await submit(`Perfecto, a nombre de ${customerName}.`);return;}
+  review();return;
+ }
  if(memory&&cart.length&&/^(?:asi esta bien|asi nomas|eso es todo|no agregues eso|ignora esa parte|descarta esa parte|sin eso)$/.test(n)){
    memory=null;saveDraft();review();return;
  }
@@ -302,8 +309,8 @@ async function handleInput(raw){
  // Respuestas a lo último que Milo preguntó o propuso.
  const lastAsked=asked,offer=proposal,options=choices;asked=null;proposal=null;choices=null;
  // «¿Algo más, o cerramos el pedido?»: «no», «nada», «así está bien» → sale la factura para enviar a cocina.
- if(lastAsked==='more'&&cart.length&&/^(?:no|nada|nada mas|no gracias|ya no|asi esta bien|asi nomas|eso|eso nomas|no nada mas|no ya esta|no eso es todo|cerremos|cerramos|finalizamos|finalizar|ya)$/.test(n)){review();return;}
- if(lastAsked==='more'&&/^(?:si|claro|bueno|dale|ok|si quiero|si algo mas|si mas)$/.test(n)){reply('¡Dale! ¿Qué más te anoto?');return;}
+ if(lastAsked==='more'&&cart.length&&/^(?:no|nada|nada mas|no gracias|ya no|asi esta bien|asi nomas|eso|eso nomas|no nada mas|no ya esta|no eso es todo|cerremos|cerramos|finalizamos|finalizar|ya|con eso|suficiente|hasta ahi|solo eso|ya estuvo|ya quedo|hecho|asi mero|dale nomas|seria todo)$/.test(n)){review();return;}
+ if(lastAsked==='more'&&/^(?:si|claro|bueno|dale|ok|si quiero|si algo mas|si mas|va|sale|venga|simon|de una|ajam)$/.test(n)){reply('¡Dale! ¿Qué más te anoto?');return;}
  // «¿De cuál quieres saber qué trae?» → «el familiar», «el segundo»: se abre su ficha, no se agrega.
  if(lastAsked==='detail'){
   const named=productsIn(raw);const pick=named.length===1?named[0]:onScreen[ordinal(n,named.length)];
@@ -408,8 +415,10 @@ async function submit(intro=''){
   const t=tab();saveTab({orders:[...(t.billed?[]:t.orders),order.id].slice(-10),billed:false});
   pending=null;memory=null;customerName='';setCart([]);lastId=null;mentioned=null;awaitingName=false;drinkOffered=false;upsold=false;roundNote=false;history=[];
   toast(`Pedido ${mode==='demo'?'de prueba ':''}#${order.number} registrado`);
-  const done=mode==='demo'?'Listo, tu pedido de prueba quedó registrado.':order.table?'¡Listo! Tu pedido ya está en cocina. ¡Buen provecho!':`¡Listo, ${order.customer}! Tu pedido es el número ${order.number}.`;
-  startRating(order);await reply(`${intro?`${intro} `:''}${done} ¿Qué te pareció mi atención? Dime de una a cinco estrellas.`,'listen');
+  const done=mode==='demo'?'Listo, tu pedido de prueba quedó registrado.'
+   :order.table?`Listo, la orden de ${order.customer} ya está en cocina. Que tengan una excelente velada. Cualquier cosa, estoy para atenderles.`
+   :`Listo, ${order.customer}. Tu pedido es el número ${order.number}. La orden ha sido enviada.`;
+  startRating(order);await reply(`${intro?`${intro} `:''}${done}`,'listen');
  }catch(e){
   if([400,409].includes(e.status)){
    pending=null;reviewed=null;saveDraft();
