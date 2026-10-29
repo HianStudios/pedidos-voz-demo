@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#f6f3ec"><title>Brasa · Mesero</title><link rel="icon" href="/public/favicon.svg"><link rel="stylesheet" href="/public/styles.css">
+<style>
+.mesero-main{max-width:800px;margin:auto;padding:28px 20px 70px}
+.mesero-heading h1{font-size:36px;margin:12px 0}
+.mesero-heading .connection{margin-top:12px;display:inline-grid;grid-template-columns:8px 1fr;align-items:center;gap:8px;font-size:12px}
+.mesero-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:20px 0}
+.mesero-stats article{border:1px solid var(--line);border-radius:14px;padding:16px;background:#fffcf6;text-align:center}
+.mesero-stats span{font-size:11px;color:var(--muted);display:block}
+.mesero-stats strong{font-size:28px;display:block;margin-top:4px}
+.mesero-stats article:first-child{background:#ede3ce;border-color:#dfd3ba}
+.order-list{display:grid;gap:14px;margin-top:20px}
+.order-card{padding:20px;border:1px solid var(--line);border-radius:16px;background:#fffcf6}
+.order-card header{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.order-card h3{margin:0;font-size:18px}
+.order-card .order-meta{font-size:12px;color:var(--muted)}
+.order-items{border-top:1px dashed var(--line);padding:10px 0;margin:10px 0;font-size:14px}
+.order-items p{margin:4px 0}
+.order-items small{color:var(--orange);padding-left:20px;display:block}
+.order-total{display:flex;justify-content:space-between;font-size:14px;padding-top:6px}
+.order-actions{display:flex;gap:8px;margin-top:12px}
+.empty-mesero{text-align:center;padding:60px 20px;border:1px dashed var(--line);border-radius:16px}
+.empty-mesero span{font-size:38px;color:var(--orange)}
+.empty-mesero h2{font-size:22px}
+.empty-mesero p{font-size:13px;color:var(--muted)}
+@media(max-width:680px){.mesero-heading h1{font-size:30px}.mesero-stats strong{font-size:22px}.mesero-stats article{padding:12px}}
+</style>
+</head>
+<body class="cashier-page">
+<header class="site-header"><a class="brand" href="/"><span class="brand-icon">b<span>•</span></span>brasa<span class="brand-dot">®</span></a><div class="header-right"><span class="demo-badge" id="modeBadge">Cargando…</span><a class="text-button" href="/admin.html">Panel ↗</a><a class="text-button" href="/caja.html">Caja ↗</a><button class="text-button" id="logout" hidden>Salir</button></div></header>
+<main class="mesero-main">
+  <section class="mesero-heading"><div class="eyebrow">VISTA DEL MESERO</div><h1>Pedidos<br><em>en curso.</em></h1><div class="connection" id="connection" role="status" data-state="connecting"><span class="live-dot"></span><span id="connectionText">Conectando…</span></div></section>
+  <form id="staffForm" class="staff-login" hidden><h2>Acceso del mesero</h2><p class="muted">Ingresa la clave del personal.</p><label for="staffToken">Clave</label><div class="staff-entry"><input id="staffToken" type="password" autocomplete="current-password" required><button class="primary-button">Entrar</button></div><p id="loginError" role="alert"></p></form>
+  <section id="workspace" hidden>
+    <div class="mesero-stats"><article><span>Por atender</span><strong id="newCount">0</strong></article><article><span>En preparación</span><strong id="preparingCount">0</strong></article><article><span>Listos</span><strong id="readyCount">0</strong></article></div>
+    <p id="queueNotice" role="status" class="muted"></p>
+    <div id="orders" class="order-list"></div>
+  </section>
+</main>
+<div class="toast" id="toast" role="status"></div>
+<script type="module" src="/public/js/mesero.js"></script></body></html>

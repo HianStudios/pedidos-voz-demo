@@ -1,40 +1,102 @@
 <!doctype html>
 <html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#f6f3ec"><title>Brasa · Panel</title><link rel="icon" href="/public/favicon.svg"><link rel="stylesheet" href="/public/styles.css"></head>
 <body class="cashier-page admin-page">
-<header class="site-header"><a class="brand" href="/admin.html"><span class="brand-icon">b<span>•</span></span>brasa<span class="brand-dot">®</span></a><div class="header-right"><span class="demo-badge" id="modeBadge">Cargando…</span><a class="text-button" href="/caja.html">Caja ↗</a><button class="text-button" id="logout" hidden>Salir</button></div></header>
-<main class="cashier-main">
-  <section class="cashier-heading"><div><div class="eyebrow">PANEL DEL RESTAURANTE</div><h1>Cómo va<br><em>el negocio.</em></h1><p class="muted" id="adminInfo">Cargando datos…</p></div></section>
-  <form id="staffForm" class="staff-login" hidden><h2>Acceso del equipo</h2><p class="muted">Ingresa la clave del personal para ver el panel.</p><label for="staffToken">Clave</label><div class="staff-entry"><input id="staffToken" type="password" autocomplete="current-password" required><button class="primary-button">Entrar</button></div><p id="loginError" role="alert"></p></form>
-  <section id="dashboard" hidden>
-    <nav class="range" aria-label="Periodo"><button data-range="1" aria-pressed="true">Hoy</button><button data-range="7" aria-pressed="false">7 días</button><button data-range="30" aria-pressed="false">30 días</button><button class="text-button" id="refresh">Actualizar ↻</button></nav>
-    <div class="kpis">
-      <article class="kpi hero"><span>Importe entregado</span><strong id="kpiSales">$0,00</strong><small id="kpiSalesNote"></small></article>
-      <article class="kpi"><span>Pedidos</span><strong id="kpiOrders">0</strong><small id="kpiOrdersNote"></small></article>
-      <article class="kpi"><span>Ticket entregado promedio</span><strong id="kpiTicket">$0,00</strong><small>sin confirmar cobro</small></article>
-      <article class="kpi"><span>Experiencia</span><strong id="kpiRating">—</strong><small id="kpiRatingNote">sin calificaciones</small></article>
-    </div>
-    <div class="charts">
-      <article class="chart-card" data-chart="food"><header><h2>Lo que más sale</h2><p>Unidades vendidas de platos, combos y extras</p></header><div class="chart"></div></article>
-      <article class="chart-card" data-chart="drinks"><header><h2>Bebidas más vendidas</h2><p>Unidades vendidas por bebida</p></header><div class="chart"></div></article>
-      <article class="chart-card wide" data-chart="hours"><header><h2>Pedidos por hora</h2><p>Cuándo llegan los pedidos</p></header><div class="chart"></div></article>
-      <article class="chart-card" data-chart="ratings"><header><h2>Calificaciones</h2><p>Estrellas que dieron los clientes</p></header><div class="chart"></div></article>
-      <article class="chart-card" data-chart="tables"><header><h2>Pedidos por mesa</h2><p>Mesas con más pedidos</p></header><div class="chart"></div></article>
-      <article class="chart-card wide"><header><h2>Lo que dijeron</h2><p>Últimas calificaciones con sus palabras</p></header><ul class="voices" id="voices"></ul></article>
-    </div>
-    <!-- Menú: lo que el dueño cambia sin tocar código -->
-    <section class="menu-editor" id="menuEditor" aria-labelledby="menuTitle">
-      <header class="menu-editor-head"><div><h2 id="menuTitle">Tu menú</h2><p class="muted">Cambia platos, precios y lo que trae cada uno. Milo lo aprende en menos de un minuto.</p></div>
-        <div class="menu-editor-actions"><button class="primary-button" id="menuAdd">+ Agregar producto</button><button class="text-button" id="menuReset">Volver al menú original</button></div></header>
-      <nav class="range" id="menuTabs" aria-label="Categoría"><button data-menu-tab="Platos" aria-pressed="true">Platos</button><button data-menu-tab="Combos" aria-pressed="false">Combos</button><button data-menu-tab="Extras" aria-pressed="false">Extras</button><button data-menu-tab="Bebidas" aria-pressed="false">Bebidas</button></nav>
-      <div class="menu-rows" id="menuRows"></div>
-      <p class="muted" id="menuNote" role="status"></p>
+<header class="site-header"><a class="brand" href="/admin.html"><span class="brand-icon">b<span>•</span></span>brasa<span class="brand-dot">®</span></a><div class="header-right"><span class="demo-badge" id="modeBadge">Cargando…</span></div></header>
+<div class="admin-layout">
+  <aside class="admin-sidebar" id="sidebar" hidden>
+    <nav class="sidebar-nav" aria-label="Secciones">
+      <button data-section="dashboard" aria-pressed="true">📊 Dashboard</button>
+      <button data-section="menu" aria-pressed="false">🍽️ Menú</button>
+      <button data-section="metrics" aria-pressed="false">📈 Métricas</button>
+      <button data-section="tables" aria-pressed="false">🪑 Mesas</button>
+      <button data-section="settings" aria-pressed="false">⚙️ Configuración</button>
+    </nav>
+    <footer class="sidebar-footer">
+      <a href="/caja.html">Caja ↗</a>
+      <a href="/mesero.html">Mesero ↗</a>
+      <button id="logout">Salir</button>
+    </footer>
+  </aside>
+  <main class="admin-content">
+    <form id="staffForm" class="staff-login" hidden><h2>Acceso del equipo</h2><p class="muted">Ingresa la clave del personal para ver el panel.</p><label for="staffToken">Clave</label><div class="staff-entry"><input id="staffToken" type="password" autocomplete="current-password" required><button class="primary-button">Entrar</button></div><p id="loginError" role="alert"></p></form>
+
+    <!-- Dashboard: calendario + detalle del día -->
+    <section id="sec-dashboard">
+      <div class="eyebrow">DASHBOARD</div>
+      <h1>Cómo va <em>el negocio.</em></h1>
+      <p class="muted" id="adminInfo">Cargando datos…</p>
+      <div class="calendar-nav">
+        <button id="calPrev" aria-label="Mes anterior">← Anterior</button>
+        <h2 id="calTitle"></h2>
+        <button id="calNext" aria-label="Mes siguiente">Siguiente →</button>
+      </div>
+      <div class="calendar-grid" id="calGrid"></div>
+      <div class="day-detail" id="dayDetail" hidden>
+        <h3 id="dayTitle"></h3>
+        <div class="day-stats" id="dayStats"></div>
+        <table class="day-orders" id="dayOrders"><thead><tr><th>#</th><th>Cliente</th><th>Mesa</th><th>Productos</th><th>Total</th><th>Estado</th><th>Hora</th></tr></thead><tbody id="dayOrdersBody"></tbody></table>
+        <div id="dayRatings" style="margin-top:20px"></div>
+      </div>
+    </section>
+
+    <!-- Menú editor -->
+    <section id="sec-menu">
+      <div class="eyebrow">MENÚ</div>
+      <h1>Tu <em>menú.</em></h1>
+      <p class="muted">Cambia platos, precios y lo que trae cada uno. Milo lo aprende en menos de un minuto.</p>
+      <section class="menu-editor" id="menuEditor" aria-labelledby="menuTitle">
+        <header class="menu-editor-head"><div><h2 id="menuTitle">Productos</h2></div>
+          <div class="menu-editor-actions"><button class="primary-button" id="menuAdd">+ Agregar producto</button><button class="text-button" id="menuReset">Volver al menú original</button></div></header>
+        <nav class="range" id="menuTabs" aria-label="Categoría"><button data-menu-tab="Platos" aria-pressed="true">Platos</button><button data-menu-tab="Combos" aria-pressed="false">Combos</button><button data-menu-tab="Extras" aria-pressed="false">Extras</button><button data-menu-tab="Bebidas" aria-pressed="false">Bebidas</button></nav>
+        <div class="menu-rows" id="menuRows"></div>
+        <p class="muted" id="menuNote" role="status"></p>
+      </section>
+    </section>
+
+    <!-- Métricas -->
+    <section id="sec-metrics">
+      <div class="eyebrow">MÉTRICAS</div>
+      <h1>Análisis del <em>rendimiento.</em></h1>
+      <nav class="metrics-period" aria-label="Periodo de métricas">
+        <button data-mperiod="7" aria-pressed="true">7 días</button>
+        <button data-mperiod="30" aria-pressed="false">30 días</button>
+        <button data-mperiod="90" aria-pressed="false">90 días</button>
+      </nav>
+      <div class="kpis" id="metricsKpis"></div>
+      <div class="metrics-charts">
+        <article class="chart-card" id="mcFood"><header><h2>Más vendido por ingresos</h2><p>Productos que más facturan</p></header><div class="chart"></div></article>
+        <article class="chart-card" id="mcHours"><header><h2>Pedidos por hora</h2><p>Cuándo llegan los pedidos</p></header><div class="chart"></div></article>
+        <article class="chart-card" id="mcRatings"><header><h2>Calificaciones</h2><p>Distribución de estrellas</p></header><div class="chart"></div></article>
+        <article class="chart-card" id="mcTrend"><header><h2>Tendencia diaria</h2><p>Pedidos por día en el periodo</p></header><div class="chart"></div></article>
+      </div>
+      <article class="chart-card wide" style="margin-top:14px"><header><h2>Lo que dijeron</h2><p>Últimas calificaciones con sus palabras</p></header><ul class="voices" id="metricsVoices"></ul></article>
+    </section>
+
+    <!-- Mesas -->
+    <section id="sec-tables">
+      <div class="eyebrow">MESAS</div>
+      <h1>Gestión de <em>mesas.</em></h1>
+      <div class="tables-config">
+        <label for="tablesCount">¿Cuántas mesas tiene tu restaurante?</label>
+        <div class="staff-entry" style="margin-top:8px"><input id="tablesCount" type="number" min="0" max="100" value="0"><button class="primary-button" id="tablesSave">Guardar</button></div>
+        <p class="muted" style="margin-top:8px" id="tablesNote">Los clientes ven el número de mesa en su pantalla.</p>
+      </div>
+      <h2 style="font-size:18px;margin:0 0 16px">Estado de las mesas</h2>
+      <div class="tables-grid" id="tablesGrid"></div>
+    </section>
+
+    <!-- Configuración -->
+    <section id="sec-settings">
+      <div class="eyebrow">CONFIGURACIÓN</div>
+      <h1>Ajustes del <em>restaurante.</em></h1>
       <div class="menu-settings">
         <article><h3>Promoción del día</h3><p class="muted">Milo la dice al saludar y sale en el letrero del menú. Déjala vacía para quitarla.</p><div class="staff-entry"><input id="promoText" maxlength="140" placeholder="Ej.: combo familiar a $16 hasta las 6 pm"><button class="secondary-button" id="promoSave">Guardar</button></div></article>
         <article><h3>Clave del modo kiosco</h3><p class="muted">La que usa el personal en las mesas (mantener la esquina 3 s). De 4 a 8 números.</p><div class="staff-entry"><input id="pinText" inputmode="numeric" maxlength="8" autocomplete="new-password" type="password" placeholder="Nueva clave"><button class="secondary-button" id="pinSave">Cambiar</button></div></article>
       </div>
+      <p class="muted" id="settingsNote" role="status" style="margin-top:12px"></p>
     </section>
-  </section>
-</main>
+  </main>
+</div>
 <div class="chart-tip" id="tip" role="tooltip" hidden></div>
 <dialog id="productForm" class="cashier-dialog product-form" aria-labelledby="pfTitle"><form method="dialog" id="productFormBody">
   <div class="dialog-heading"><h2 id="pfTitle">Producto</h2><button type="button" class="close-button" id="pfClose" aria-label="Cerrar">×</button></div>

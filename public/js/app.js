@@ -418,7 +418,7 @@ async function submit(intro=''){
   const done=mode==='demo'?'Listo, tu pedido de prueba quedó registrado.'
    :order.table?`Listo, la orden de ${order.customer} ya está en cocina. Que tengan una excelente velada. Cualquier cosa, estoy para atenderles.`
    :`Listo, ${order.customer}. Tu pedido es el número ${order.number}. La orden ha sido enviada.`;
-  startRating(order);await reply(`${intro?`${intro} `:''}${done}`,'listen');
+  startRating(order);showOrderStatus(order);await reply(`${intro?`${intro} `:''}${done}`,'listen');
  }catch(e){
   if([400,409].includes(e.status)){
    pending=null;reviewed=null;saveDraft();
@@ -435,6 +435,49 @@ async function submit(intro=''){
  }
  finally{sending=false;}
 }
+
+// ---------- Estado del pedido (popup para el cliente) ----------
+let statusPoll=null;let trackedOrder=null;
+const statusSteps=['nuevo','aceptado','preparando','listo','entregado'];
+const statusIcons={nuevo:'🍳',aceptado:'👨‍🍳',preparando:'🔥',listo:'✅',entregado:'🎉'};
+const statusTitles={nuevo:'Su entrega está en proceso',aceptado:'Tu pedido fue aceptado',preparando:'Están preparando tu pedido',listo:'¡Tu pedido está listo!',entregado:'Su pedido ya está en camino'};
+const statusMessages={nuevo:'Tu pedido fue recibido y pronto comenzarán a prepararlo.',aceptado:'Ya lo aceptaron y en breve pasa a cocina.',preparando:'Ya lo están preparando en cocina.',listo:'¡Ya está listo! En un momento te lo traen a tu mesa.',entregado:'Su pedido ya está en camino, ya está llegando a su mesa.'};
+function showOrderStatus(order){
+  trackedOrder=order;
+  updateStatusUI(order.status||'nuevo');
+  const dlg=$('orderStatusSheet');if(!dlg.open)dlg.showModal();
+  if(mode!=='demo'&&order.id){
+    clearInterval(statusPoll);
+    statusPoll=setInterval(()=>pollOrderStatus(order.id),5000);
+  }
+}
+function updateStatusUI(status){
+  const idx=statusSteps.indexOf(status);if(idx<0)return;
+  $('statusIcon').textContent=statusIcons[status]||'🍳';
+  $('orderStatusTitle').textContent=statusTitles[status]||'';
+  $('statusMessage').textContent=statusMessages[status]||'';
+  const steps=$('statusProgress').children;
+  for(let i=0;i<steps.length;i++){steps[i].classList.toggle('active',i<=idx);steps[i].classList.toggle('current',i===idx);}
+  const delivered=status==='entregado';
+  $('orderStatusSheet').classList.toggle('delivered',delivered);
+  $('statusConfirm').hidden=status!=='listo';
+  if(delivered){clearInterval(statusPoll);setTimeout(()=>{const d=$('orderStatusSheet');if(d.open)d.close();},4000);}
+}
+async function pollOrderStatus(orderId){
+  try{
+    const res=await fetch(`/api/orders?ids=${orderId}`,{signal:AbortSignal.timeout(8000)});
+    if(!res.ok)return;const data=await res.json();
+    const order=data.orders?.[0];if(!order)return;
+    trackedOrder=order;updateStatusUI(order.status);
+  }catch{}
+}
+$('statusConfirm')?.addEventListener('click',()=>{
+  if(!trackedOrder)return;
+  $('orderStatusSheet').close();
+  toast('Gracias por confirmar la entrega');
+});
+$('statusDismiss')?.addEventListener('click',()=>{$('orderStatusSheet').close();});
+$('orderStatusSheet')?.addEventListener('close',()=>{clearInterval(statusPoll);});
 
 // ---------- Ficha del producto ----------
 const lower=t=>t.charAt(0).toLowerCase()+t.slice(1);

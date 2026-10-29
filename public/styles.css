@@ -231,6 +231,69 @@
 .form-grid .check{display:flex;align-items:center;gap:10px;font-weight:600}
 .form-actions{display:flex;justify-content:space-between;align-items:center}
 @media (max-width:640px){.menu-row{grid-template-columns:28px 1fr auto;}.menu-row .switch{grid-column:2}.menu-row .secondary-button{grid-column:3}.form-grid{grid-template-columns:1fr}.menu-editor{padding:18px}}
+
+/* ---------- Admin sidebar layout ---------- */
+.admin-layout{display:grid;grid-template-columns:220px 1fr;min-height:calc(100dvh - 100px);max-width:1440px;margin:auto}
+.admin-sidebar{background:#fffcf5;border-right:1px solid var(--line);padding:28px 0;display:flex;flex-direction:column}
+.sidebar-nav{display:flex;flex-direction:column;gap:4px;padding:0 12px}
+.sidebar-nav button{border:0;background:none;text-align:left;padding:12px 14px;border-radius:10px;font-size:14px;font-weight:500;transition:background .15s}
+.sidebar-nav button:hover{background:#f0ede3}
+.sidebar-nav button[aria-pressed=true]{background:#ede3ce;font-weight:700}
+.sidebar-footer{margin-top:auto;padding:16px;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:8px;font-size:13px}
+.sidebar-footer a{padding:8px 14px;border-radius:8px;font-weight:500}
+.sidebar-footer a:hover{background:#f0ede3}
+.sidebar-footer button{border:0;background:none;text-align:left;padding:8px 14px;border-radius:8px;font-size:13px;font-weight:500;color:var(--orange)}
+.sidebar-footer button:hover{background:#fff1e9}
+.admin-content{padding:44px 5% 70px;min-width:0}
+.admin-content>section{display:none}
+.admin-content>section.active{display:block}
+.admin-content .staff-login{margin:60px auto}
+
+/* ---------- Calendar ---------- */
+.calendar-nav{display:flex;align-items:center;gap:18px;margin:28px 0 18px}
+.calendar-nav h2{flex:1;text-align:center;font-size:20px;margin:0}
+.calendar-nav button{border:1px solid var(--line);background:none;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:600}
+.calendar-nav button:hover{background:#f0ede3}
+.calendar-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.calendar-header{text-align:center;font-size:11px;font-weight:700;color:var(--muted);padding:8px 0;letter-spacing:.5px}
+.calendar-day{border:1px solid var(--line);border-radius:10px;padding:10px 8px;min-height:68px;cursor:pointer;background:#fffcf6;transition:background .15s,border-color .15s}
+.calendar-day:hover{background:#f7f3e8;border-color:#c5c1b5}
+.calendar-day.empty{border:0;cursor:default;background:none}
+.calendar-day.today{border-color:var(--orange);background:#fff6ed}
+.calendar-day.selected{border-color:var(--ink);background:#ede3ce;font-weight:700}
+.day-num{display:block;font-size:14px;font-weight:600}
+.day-count{display:block;font-size:10px;color:var(--muted);margin-top:4px}
+
+/* ---------- Day detail ---------- */
+.day-detail{margin-top:28px;padding:28px;border:1px solid var(--line);border-radius:18px;background:#fffcf5}
+.day-detail h3{font-size:18px;margin:0 0 18px}
+.day-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:14px;margin-bottom:22px}
+.day-stat{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:4px}
+.day-stat span{font-size:12px;color:var(--muted)}
+.day-stat strong{font-size:22px;font-weight:700;letter-spacing:-.5px}
+.day-orders{width:100%;border-collapse:collapse;font-size:13px}
+.day-orders th{text-align:left;padding:10px 8px;border-bottom:2px solid var(--line);font-size:11px;letter-spacing:.5px;color:var(--muted);font-weight:600}
+.day-orders td{padding:10px 8px;border-bottom:1px solid var(--line)}
+
+/* ---------- Metrics charts grid ---------- */
+.metrics-charts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-top:18px}
+.metrics-period{display:flex;gap:8px;margin-bottom:18px}
+.metrics-period button{border:1px solid var(--line);background:#fff;border-radius:99px;padding:9px 18px;font-size:14px}
+.metrics-period button[aria-pressed=true]{background:var(--ink);color:#fff;border-color:var(--ink)}
+.kpi-change{font-size:12px}
+.kpi-change.up{color:#3d7a27}
+.kpi-change.down{color:#a93224}
+
+/* ---------- Tables management ---------- */
+.tables-config{margin-bottom:28px}
+.tables-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px}
+.table-card{border:1px solid var(--line);border-radius:14px;padding:18px;text-align:center;background:#fffcf6;transition:border-color .2s}
+.table-card.active{border-color:var(--orange);background:#fff6ed}
+.table-num{font-size:16px;font-weight:700;margin-bottom:6px}
+.table-status{font-size:11px;color:var(--muted)}
+
+/* ---------- Admin responsive ---------- */
+@media(max-width:820px){.admin-layout{grid-template-columns:1fr}.admin-sidebar{flex-direction:row;border-right:0;border-bottom:1px solid var(--line);padding:0;overflow-x:auto;scrollbar-width:none}.sidebar-nav{flex-direction:row;padding:8px}.sidebar-nav button{white-space:nowrap;padding:10px 14px;font-size:13px}.sidebar-footer{flex-direction:row;margin-top:0;border-top:0;border-left:1px solid var(--line);padding:8px}.sidebar-footer a,.sidebar-footer button{white-space:nowrap;padding:8px 10px;font-size:12px}.admin-content{padding:28px 20px 60px}.calendar-grid{gap:3px}.calendar-day{padding:8px 4px;min-height:56px}.day-num{font-size:12px}.day-count{font-size:9px}.metrics-charts{grid-template-columns:1fr}.day-stats{grid-template-columns:1fr 1fr}.day-orders{font-size:11px}.day-orders th,.day-orders td{padding:8px 4px}}
 .range [data-menu-tab]{border:1px solid var(--line);background:#fff;border-radius:99px;padding:9px 18px;font-size:14px}
 .range [data-menu-tab][aria-pressed=true]{background:var(--ink);color:#fff;border-color:var(--ink)}
 #menuTabs{margin:18px 0 4px}

@@ -25,7 +25,7 @@ export async function getState(){
 }
 export const getMenu=async()=>(await getState()).menu;
 // Lo que el cliente puede ver de la configuración (nunca la clave del kiosco).
-export const publicSettings=s=>({promo:s.promo||''});
+export const publicSettings=s=>({promo:s.promo||'',tables:s.tables||0});
 
 const text=(v,max)=>typeof v==='string'?v.replace(/[<>]/g,'').replace(/\s+/g,' ').trim().slice(0,max):'';
 const list=(v,max,len=60)=>(Array.isArray(v)?v:typeof v==='string'?v.split(','):[]).map(x=>text(x,len)).filter(Boolean).slice(0,max);
@@ -75,10 +75,11 @@ export async function setAvailable(id,available){
 }
 export async function resetMenu(){if(hasRedis())await redis(['DEL',keys.menu]);cache=null;return baseMenu;}
 export const pinDigest=pin=>createHash('sha256').update(`kiosk:${pin}`).digest('hex');
-export async function saveSettings({promo,pin}){
+export async function saveSettings({promo,pin,tables}){
   if(!hasRedis())throw fail('Para guardar la configuración hace falta la caja compartida (Redis).',503);
   const {settings}=await getState();const next={...settings};
   if(promo!==undefined)next.promo=text(promo,140);
   if(pin!==undefined){if(!/^\d{4,8}$/.test(String(pin)))throw fail('La clave del kiosco debe tener de 4 a 8 números.');next.kioskPin=pinDigest(pin);}
+  if(tables!==undefined){const n=parseInt(tables,10);if(isNaN(n)||n<0||n>100)throw fail('El número de mesas debe ser entre 0 y 100.');next.tables=n;}
   await redis(['SET',keys.settings,JSON.stringify(next)]);cache=null;return next;
 }
