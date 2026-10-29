@@ -72,6 +72,21 @@
     <div id="detailRemoveBox"><h3>Quitar</h3><div class="detail-chips" id="detailChips"></div></div>
     <footer><strong class="price" id="detailPrice"></strong><button class="add" id="detailAdd">Agregar al pedido</button></footer>
   </dialog>
+  <!-- Estado del pedido: se muestra tras enviarlo y se actualiza hasta la entrega -->
+  <dialog id="orderStatusSheet" class="order-status-sheet" aria-labelledby="orderStatusTitle">
+    <div class="status-icon" id="statusIcon">🍳</div>
+    <h2 id="orderStatusTitle">Su entrega está en proceso</h2>
+    <p class="status-message" id="statusMessage">Tu pedido fue recibido y pronto comenzarán a prepararlo.</p>
+    <div class="status-progress" id="statusProgress">
+      <div class="progress-step active" data-step="nuevo"><span class="step-dot"></span><small>Recibido</small></div>
+      <div class="progress-step" data-step="aceptado"><span class="step-dot"></span><small>Aceptado</small></div>
+      <div class="progress-step" data-step="preparando"><span class="step-dot"></span><small>Preparando</small></div>
+      <div class="progress-step" data-step="listo"><span class="step-dot"></span><small>Listo</small></div>
+      <div class="progress-step" data-step="entregado"><span class="step-dot"></span><small>Entregado</small></div>
+    </div>
+    <button class="status-confirm" id="statusConfirm" hidden>Ya recibí mi pedido</button>
+    <button class="status-dismiss" id="statusDismiss">Seguir pidiendo</button>
+  </dialog>
   <!-- Calificación al terminar el pedido: por voz («cuatro y media») o tocando las estrellas -->
   <dialog id="rateSheet" class="rate-sheet" aria-labelledby="rateTitle">
     <p class="rate-eyebrow">Tu pedido va en camino a cocina</p>

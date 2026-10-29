@@ -214,3 +214,32 @@ body.kiosk{user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;
 .soldout-note{font-size:13px;font-weight:600;color:#9a4a2c;padding:8px 14px;border-radius:999px;background:#f6e1d6}
 .menu-sign.promo{background:#fde9de;border-color:#f0b99c;color:#6b2c12}
 .menu-sign.promo .sign-icon{background:#f9cdb5}
+
+/* Estado del pedido (popup cliente) */
+.order-status-sheet{border:0;border-radius:20px;padding:32px 24px;text-align:center;max-width:360px;width:calc(100vw - 32px);background:#fff;box-shadow:0 12px 40px rgba(0,0,0,.15)}
+.order-status-sheet::backdrop{background:rgba(0,0,0,.45)}
+.status-icon{font-size:48px;margin-bottom:8px;animation:statusPulse 2s ease-in-out infinite}
+@keyframes statusPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.15)}}
+.order-status-sheet h2{font-size:18px;font-weight:700;margin:0 0 6px;color:#1a1a1a}
+.status-message{font-size:14px;color:#666;margin:0 0 20px}
+.status-progress{display:flex;align-items:flex-start;justify-content:center;gap:0;margin-bottom:24px;position:relative}
+.progress-step{display:flex;flex-direction:column;align-items:center;gap:4px;flex:1;position:relative}
+.progress-step+.progress-step::before{content:'';position:absolute;top:10px;right:50%;width:100%;height:2px;background:#e0e0e0;z-index:0}
+.progress-step.active+.progress-step.active::before,.progress-step.active+.progress-step::before{background:transparent}
+.progress-step.active+.progress-step.active::before{background:#f97316}
+.step-dot{width:20px;height:20px;border-radius:50%;background:#e0e0e0;position:relative;z-index:1;transition:all .3s}
+.progress-step.active .step-dot{background:#f97316}
+.progress-step.current .step-dot{background:#f97316;box-shadow:0 0 0 4px rgba(249,115,22,.25)}
+.progress-step small{font-size:10px;color:#999}
+.progress-step.active small{color:#f97316;font-weight:600}
+.order-status-sheet.delivered{border:2px solid #22c55e}
+.order-status-sheet.delivered h2{color:#16a34a}
+.order-status-sheet.delivered .status-message{color:#22c55e;font-weight:600}
+.order-status-sheet.delivered .step-dot{background:#22c55e}
+.order-status-sheet.delivered .progress-step.active+.progress-step.active::before{background:#22c55e}
+.order-status-sheet.delivered .progress-step.active small{color:#22c55e}
+.status-confirm{display:block;width:100%;padding:12px;border:0;border-radius:12px;background:#22c55e;color:#fff;font-size:15px;font-weight:600;cursor:pointer;margin-bottom:8px}
+.status-confirm:hover{background:#16a34a}
+.status-dismiss{display:block;width:100%;padding:10px;border:0;border-radius:12px;background:transparent;color:#999;font-size:13px;cursor:pointer}
+.status-dismiss:hover{color:#666}
+@media(max-width:700px){.order-status-sheet{padding:24px 16px;max-width:none;margin:auto 8px}}
