@@ -20,8 +20,8 @@ export async function rawBody(req,limit){
 // Dos formas de llegar a Redis:
 // - HTTP (Upstash): UPSTASH_REDIS_REST_* o KV_REST_API_* (integración Upstash en Vercel).
 // - Conexión directa: REDIS_URL (integración «Redis» de Vercel Storage u otro proveedor).
-const redisUrl=()=>process.env.UPSTASH_REDIS_REST_URL||process.env.KV_REST_API_URL;
-const redisToken=()=>process.env.UPSTASH_REDIS_REST_TOKEN||process.env.KV_REST_API_TOKEN;
+const redisUrl=()=>process.env.UPSTASH_REDIS_REST_URL||process.env.KV_REST_API_URL||process.env.UPSTASH_REDIS_REST_KV_REST_API_URL;
+const redisToken=()=>process.env.UPSTASH_REDIS_REST_TOKEN||process.env.KV_REST_API_TOKEN||process.env.UPSTASH_REDIS_REST_KV_REST_API_TOKEN;
 const rest=()=>Boolean(redisUrl()&&redisToken());
 let tcp=null;
 // Una conexión por instancia de la función, reutilizada entre invocaciones.
