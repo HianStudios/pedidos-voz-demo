@@ -96,7 +96,7 @@ function talk(){
  if(!voice.enabled){sessionActive=true;voice.enable(true);return;}
  if(!sessionActive){sessionActive=true;voice.call();return;}
  if(voice.mode==='listening')voice.finish();
- else if(voice.mode==='speaking')voice.call(); // Interrumpir con el botón.
+ else if(voice.mode==='speaking')voice.listen(); // Interrumpir y escuchar.
  else voice.listen();
 }
 function closeModals(){clearSpot();for(const id of ['optionsModal','summaryModal'])if($(id).open)$(id).close();}
