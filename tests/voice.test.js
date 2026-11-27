@@ -82,3 +82,38 @@ test('con gente conversando en la mesa, la frase del cliente se corta cuando él
  assert.equal(uploads,2,'máximo 9 s por frase');
  globalThis.fetch=realFetch;voice.disable();
 });
+
+test('si el navegador rechaza las restricciones de audio, usa micrófono básico',async()=>{
+ const previous=globalThis.navigator, context=window.AudioContext;
+ let requested=[],stopped=0;
+ const stream={getTracks:()=>[{stop(){stopped++;}}]};
+ Object.defineProperty(globalThis,'navigator',{configurable:true,value:{mediaDevices:{
+  async getUserMedia(constraints){requested.push(constraints);if(requested.length===1){const e=new Error('unsupported');e.name='OverconstrainedError';throw e;}return stream;}
+ }}});
+ window.AudioContext=class{constructor(){throw new Error('AudioContext blocked');}};
+ const {voice}=setup();voice.enabled=false;
+ try{
+  await voice.enable(false);
+  assert.equal(voice.enabled,true,'la voz sigue activa aunque AudioContext no funcione');
+  assert.deepEqual(requested[1],{audio:true},'reintenta sin restricciones');
+  assert.equal(voice.mode,'listening');
+ }finally{voice.disable();window.AudioContext=context;
+  if(previous===undefined)delete globalThis.navigator;else Object.defineProperty(globalThis,'navigator',{configurable:true,value:previous});}
+ assert.equal(stopped,1);
+});
+test('si falla el permiso, no deja el controlador activado y permite reintentar',async()=>{
+ const previous=globalThis.navigator;let calls=0;
+ Object.defineProperty(globalThis,'navigator',{configurable:true,value:{mediaDevices:{async getUserMedia(){
+   calls++;if(calls===1){const error=new Error('denied');error.name='NotAllowedError';throw error;}
+   return {getTracks:()=>[]};
+ }}}});
+ const {voice,errors}=setup();voice.enabled=false;voice.startDelay=0;
+ try{
+  await voice.enable(false);
+  assert.equal(voice.enabled,false);
+  assert.match(errors.at(-1),/bloqueado/i);
+  await voice.enable(false);
+  assert.equal(voice.enabled,true,'un toque posterior debe volver a intentar');
+ }finally{voice.disable();if(previous===undefined)delete globalThis.navigator;else Object.defineProperty(globalThis,'navigator',{configurable:true,value:previous});}
+ assert.equal(calls,2);
+});
