@@ -49,6 +49,6 @@ jobs:
             if curl -fsS http://127.0.0.1:3000/api/menu >/dev/null; then break; fi
             sleep 1
           done
+          node tests/mobile.cjs
           node tests/order-memory.browser.cjs
           node tests/browser.cjs
-          node tests/mobile.cjs
