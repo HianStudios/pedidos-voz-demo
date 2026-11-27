@@ -12,14 +12,33 @@ export class VoiceController{
     if(!navigator.mediaDevices?.getUserMedia){this.onError('Este navegador necesita HTTPS y permiso de micrófono. Puedes usar texto.');return;}
     this.activatePending=true;const token=++this.generation;
     try{
-      const stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true,channelCount:1,voiceIsolation:true}});
+      let stream;
+       try{stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true,channelCount:1}});}
+       catch(e){if(e.name!=='OverconstrainedError'&&e.name!=='NotFoundError')throw e;
+         // Some phones reject advanced constraints although the microphone itself works.
+         stream=await navigator.mediaDevices.getUserMedia({audio:true});
+       }
       if(token!==this.generation){stream.getTracks().forEach(t=>t.stop());return;}
       this.stream=stream;this.enabled=true;
       const Context=window.AudioContext||window.webkitAudioContext;
-      if(Context){this.context=new Context();await this.context.resume();this.analyser=this.context.createAnalyser();this.analyser.fftSize=1024;this.source=this.context.createMediaStreamSource(stream);this.source.connect(this.analyser);this.samples=new Float32Array(this.analyser.fftSize);this.measure();}
+      if(Context){
+         try{
+           this.context=new Context();
+           await this.context.resume();
+           this.analyser=this.context.createAnalyser();this.analyser.fftSize=1024;
+           this.source=this.context.createMediaStreamSource(stream);this.source.connect(this.analyser);
+           this.samples=new Float32Array(this.analyser.fftSize);this.measure();
+         }catch{
+           // A microphone that is already open must remain usable if AudioContext fails.
+           this.context?.close().catch(()=>{});this.context=null;this.analyser=null;this.source=null;
+         }
+       }
       if(token!==this.generation)return;
       if(direct)await this.call();else this.listen();
-    }catch(e){if(token===this.generation){this.disable();this.onError(e.name==='NotAllowedError'?'Permite el micrófono en tu navegador o escribe tu pedido.':'No pude abrir el micrófono. Puedes continuar por texto.');}}
+    }catch(e){if(token===this.generation){this.disable();this.onError(e.name==='NotAllowedError'||e.name==='PermissionDeniedError'
+         ?'El micrófono está bloqueado. Habilítalo en los permisos de este sitio y vuelve a tocar a Milo.'
+         :e.name==='NotFoundError'?'No se detectó ningún micrófono. Revisa el dispositivo de entrada.'
+         :'No pude iniciar el micrófono. Revisa que otra aplicación no lo esté usando.');}}
     finally{this.activatePending=false;}
   }
   measure(){
@@ -170,7 +189,7 @@ export class VoiceController{
     recorder.onerror=()=>{if(token===this.generation){this.pause();this.state('waiting');this.onError('Falló la grabación. Vuelve a tocar a Milo o escribe.');}};
     recorder.onstop=async()=>{
       clearInterval(this.vad);clearTimeout(this.timer);if(token!==this.generation)return;this.recorder=null;
-      if(!hadVoice&&this.analyser){this.relisten();return;}
+      if(!hadVoice&&this.analyser){this.relisten('No detecté tu voz. Acércate al micrófono y vuelve a intentarlo.');return;}
       const blob=new Blob(chunks,{type:recorder.mimeType});if(blob.size<500){this.relisten();return;}
       this.state('transcribing');const form=new FormData();form.append('file',blob,recorder.mimeType.includes('mp4')?'pedido.m4a':recorder.mimeType.includes('ogg')?'pedido.ogg':'pedido.webm');
       const controller=new AbortController();this.upload=controller;
@@ -187,13 +206,14 @@ export class VoiceController{
     this.vad=setInterval(()=>{
       if(token!==this.generation)return;const now=Date.now(),rms=this.rms||0,age=now-started;
       if(age<250)return;
-      if(age<600&&!hadVoice){noise+=rms;samples++;threshold=Math.min(.06,Math.max(.012,(noise/samples)*2.5));return;}
+      if(age<600&&!hadVoice){noise+=rms;samples++;threshold=Math.min(.035,Math.max(.006,(noise/samples)*1.75));return;}
       const floor=hadVoice?Math.max(threshold,peak*.33):threshold;
       if(rms>floor){if(++loud>=2){if(!hadVoice)voiceStart=now;hadVoice=true;lastVoice=now;}}else loud=0;
       if(hadVoice)peak=Math.max(peak*.997,rms);
       if((hadVoice&&(now-lastVoice>1300||now-voiceStart>9000))||(!hadVoice&&age>8000&&this.analyser)){if(recorder.state==='recording')recorder.stop();}
     },100);
-    this.timer=setTimeout(()=>{if(token===this.generation&&recorder.state==='recording')recorder.stop();},25000);
+    // If AudioContext/VAD is unavailable, record a short fixed window rather than silence for 25 seconds.
+    this.timer=setTimeout(()=>{if(token===this.generation&&recorder.state==='recording')recorder.stop();},this.analyser?25000:6500);
   }
   finish(){if(this.recorder?.state==='recording')this.recorder.stop();else if(this.recognition&&this.mode==='listening')try{this.recognition.stop();}catch{}else this.call();}
 }

@@ -90,7 +90,15 @@ function setCart(next){
 // Pantalla siempre encendida mientras la app está abierta (Chrome Android, Safari iOS 16.4+).
 let wakeLock=null;
 async function keepAwake(){try{if(!wakeLock&&navigator.wakeLock&&document.visibilityState==='visible'){wakeLock=await navigator.wakeLock.request('screen');wakeLock.addEventListener('release',()=>{wakeLock=null;});}}catch{}}
-function talk(){keepAwake();activity();if(busy||sending)return;if(!sessionActive){sessionActive=true;voice.enable(true);}else if(voice.mode==='listening')voice.finish();else voice.listen();}
+function talk(){
+ keepAwake();activity();if(busy||sending||voice.activatePending)return;
+ // Un intento fallido de permisos/inicialización no debe dejar la sesión atascada.
+ if(!voice.enabled){sessionActive=true;voice.enable(true);return;}
+ if(!sessionActive){sessionActive=true;voice.call();return;}
+ if(voice.mode==='listening')voice.finish();
+ else if(voice.mode==='speaking')voice.listen(); // Interrumpir y escuchar.
+ else voice.listen();
+}
 function closeModals(){clearSpot();for(const id of ['optionsModal','summaryModal'])if($(id).open)$(id).close();}
 
 // ---------- Menú animado ----------
