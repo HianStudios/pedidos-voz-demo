@@ -212,7 +212,8 @@ export class VoiceController{
       if(hadVoice)peak=Math.max(peak*.997,rms);
       if((hadVoice&&(now-lastVoice>1300||now-voiceStart>9000))||(!hadVoice&&age>8000&&this.analyser)){if(recorder.state==='recording')recorder.stop();}
     },100);
-    this.timer=setTimeout(()=>{if(token===this.generation&&recorder.state==='recording')recorder.stop();},25000);
+    // If AudioContext/VAD is unavailable, record a short fixed window rather than silence for 25 seconds.
+    this.timer=setTimeout(()=>{if(token===this.generation&&recorder.state==='recording')recorder.stop();},this.analyser?25000:6500);
   }
   finish(){if(this.recorder?.state==='recording')this.recorder.stop();else if(this.recognition&&this.mode==='listening')try{this.recognition.stop();}catch{}else this.call();}
 }
