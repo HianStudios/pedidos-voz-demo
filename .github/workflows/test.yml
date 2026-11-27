@@ -51,3 +51,4 @@ jobs:
           done
           node tests/order-memory.browser.cjs
           node tests/browser.cjs
+          node tests/mobile.cjs
