@@ -77,3 +77,26 @@ test('una edición con una opción inexistente conserva lo válido',async()=>{
   try{const r=await interpret({transcript:'quiero un combo de alitas pero con sprite',cart:[]},{fetchImpl});assert.deepEqual(r.operations,[{type:'add',id:'combo-alitas',qty:1}]);assert.match(r.reply,/no lo puedo anotar/);}
   finally{if(old===undefined)delete process.env.GROQ_API_KEY;else process.env.GROQ_API_KEY=old;}
 });
+
+test('transcripción: reintenta 502 temporal sin perder el audio',async()=>{
+ const oldFetch=globalThis.fetch,oldKey=process.env.GROQ_API_KEY;process.env.GROQ_API_KEY='test';
+ const boundary='retry',raw=Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="a.webm"\r\nContent-Type: audio/webm\r\n\r\n${'x'.repeat(850)}\r\n--${boundary}--\r\n`);
+ let calls=0;
+ try{
+  globalThis.fetch=async()=>{calls++;return calls===1?new Response('upstream error',{status:502}):new Response(JSON.stringify({text:'un cuarto de pollo.',segments:[]}));};
+  const r=Readable.from([raw]);Object.assign(r,{method:'POST',headers:{host:'localhost','content-type':`multipart/form-data; boundary=${boundary}`,'content-length':raw.length},socket:{remoteAddress:'test-retry'}});
+  const res=response();await transcribe(r,res);
+  assert.equal(res.code,200);assert.equal(res.data.text,'un cuarto de pollo.');assert.equal(calls,2);
+ }finally{globalThis.fetch=oldFetch;if(oldKey===undefined)delete process.env.GROQ_API_KEY;else process.env.GROQ_API_KEY=oldKey;}
+});
+test('transcripción: comunica el límite de Groq 429, sin ocultarlo como 502',async()=>{
+ const oldFetch=globalThis.fetch,oldKey=process.env.GROQ_API_KEY;process.env.GROQ_API_KEY='test';
+ const boundary='limited',raw=Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="a.webm"\r\nContent-Type: audio/webm\r\n\r\n${'x'.repeat(850)}\r\n--${boundary}--\r\n`);
+ let calls=0;
+ try{
+  globalThis.fetch=async()=>{calls++;return new Response('limited',{status:429});};
+  const r=Readable.from([raw]);Object.assign(r,{method:'POST',headers:{host:'localhost','content-type':`multipart/form-data; boundary=${boundary}`,'content-length':raw.length},socket:{remoteAddress:'test-limit'}});
+  const res=response();await transcribe(r,res);
+  assert.equal(res.code,429);assert.match(res.data.error,/saturado/);assert.equal(calls,1);
+ }finally{globalThis.fetch=oldFetch;if(oldKey===undefined)delete process.env.GROQ_API_KEY;else process.env.GROQ_API_KEY=oldKey;}
+});
