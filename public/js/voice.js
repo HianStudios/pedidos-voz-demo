@@ -72,7 +72,7 @@ export class VoiceController{
   }
   relisten(message){
     if(!this.enabled)return;
-    if(Date.now()<this.listenUntil){this.listen(true);return;}
+    if(Date.now()<this.listenUntil){this.listen(true);if(message)this.onError(message);return;}
     this.wait();this.onError(message||'Toca a Milo cuando quieras seguir.');
   }
   // Tono corto y suave: avisa que el micrófono está abierto.
@@ -193,8 +193,22 @@ export class VoiceController{
       const blob=new Blob(chunks,{type:recorder.mimeType});if(blob.size<500){this.relisten();return;}
       this.state('transcribing');const form=new FormData();form.append('file',blob,recorder.mimeType.includes('mp4')?'pedido.m4a':recorder.mimeType.includes('ogg')?'pedido.ogg':'pedido.webm');
       const controller=new AbortController();this.upload=controller;
-      try{const res=await fetch('/api/transcribe',{method:'POST',body:form,signal:AbortSignal.any([controller.signal,AbortSignal.timeout(25000)])});const data=await res.json();if(token!==this.generation)return;if(!res.ok)throw new Error(data.error||'No pude transcribir.');if(data.text?.trim()){this.onText(data.text);this.state('thinking');this.onInput(data.text);}else this.relisten('No entendí el audio. Toca a Milo para intentarlo otra vez.');}
-      catch(e){if(token===this.generation){this.wait();this.onError(e.name==='TimeoutError'?'La transcripción tardó demasiado. Usa texto o intenta de nuevo.':e.message);}}
+      try{
+        const res=await fetch('/api/transcribe',{method:'POST',body:form,signal:AbortSignal.any([controller.signal,AbortSignal.timeout(25000)])});
+        const data=await res.json();
+        if(token!==this.generation)return;
+        if(!res.ok)throw Object.assign(new Error(data.error||'No pude transcribir.'),{status:res.status});
+        if(data.text?.trim()){this.onText(data.text);this.state('thinking');this.onInput(data.text);}
+        else this.relisten('No entendí el audio. Habla un poco más cerca del micrófono.');
+      }catch(e){
+        if(token!==this.generation)return;
+        if(e.status===429||/configuración|clave|credencial/i.test(e.message)){
+          this.wait();this.onError(e.message);return;
+        }
+        this.relisten(e.name==='TimeoutError'?
+          'La transcripción tardó demasiado. Sigo escuchando; repite la frase.':
+          `${e.message||'Falló la transcripción.'} Sigo escuchando; repite la frase.`);
+      }finally{if(this.upload===controller)this.upload=null;}
     };
     recorder.start();
     // Detección de voz adaptada al ruido del lugar: se mide el ambiente unos instantes (después del tono)

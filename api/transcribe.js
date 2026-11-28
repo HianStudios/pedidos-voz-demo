@@ -15,8 +15,31 @@ export default endpoint(async(req,res)=>{
   // de un audio con ruido o silencio (así llegó un «agua mineral» que nadie pidió).
   outgoing.append('prompt','Cliente en una pollería: Muéstrame los platos y los combos. Quiero un cuarto de pollo sin cebolla, alitas BBQ y una Sprite.');
   try{
-    const response=await fetch('https://api.groq.com/openai/v1/audio/transcriptions',{method:'POST',headers:{Authorization:`Bearer ${process.env.GROQ_API_KEY}`},body:outgoing,signal:AbortSignal.timeout(20000)});
-    if(!response.ok)throw new Error('Provider failed');const result=await response.json();
+    let response;
+    // Un fallo temporal de Groq no debe perder inmediatamente una frase grabada.
+    // Dos intentos de hasta 10 s mantienen la operación dentro del límite del cliente (25 s).
+    for(let attempt=0;attempt<2;attempt++){
+      try{
+        response=await fetch('https://api.groq.com/openai/v1/audio/transcriptions',{
+          method:'POST',headers:{Authorization:`Bearer ${process.env.GROQ_API_KEY}`},
+          body:outgoing,signal:AbortSignal.timeout(10000)
+        });
+      }catch(e){
+        if(attempt===0&&['TimeoutError','AbortError','TypeError'].includes(e.name))continue;
+        console.error('Transcribe upstream network:',e.name);
+        throw fail('No hay conexión con el servicio de voz. Intenta nuevamente.',503);
+      }
+      if(response.ok)break;
+      const code=response.status;
+      // No registrar el audio, claves ni el texto del cliente en logs.
+      console.error('Transcribe upstream status:',code);
+      if(code===401||code===403)throw fail('El servicio de voz necesita revisar su configuración. Usa texto por ahora.',503);
+      if(code===429)throw fail('El servicio de voz está saturado. Espera unos segundos y vuelve a intentarlo.',429);
+      if(attempt===0&&[500,502,503,504].includes(code))continue;
+      if(code===400||code===413||code===415||code===422)throw fail('El servicio de voz rechazó el formato del audio. Vuelve a intentarlo.',502);
+      throw fail('El servicio de transcripción no respondió correctamente. Intenta nuevamente.',502);
+    }
+    const result=await response.json();
     // Varias voces en la mesa: los tramos que Whisper oyó con poca confianza (otra persona lejos, ruido) o que
     // parecen inventados se descartan; si no queda ninguno, se usa el texto completo.
     const segs=Array.isArray(result.segments)?result.segments:[];
@@ -30,5 +53,9 @@ export default endpoint(async(req,res)=>{
     // Frases que Whisper «inventa» con ruido o silencio en español.
     const phantom=/subt[ií]tul|amara\.org|gracias por ver|suscr[ií]b|^\W*$/i.test(text);
     json(res,200,{text:silent||phantom?'':text.slice(0,1200)});
-  }catch{throw fail('No pude transcribir el audio. Puedes escribir tu pedido.',502);}
+  }catch(e){
+    if(e.status)throw e;
+    console.error('Transcribe result processing:',e.name);
+    throw fail('No pude procesar la respuesta del servicio de voz. Intenta nuevamente.',502);
+  }
 });
