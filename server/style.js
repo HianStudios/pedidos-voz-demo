@@ -39,7 +39,9 @@ export let styleSkip='';
 export async function styleReply({said,reply,cart=[],history=[],fetchImpl,menu=baseMenu}){
   styleSkip='';
   // En las pruebas (fetch simulado) y sin clave, la frase queda como está.
-  if(!process.env.GROQ_API_KEY||process.env.GROQ_STYLE==='off'||(fetchImpl&&fetchImpl!==globalThis.fetch))return null;
+  // Por defecto se usa la frase local ya validada: elimina hasta 1,5 s de
+  // latencia y consumo de Groq en cada pedido rutinario. Opt-in: GROQ_STYLE=on.
+  if(!process.env.GROQ_API_KEY||process.env.GROQ_STYLE!=='on'||(fetchImpl&&fetchImpl!==globalThis.fetch))return null;
   if(Date.now()<limitedUntil){styleSkip='cupo de Groq lleno: voz en pausa';return null;}
   const order=cart.map(l=>{const p=menu.find(x=>x.id===l.id);return p?`${l.qty} ${p.name}${l.notes?.length?` (${l.notes.join(', ')})`:''}`:'';}).filter(Boolean).join('; ')||'vacío';
   const recent=(Array.isArray(history)?history:[]).slice(-3).filter(m=>typeof m?.content==='string').map(m=>`${m.role==='user'?'Cliente':'Milo'}: ${m.content.slice(0,160)}`).join('\n');
