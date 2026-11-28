@@ -24,7 +24,7 @@ function distance(a,b){
  // No tocar números ni vocabulario común: alterar «cuatro» puede generar pedidos fantasma.
 export const speechAliases=Object.freeze({
   esprait:'sprite',espray:'sprite',esprite:'sprite',sprayt:'sprite',
-  pepsi:'pepsi',pepsí:'pepsi',pesi:'pepsi',pipsi:'pepsi',
+  pesi:'pepsi',pipsi:'pepsi',
   conbo:'combo',konbo:'combo',combito:'combo',conbitos:'combos',
   pechuca:'pechuga',bebidaa:'bebida',alitas:'alitas',
   serviyetaz:'servilletas',servietas:'servilletas',
