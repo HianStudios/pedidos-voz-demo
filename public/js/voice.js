@@ -1,10 +1,10 @@
 import {speakable,chunks} from './speech-text.js';
 const Recognition=window.SpeechRecognition||window.webkitSpeechRecognition;
 export class VoiceController{
-  constructor({onState,onLevel,onText,onInput,onError,onSentence,greeting}){Object.assign(this,{onState,onLevel,onText,onInput,onError,onSentence,greeting});this.rate=1.2;this.neural=false;
+  constructor({onState,onLevel,onText,onInput,onError,onSentence,greeting}){Object.assign(this,{onState,onLevel,onText,onInput,onError,onSentence,greeting});this.rate=1.16;this.neural=false;this.audioCache=new Map();
     // En celulares el reconocedor del sistema pita en cada intento y choca con el micrófono ya abierto:
     // se graba y se transcribe en el servidor. La app lo activa solo si hay transcripción disponible.
-    this.preferRecorder=false;this.neuralFailures=0;this.listenDelay=300;this.listenWindow=40000;this.startDelay=120;this.listenUntil=0;this.startFailures=0;this.voice=null;window.speechSynthesis?.addEventListener?.('voiceschanged',()=>{this.voice=null;});this.enabled=false;this.generation=0;this.recognition=null;this.recorder=null;this.stream=null;this.speechDone=null;this.meter=0;this.level=0;this.activatePending=false;}
+    this.preferRecorder=false;this.neuralFailures=0;this.listenDelay=170;this.listenWindow=40000;this.startDelay=120;this.listenUntil=0;this.startFailures=0;this.voice=null;window.speechSynthesis?.addEventListener?.('voiceschanged',()=>{this.voice=null;});this.enabled=false;this.generation=0;this.recognition=null;this.recorder=null;this.stream=null;this.speechDone=null;this.meter=0;this.level=0;this.activatePending=false;}
   state(value){this.mode=value;this.onState(value);}
   async enable(direct=false){
     if(this.activatePending)return;
@@ -93,7 +93,7 @@ export class VoiceController{
       const audio=next?await next:null;
       if(token!==this.generation)return;
       next=this.neural&&i+1<parts.length?this.fetchAudio(parts[i+1].spoken):null;
-      this.onSentence?.(parts[i].shown,audio?audio.duration*1000:parts[i].spoken.length*62/this.rate);
+      this.onSentence?.(parts[i].shown,audio?audio.duration/1.03*1000:parts[i].spoken.length*62/this.rate);
       if(audio)await this.play(audio,token);else await this.utter(parts[i].spoken,token);
       if(token!==this.generation)return;
     }
@@ -103,17 +103,22 @@ export class VoiceController{
   // dos seguidas la desactivan para no alternar voces durante la sesión.
   async fetchAudio(text){
     if(!this.context)return null;
+    if(this.audioCache.has(text))return this.audioCache.get(text);
     try{
       const res=await fetch('/api/speak',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text}),signal:AbortSignal.timeout(8000)});
       if(!res.ok)throw new Error();
-      const audio=await this.context.decodeAudioData(await res.arrayBuffer());this.neuralFailures=0;return audio;
+      const audio=await this.context.decodeAudioData(await res.arrayBuffer());
+      this.neuralFailures=0;
+      this.audioCache.set(text,audio);
+      if(this.audioCache.size>8)this.audioCache.delete(this.audioCache.keys().next().value);
+      return audio;
     }catch{if(++this.neuralFailures>=2)this.neural=false;return null;}
   }
   play(buffer,token){
     return new Promise(resolve=>{
       if(token!==this.generation)return resolve();
       if(this.context.state==='suspended')this.context.resume().catch(()=>{});
-      const source=this.context.createBufferSource();source.buffer=buffer;source.connect(this.context.destination);this.playing=source;
+      const source=this.context.createBufferSource();source.buffer=buffer;source.playbackRate.value=1.03;source.connect(this.context.destination);this.playing=source;
       const done=()=>{if(this.speechDone===done)this.speechDone=null;if(this.playing===source)this.playing=null;resolve();};
       this.speechDone=done;source.onended=done;source.start();
     });
