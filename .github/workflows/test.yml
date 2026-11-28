@@ -1,7 +1,7 @@
 name: Milo - pruebas de regresión
 on:
   push:
-    branches: [main, 'fix/**']
+    branches: [main, 'fix/**', 'feat/**']
   pull_request:
 
 permissions:
