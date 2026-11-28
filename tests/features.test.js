@@ -10,7 +10,7 @@ import ratings from '../api/ratings.js';
 const response=()=>({headers:{},setHeader(k,v){this.headers[k]=v;},status(code){this.code=code;return this;},json(data){this.data=data;return this;}});
 const req=(body,method='POST')=>({method,headers:{host:'localhost'},body,socket:{remoteAddress:`t-${Math.random()}`}});
 test('palabras mal escuchadas se corrigen por parecido; números y palabras comunes no',()=>{
-  for(const [heard,meant] of [['muestrame los piatos','muestrame los platos'],['quiero conbos','quiero combos'],['una pechuca','una pechuga'],['unas alitaz','unas alitas'],['las bevidas','las bebidas'],['el conbo persnal','el combo personal']])assert.equal(fixWords(heard,menu),meant,heard);
+  for(const [heard,meant] of [['muestrame los piatos','muestrame los platos'],['quiero conbos','quiero combos'],['una pechuca','una pechuga'],['unas alitaz','unas alitas'],['las bevidas','las bebidas'],['el conbo persnal','el combo personal'],['una esprait','una sprite'],['ponme una pesi','ponme una pepsi'],['dos combopersonal','dos combo personal'],['unas servietas','unas servilletas']])assert.equal(fixWords(heard,menu),meant,heard);
   for(const same of ['cuatro cuartos','una cosa mas','no tengo plata','media hora','para dos'])assert.equal(fixWords(same,menu),same,same);
   assert.equal(navigation('muéstrame los piatos'),'Platos');assert.equal(navigation('las bevidas'),'Bebidas');
 });
