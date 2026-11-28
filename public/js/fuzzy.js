@@ -20,6 +20,16 @@ function distance(a,b){
   }
   return d[a.length][b.length];
 }
+// Variantes acústicas de Whisper: solo se corrigen palabras completas y sin ambigüedad.
+ // No tocar números ni vocabulario común: alterar «cuatro» puede generar pedidos fantasma.
+export const speechAliases=Object.freeze({
+  esprait:'sprite',espray:'sprite',esprite:'sprite',sprayt:'sprite',
+  pesi:'pepsi',pipsi:'pepsi',
+  conbo:'combo',konbo:'combo',combito:'combo',conbitos:'combos',
+  pechuca:'pechuga',bebidaa:'bebida',alitas:'alitas',
+  serviyetaz:'servilletas',servietas:'servilletas',
+  combofamiliar:'combo familiar',combopersonal:'combo personal'
+});
 const cache=new Map();
 function vocabulary(menu){
   const key=menu?(menu.map(p=>p.id+'/'+p.name).join(',')):0;if(cache.has(key))return cache.get(key);
@@ -31,7 +41,7 @@ function vocabulary(menu){
 // Recibe texto ya normalizado (minúsculas, sin tildes ni signos).
 export function fixWords(normalized,menu){
   const vocab=vocabulary(menu);const known=new Set(vocab);
-  return normalized.split(' ').map(word=>{
+  return normalized.split(' ').flatMap(word=>speechAliases[word]?speechAliases[word].split(' '):[word]).map(word=>{
     if(word.length<5||known.has(word)||keep.has(word)||/\d/.test(word))return word;
     const limit=word.length>=8?2:1;let best=null,bestDistance=limit+1,tie=false;
     // Empate: gana la del mismo largo («alitaz» → alitas, no alita); si sigue empatado, no se toca.

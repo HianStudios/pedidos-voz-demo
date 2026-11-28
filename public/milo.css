@@ -243,3 +243,48 @@ body.kiosk{user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;
 .status-dismiss{display:block;width:100%;padding:10px;border:0;border-radius:12px;background:transparent;color:#999;font-size:13px;cursor:pointer}
 .status-dismiss:hover{color:#666}
 @media(max-width:700px){.order-status-sheet{padding:24px 16px;max-width:none;margin:auto 8px}}
+
+/* Milo v3: micro-interacciones suaves, prioridad a contenido y gestos naturales. */
+@keyframes miloPanelReveal{from{opacity:0;transform:translate3d(0,24px,0) scale(.975)}to{opacity:1;transform:translate3d(0,0,0) scale(1)}}
+@keyframes miloPanelFade{from{opacity:0}to{opacity:1}}
+@keyframes miloSurfaceIn{from{opacity:0;transform:translate3d(0,14px,0)}to{opacity:1;transform:translate3d(0,0,0)}}
+@keyframes miloSoftPulse{50%{box-shadow:0 0 0 9px rgba(239,196,119,.15),0 16px 45px rgba(207,170,106,.20)}}
+@keyframes miloListeningGlow{50%{opacity:.65;transform:scale(1.17)}}
+@keyframes miloProgress{from{transform:scaleX(.35);opacity:.4}to{transform:scaleX(1);opacity:1}}
+@keyframes miloToastReveal{from{opacity:0;filter:blur(5px);transform:translate(-50%,-120%)}to{opacity:1;filter:blur(0);transform:translate(-50%,0)}}
+.sheet[open]{animation:miloPanelReveal .48s var(--ease) both}
+.sheet::backdrop,.detail-sheet::backdrop,.rate-sheet::backdrop,.order-status-sheet::backdrop{animation:miloPanelFade .3s ease-out both;backdrop-filter:blur(5px)}
+.sheet[open] .sheet-head{animation:miloSurfaceIn .4s var(--ease) both}
+.sheet[open] .sheet-foot{animation:miloSurfaceIn .48s var(--ease) .12s both}
+.sheet[open] .door,.sheet[open] .dish{animation-duration:.52s;animation-delay:calc(var(--i,0)*65ms)}
+.sheet[open] .line{animation-duration:.42s;animation-delay:calc(var(--i,0)*55ms)}
+.sheet[open] .total{animation:miloSurfaceIn .45s var(--ease) .1s both}
+.detail-sheet[open],.rate-sheet[open],.order-status-sheet[open],.pin-pad[open]{animation:miloPanelReveal .4s var(--ease) both}
+.detail-sheet[open] .detail-art{animation:miloSurfaceIn .55s var(--ease) .08s both}
+.detail-sheet[open] .detail-chips button{transition:transform .22s var(--ease),background-color .22s,color .22s,border-color .22s}
+.detail-sheet[open] .detail-chips button:active,.dock-btn:active,.close:active{transform:scale(.93)}
+.dock-btn{transition:background .22s var(--ease),transform .22s var(--ease)}
+.dock-btn:not(:disabled):hover{transform:translateY(-3px)}
+.dock{transition:box-shadow .28s var(--ease),border-color .28s}
+body[data-state=listening] .dock{box-shadow:0 10px 30px #4a3a2012,0 0 0 2px #efc47755;border-color:#e4c68f}
+.mascot-stage[data-state=listening] .halo{animation:miloListeningGlow 1.9s ease-in-out infinite}
+.mascot-stage[data-state=waiting] .mascot{animation:bob 5s ease-in-out infinite,miloSoftPulse 3.2s ease-in-out infinite}
+body[data-state=transcribing] #voiceState::after,body[data-state=thinking] #voiceState::after{
+ content:'…';display:inline-block;transform-origin:left;animation:miloProgress .9s ease-in-out infinite alternate
+}
+.toast.visible{animation:miloToastReveal .4s var(--ease) both}
+.rate-sheet[open] .stars button{animation:miloSurfaceIn .35s var(--ease) both}
+.rate-sheet[open] .stars button:nth-child(2){animation-delay:55ms}
+.rate-sheet[open] .stars button:nth-child(3){animation-delay:110ms}
+.rate-sheet[open] .stars button:nth-child(4){animation-delay:165ms}
+.rate-sheet[open] .stars button:nth-child(5){animation-delay:220ms}
+.status-progress .progress-step.current .step-dot{animation:miloSoftPulse 2s ease-in-out infinite}
+@media (hover:hover){.dish:not(.soldout):hover{transform:translateY(-6px);box-shadow:0 14px 32px #4a3a2017}.dish.is-spot:hover{transform:translateY(-10px) scale(1.03)}.add:hover,.send:hover{filter:brightness(1.08)}}
+@media (prefers-reduced-motion:reduce){
+ .sheet[open],.sheet[open] .sheet-head,.sheet[open] .sheet-foot,.sheet[open] .door,.sheet[open] .dish,.sheet[open] .line,.sheet[open] .total,
+ .detail-sheet[open],.rate-sheet[open],.order-status-sheet[open],.pin-pad[open],
+ .detail-sheet[open] .detail-art,.rate-sheet[open] .stars button,.mascot-stage[data-state=listening] .halo,.toast.visible{
+  animation:none!important;filter:none!important;transform:none
+ }
+ .dish.is-spot{transform:none!important}
+}

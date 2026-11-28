@@ -78,11 +78,21 @@ Milo atiende lo que un mesero resuelve aparte de la comida, sin pasar por la IA:
 - **Palabras parecidas:** «piatos», «conbos», «pechuca», «bevidas» y «conbo persnal» se corrigen por parecido con las palabras del menú (`public/js/fuzzy.js`). No se tocan números ni palabras comunes como «cuatro», «cosa», «plata» o «media».
 - **Por sensación:** «algo ligero» y «algo pesado para llenarme» recomiendan según el perfil de cada plato (`feel` en el catálogo). Luego «el primero», «la segunda» o «el otro» eligen una de las opciones.
 
+## Evolución v3: cerebro, voz y microinteracciones
+
+- **Comprensión:** el intérprete conserva la aclaración pendiente, evita productos extra, reconoce variantes acústicas completas (por ejemplo «esprait», «pesi», «konbo») y usa instrucciones de mesero de Ecuador en `prompts/milo-sistema.md`. El cerebro Qwen responde preguntas más libres sobre el catálogo y restricciones alimentarias sin modificar el pedido; no sustituye la validación local.
+- **Respuesta rápida:** `GROQ_STYLE` está desactivado por defecto para no añadir hasta 1,5 s de una segunda generación IA a cada confirmación local. Para activarlo explícitamente, configura `GROQ_STYLE=on` en Vercel; se incrementan latencia y consumo.
+- **Voz:** navegador a velocidad 1,16 (más natural), escucha después de una pausa de 170 ms, reproducción neural ligeramente acelerada y caché de hasta ocho locuciones repetidas durante la sesión.
+- **ElevenLabs:** integrado, **NO activo sin credenciales**. Añadir `ELEVENLABS_API_KEY` y `ELEVENLABS_VOICE_ID` a Production y Preview, y opcionalmente `TTS_PROVIDER=elevenlabs`, `ELEVENLABS_MODEL=eleven_flash_v2_5` y `ELEVENLABS_SPEED=1.08`. El backend jamás expone la API key en el navegador. Si falla la voz neural, Milo pasa a la voz del navegador.
+- **Azure:** alternativa mediante `AZURE_SPEECH_KEY` y `AZURE_SPEECH_REGION`. Sin `TTS_PROVIDER`, la prioridad sigue siendo Azure si está disponible, luego ElevenLabs.
+- **Interfaz:** animaciones fluidas de hojas de menú, tarjetas, resúmenes, estados de voz, caja y panel administrativo; `prefers-reduced-motion` permite desactivarlas para accesibilidad.
+- **Limitación:** la latencia real de Groq y ElevenLabs depende de las cuotas, región, red y del proveedor. No se han probado sus voces con credenciales reales en esta versión.
+
 ## Voz y límites
 
-- Milo habla a velocidad 1,2 y **dice de corrido** las respuestas de hasta ~220 caracteres (las largas se parten en oraciones) y pronuncia precios y medidas como un mesero («cuatro dólares con cincuenta», «cuatrocientos mililitros»), sin emojis ni símbolos (`public/js/speech-text.js`).
+- Milo habla a velocidad 1,16 y **dice de corrido** las respuestas de hasta ~220 caracteres (las largas se parten en oraciones) y pronuncia precios y medidas como un mesero («cuatro dólares con cincuenta», «cuatrocientos mililitros»), sin emojis ni símbolos (`public/js/speech-text.js`).
 - Las respuestas locales dicen lo anotado («Van dos cuartos de pollo y una Coca-Cola. ¿Algo para tomar?») y ofrecen bebida una sola vez por pedido, nunca si ya hay bebida o combo.
-- **Voz neural opcional.** Con `AZURE_SPEECH_KEY` y `AZURE_SPEECH_REGION`, el servidor usa Azure (voz `es-EC-AndreaNeural` por defecto, acento de Ecuador). Si no, usa ElevenLabs cuando estén `ELEVENLABS_API_KEY` y `ELEVENLABS_VOICE_ID`. Si no hay ninguno, se usa la voz del navegador: velocidad 1.05, una sola voz por sesión, con preferencia por las voces «Natural» de es-EC. **Gratis y con buena calidad:** Microsoft Edge en Windows trae las voces «Natural» de Azure. Dos fallas seguidas de la voz neural vuelven a la del navegador, para no alternar voces.
+- **Voz neural opcional.** Con `AZURE_SPEECH_KEY` y `AZURE_SPEECH_REGION`, el servidor usa Azure (voz `es-EC-AndreaNeural` por defecto, acento de Ecuador). Si no, usa ElevenLabs cuando estén `ELEVENLABS_API_KEY` y `ELEVENLABS_VOICE_ID`. Si no hay ninguno, se usa la voz del navegador: velocidad 1,16, una sola voz por sesión, con preferencia por las voces «Natural» de es-EC. **Gratis y con buena calidad:** Microsoft Edge en Windows trae las voces «Natural» de Azure. Dos fallas seguidas de la voz neural vuelven a la del navegador, para no alternar voces.
 - **Pronunciación:** `pronunciations` en `public/js/speech-text.js` convierte marcas y siglas (Sprite → «Spráit», BBQ → «bibikiú»). Agrega ahí las de cada restaurante.
 - Al mostrar una categoría, Milo nombra **todos** los productos y cada tarjeta se ilumina cuando la menciona.
 - Después de cada cambio, Milo pregunta si quieres algo más o cerrar el pedido. «Finalizar», «confírmalo», «ya, envíalo» o «cerramos» muestran el resumen, y un «sí» sobre ese resumen lo envía.
