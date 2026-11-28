@@ -9,7 +9,7 @@ import {endpoint,guard,json,body,rateLimit,fail} from '../server/http.js';
 // Instrucciones compactas (resumen de la PARTE I del prompt maestro): deben caber en el límite de
 // tokens por minuto del plan gratuito de Groq junto con el catálogo y el turno.
 const system=readFileSync(new URL('../prompts/milo-sistema.md',import.meta.url),'utf8');
-const persona=system.slice(system.indexOf('## Quién eres')).trim();
+const persona=system.trim();
 const money=c=>`$${(c/100).toFixed(2).replace('.',',')}`;
 // Catálogo en líneas cortas: id | nombre | categoría | precio | descripción | opciones | alias.
 const catalogFor=menu=>menu.filter(p=>p.available&&p.category!=='Mesa').map(p=>{
