@@ -297,3 +297,24 @@
 .range [data-menu-tab]{border:1px solid var(--line);background:#fff;border-radius:99px;padding:9px 18px;font-size:14px}
 .range [data-menu-tab][aria-pressed=true]{background:var(--ink);color:#fff;border-color:var(--ink)}
 #menuTabs{margin:18px 0 4px}
+
+/* Milo v3 — movimiento funcional en caja, administración y paneles. */
+@keyframes panelSlideIn{from{opacity:0;transform:translate3d(0,15px,0)}to{opacity:1;transform:translate3d(0,0,0)}}
+@keyframes cardRiseIn{from{opacity:0;transform:translate3d(0,18px,0) scale(.985)}to{opacity:1;transform:translate3d(0,0,0) scale(1)}}
+@keyframes alertSoftIn{from{opacity:0;transform:translate3d(-12px,0,0)}to{opacity:1;transform:translate3d(0,0,0)}}
+.admin-content>section.active{animation:panelSlideIn .4s cubic-bezier(.2,.8,.2,1) both}
+.kpi,.chart-card,.table-card,.day-detail{animation:cardRiseIn .46s cubic-bezier(.2,.8,.2,1) both}
+.kpis>.kpi:nth-child(2),.charts>.chart-card:nth-child(2),.tables-grid>.table-card:nth-child(2){animation-delay:.06s}
+.kpis>.kpi:nth-child(3),.charts>.chart-card:nth-child(3),.tables-grid>.table-card:nth-child(3){animation-delay:.12s}
+.kpis>.kpi:nth-child(4),.charts>.chart-card:nth-child(4),.tables-grid>.table-card:nth-child(4){animation-delay:.18s}
+.alert-row{animation:alertSoftIn .33s cubic-bezier(.2,.8,.2,1) both}
+.kpi,.chart-card,.table-card{transition:transform .24s cubic-bezier(.2,.8,.2,1),box-shadow .24s,border-color .24s}
+.sidebar-nav button,.metrics-period button,.calendar-nav button{transition:background-color .2s,transform .22s cubic-bezier(.2,.8,.2,1)}
+@media (hover:hover){
+ .kpi:hover,.chart-card:hover,.table-card:hover{transform:translateY(-3px);box-shadow:0 14px 34px rgba(74,58,32,.09)}
+ .sidebar-nav button:hover,.calendar-nav button:hover{transform:translateX(3px)}
+}
+@media (prefers-reduced-motion:reduce){
+ .admin-content>section.active,.kpi,.chart-card,.table-card,.day-detail,.alert-row{animation:none!important;transform:none!important}
+ .kpi:hover,.chart-card:hover,.table-card:hover,.sidebar-nav button:hover,.calendar-nav button:hover{transform:none!important}
+}
